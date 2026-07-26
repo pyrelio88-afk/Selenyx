@@ -1,0 +1,38 @@
+{
+  "name": "selenyx",
+  "version": "0.6.0",
+  "description": "Selenyx — 月相科研终端 Agent。静谧如月，严谨如刃。A serene, moonlit research workbench for rigorous evidence-grounded investigation.",
+  "type": "module",
+  "bin": {
+    "selenyx": "bin/selenyx.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage \"test/*.test.js\""
+  },
+  "keywords": [
+    "research",
+    "agent",
+    "cli",
+    "evidence",
+    "llm",
+    "tui",
+    "moon"
+  ],
+  "author": "pyrelio88-afk",
+  "license": "MIT",
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ]
+}

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'sha256-Z7TxMzF7262iki7FLANnqlKNzbM6EzM4iOKeVCCn8pk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-src https: http://localhost:* http://127.0.0.1:*;">
+  <title>Selenyx — 科研助手</title>
+  <script>
+    try {
+      const accent = localStorage.getItem('selenyx.ui.accent');
+      if (accent && /^#[0-9a-f]{6}$/i.test(accent)) {
+        document.documentElement.style.setProperty('--accent', accent);
+      }
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside id="left-panel" class="left-panel" aria-label="项目与会话">
+      <header class="brand-row">
+        <div class="moon-mark" aria-hidden="true">◐</div>
+        <div class="brand-copy"><strong>Selenyx</strong><span>科研助手</span></div>
+        <button id="collapse-left" class="icon-button" title="折叠左栏" aria-label="折叠左栏">‹</button>
+      </header>
+      <button id="new-session" class="new-session">＋ 新建研究会话</button>
+      <nav class="primary-nav" aria-label="主导航">
+        <button data-view="research" class="nav-item active"><span>⌕</span><b>文献检索</b></button>
+        <button data-view="chat" class="nav-item"><span>◌</span><b>科研对话</b></button>
+        <button data-view="reader" class="nav-item"><span>▤</span><b>阅读模式</b></button>
+        <button data-view="browser" class="nav-item"><span>◎</span><b>内置浏览器</b></button>
+      </nav>
+      <section class="nav-section">
+        <div class="section-label">工作台</div>
+        <button class="nav-item muted" data-view="evidence"><span>◇</span><b>证据图谱</b><em id="evidence-count">0</em></button>
+        <button class="nav-item muted" data-view="skills"><span>✦</span><b>科研技能</b></button>
+      </section>
+      <section class="sessions">
+        <div class="section-label">会话</div>
+        <div id="session-list" class="session-list">
+          <button class="session-row active"><span class="status-dot"></span><span><b>未命名研究</b><small>本地 · 刚刚</small></span></button>
+        </div>
+      </section>
+      <footer class="left-footer">
+        <button id="open-settings" class="nav-item"><span>⚙</span><b>设置</b></button>
+        <div class="privacy-line"><span class="status-dot safe"></span><span>本地优先</span></div>
+      </footer>
+    </aside>
+
+    <div id="left-resizer" class="resizer" role="separator" aria-orientation="vertical"></div>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div>
+          <div id="view-eyebrow" class="eyebrow">研究工作台</div>
+          <h1 id="view-title">文献检索</h1>
+        </div>
+        <div class="top-actions">
+          <span id="runtime-badge" class="status-badge pending">正在自检</span>
+          <button id="toggle-right" class="icon-button" title="切换右栏" aria-label="切换右栏">▥</button>
+        </div>
+      </header>
+
+      <section id="research-view" class="view active">
+        <div class="content-column">
+          <div class="hero">
+            <span class="hero-moon">◐</span>
+            <p class="eyebrow">OPENALEX + PUBMED</p>
+            <h2>从真实文献开始，而不是从答案开始。</h2>
+            <p>每次检索保留来源、时间、HTTP 状态与响应指纹；没有结果时如实返回 0 条。</p>
+          </div>
+          <form id="literature-search-form" class="search-box">
+            <label class="sr-only" for="literature-query">论文标题、关键词或作者</label>
+            <input id="literature-query" autocomplete="off" placeholder="输入论文标题、关键词或作者…" required>
+            <button type="submit" class="primary-button">检索</button>
+          </form>
+          <div class="search-options">
+            <label><input type="checkbox" name="source" value="openalex" checked> OpenAlex</label>
+            <label><input type="checkbox" name="source" value="pubmed" checked> PubMed</label>
+            <span id="search-audit" class="audit-text">尚未发起联网请求</span>
+          </div>
+          <div id="search-state" class="empty-state">
+            <div class="empty-symbol">⌕</div>
+            <h3>等待研究问题</h3>
+            <p>输入现场编造的论文标题时，真实数据源应返回 0 条，不会生成替代结果。</p>
+          </div>
+          <div id="search-results" class="result-list" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section id="chat-view" class="view">
+        <div id="chat-scroll" class="chat-scroll">
+          <div class="content-column message-column">
+            <div class="assistant-intro">
+              <span class="hero-moon small">◐</span>
+              <div><h2>围绕证据提问</h2><p>没有模型 Key 时，Selenyx 会明确停留在离线 L1，不会模拟大模型回答。</p></div>
+            </div>
+            <div id="messages" class="messages" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="reader-view" class="view">
+        <div class="reader-shell">
+          <article id="reader-document" class="paper">
+            <div class="paper-empty">
+              <span>▤</span><h2>尚未选择文献</h2>
+              <p>从真实检索结果中选择“进入阅读”，即可在这里查看元数据、摘要、批注与证据。</p>
+            </div>
+          </article>
+          <div class="reader-tools" aria-label="阅读工具">
+            <button data-reader-action="highlight">高亮</button>
+            <button data-reader-action="underline">下划线</button>
+            <button data-reader-action="note">批注</button>
+            <button data-reader-action="translate">L1 翻译</button>
+            <button data-reader-action="summarize">L1 总结</button>
+            <button data-reader-action="relevance">相关性</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="browser-view" class="view">
+        <div class="browser-toolbar">
+          <select id="browser-site" aria-label="科研站点"></select>
+          <input id="browser-url" aria-label="网址或关键词" value="https://arxiv.org" spellcheck="false">
+          <button id="browser-go" class="primary-button">前往</button>
+          <button id="browser-external" class="secondary-button">系统浏览器</button>
+        </div>
+        <div id="browser-host" class="browser-host">
+          <div id="browser-status" class="browser-fallback">
+            <span class="empty-symbol">◎</span>
+            <h3>内置科研浏览器</h3>
+            <p>arXiv 可直接加载；遇到登录墙、网络错误或站点限制时，这里会显示原因和绕行按钮。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence-view" class="view"><div class="content-column"><div id="evidence-board" class="empty-state"><div class="empty-symbol">◇</div><h3>证据链尚为空</h3><p>从阅读器创建的证据将保留出处、支持/矛盾关系和审阅状态。</p></div></div></section>
+      <section id="skills-view" class="view"><div class="content-column"><div class="section-heading"><div><p class="eyebrow">L1 OFFLINE</p><h2>内置科研技能</h2></div></div><div id="skill-grid" class="skill-grid"></div></div></section>
+
+      <footer id="composer" class="composer">
+        <div class="composer-inner">
+          <textarea id="composer-input" rows="1" placeholder="询问当前研究或证据…" aria-label="消息"></textarea>
+          <button id="send-message" class="send-button" aria-label="发送">↑</button>
+          <div class="composer-meta">
+            <button id="provider-pill" class="provider-pill">离线 L1</button>
+            <span id="context-label">本地上下文 · 不上传</span>
+            <span class="spacer"></span>
+            <span>Enter 发送 · Shift+Enter 换行</span>
+          </div>
+        </div>
+      </footer>
+    </main>
+
+    <div id="right-resizer" class="resizer" role="separator" aria-orientation="vertical"></div>
+    <aside id="right-panel" class="right-panel" aria-label="任务、文档与证据">
+      <div class="right-tabs" role="tablist">
+        <button class="active" data-right-tab="tasks">任务</button>
+        <button data-right-tab="documents">文档</button>
+        <button data-right-tab="evidence">证据</button>
+      </div>
+      <div id="right-content" class="right-content"></div>
+    </aside>
+  </div>
+
+  <div id="settings-modal" class="modal-backdrop" hidden>
+    <div class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <aside class="settings-nav">
+        <div class="settings-title-row"><div><p class="eyebrow">SELENYX</p><h2 id="settings-title">设置</h2></div><button id="close-settings" class="icon-button" aria-label="关闭设置">×</button></div>
+        <nav id="settings-nav"></nav>
+      </aside>
+      <section id="settings-content" class="settings-content"></section>
+    </div>
+  </div>
+
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
