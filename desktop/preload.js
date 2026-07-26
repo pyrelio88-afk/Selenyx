@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('selenyx', Object.freeze({
   readProfile: () => invoke('profile:read'),
   pushProfileEvent: (event) => invoke('profile:event', event),
   searchLiterature: (payload) => invoke('literature:search', payload),
+  listSources: () => invoke('literature:sources', {}),
+  openExternal: (url) => invoke('external:open', { url }),
   providers: Object.freeze({
     list: () => invoke('provider:list'),
     save: (payload) => invoke('provider:save', payload),

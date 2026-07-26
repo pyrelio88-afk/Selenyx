@@ -115,9 +115,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .primary-button:hover { background: var(--accent-strong); }
 .primary-button:disabled { opacity: .55; cursor: progress; }
 .secondary-button { border: 1px solid var(--line); background: var(--paper-raised); }
-.search-options { display: flex; align-items: center; gap: 15px; padding: 10px 3px; color: var(--ink-soft); font-size: 12px; }
+.search-options { display: flex; align-items: flex-start; gap: 18px; padding: 10px 3px; color: var(--ink-soft); font-size: 12px; flex-wrap: wrap; }
 .search-options label { display: flex; align-items: center; gap: 6px; }
-.audit-text { margin-left: auto; color: var(--ink-faint); }
+.source-group { display: flex; flex-direction: column; gap: 6px; min-width: 240px; flex: 1 1 280px; }
+.source-group h4 { margin: 0; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-faint); text-transform: uppercase; }
+.source-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.source-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line-soft); background: var(--paper-card); font-size: 12px; cursor: pointer; }
+.source-chip.api-kind { border-color: var(--accent); color: var(--accent); }
+.source-chip.link-kind { border-color: var(--ink-faint); color: var(--ink-soft); }
+.source-chip .source-kind { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: var(--paper-soft); }
+.source-disclaimer { margin: 6px 0 0; font-size: 11px; color: var(--ink-faint); max-width: 360px; }
+.audit-text { margin-left: auto; color: var(--ink-faint); align-self: flex-end; }
+.china-link-section { margin-top: 16px; padding: 12px 0; border-top: 1px dashed var(--line-soft); }
+.china-link-section h3 { margin: 0 0 10px; font-size: 13px; color: var(--ink-soft); }
+.china-link-card { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--paper-soft); font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.china-link-head { display: flex; align-items: center; gap: 8px; }
+.china-link-mode { color: var(--ink-faint); font-size: 11px; }
+.china-link-honesty { color: var(--ink-soft); font-size: 11px; font-style: italic; }
+.china-link-actions { margin-top: 4px; }
+.pill { display: inline-block; padding: 1px 6px; border-radius: 6px; font-size: 10px; }
+.pill.ok { background: var(--accent-soft); color: var(--accent); }
+.pill.warn { background: rgba(196, 64, 47, 0.1); color: #c4402f; }
 .empty-state { padding: 68px 20px; color: var(--ink-soft); text-align: center; }
 .empty-symbol { margin-bottom: 10px; color: var(--line-strong); font: 42px/1 Georgia, serif; }
 .empty-state h3, .browser-fallback h3 { margin: 0 0 5px; color: var(--ink); font-size: 15px; }

@@ -117,6 +117,8 @@ for (const bridgeMethod of [
   'readProfile',
   'pushProfileEvent',
   'searchLiterature',
+  'listSources',
+  'openExternal',
   'providers',
   'browser',
 ]) {
@@ -151,6 +153,16 @@ test('desktop: provider keys use safeStorage encryption', () => {
   assert.match(main, /safeStorage\.encryptString/);
   assert.match(main, /safeStorage\.decryptString/);
 });
+
+for (const ipcChannel of [
+  'literature:search',
+  'literature:sources',
+  'external:open',
+]) {
+  test(`desktop main registers ${ipcChannel}`, () => {
+    assert.match(main, new RegExp(`registerHandle\\(\\s*['"]${ipcChannel}['"]`));
+  });
+}
 
 test('desktop: provider state never returns encrypted key material', () => {
   assert.match(main, /\{ encryptedApiKey, \.\.\.profile \}/);

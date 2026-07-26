@@ -11,17 +11,49 @@ The product language is intentionally quiet and restrained: paper white, cinnaba
 
 ## Status
 
-R0.6 is published as a **private GitHub Pre-release**.
+R0.7 is published as a **private GitHub Pre-release**.
 
-- Git history: a single root commit (see the v0.6.0 Release metadata).
-- GitHub Release ID: `359960038`.
-- 333 automated tests pass locally.
-- Real OpenAlex and PubMed search is implemented.
+- Git history: a single root commit (see the v0.7.0 Release metadata).
+- **352 automated tests pass locally** (R0.6: 333 + 19 new tests for 7 international APIs and 8 China-source links).
+- 7 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
+- 8 China sources: PubScholar, ChinaXiv, NSTL, NCPSSD, SinoMed, CNKI, Wanfang, CQVIP (R0.6: 0).
+- China sources are presented as honesty-guarded browser handoffs (search-link mode), never page scraping.
 - Windows x64 setup and portable builds are attached to the Release.
 - Windows binaries are unsigned.
 - macOS/Linux packages, code signing, and production distribution are not yet verified.
 
 Release claims remain valid only when accompanied by the commit hash, Release ID, and verification checklist.
+
+## Literature sources
+
+### International (real native APIs)
+
+| Source | Coverage | Auth |
+| --- | --- | --- |
+| OpenAlex | 250M+ scholarly works | free, mailto recommended |
+| PubMed (NCBI E-utilities) | Biomedical + preprints | free, optional API key |
+| arXiv | Preprints (physics, math, CS, bio) | free |
+| Crossref | DOI registry (broad coverage) | free, mailto recommended |
+| Europe PMC | Biomedical full text + preprints | free |
+| Semantic Scholar | AI-enriched, abstract + citations | free, optional API key |
+| Unpaywall | Open-access full text locator | free, email required |
+| DOAJ | Open-access journal index | free |
+| CORE | Global open-access aggregator | free, optional API key |
+
+### China (browser handoff, no page scraping)
+
+| Source | Access | Mode |
+| --- | --- | --- |
+| PubScholar (公益学术平台) | free | search-link |
+| ChinaXiv (中科院预印本) | free | search-link |
+| NSTL (国家科技图书文献中心) | free | search-link |
+| NCPSSD (国家哲社文献中心) | free | search-link |
+| SinoMed (中国生物医学文献) | institutional | search-link |
+| CNKI (知网) | paid | search-link |
+| 万方数据 | paid | search-link |
+| 维普 CQVIP | paid | search-link |
+
+China sources are explicitly **not scraped** by Selenyx. They are presented as handoff cards that open the source's own search URL in your system browser.
 
 ## Research-first architecture
 

@@ -12,6 +12,7 @@ const state = {
   messages: [],
   browserUrl: 'https://arxiv.org',
   browserStatus: { state: 'idle' },
+  sources: [],
 };
 
 const views = {
@@ -207,6 +208,30 @@ function renderSearchResults() {
       text: `部分数据源失败：${result.errors.map((item) => `${item.source}${item.status ? ` HTTP ${item.status}` : ''}`).join('；')}。已展示成功返回的真实结果。`,
     }));
   }
+  if (Array.isArray(result.links) && result.links.length) {
+    const linkSection = el('section', { class: 'china-link-section' }, [
+      el('h3', { text: '国内来源跳转（Selenyx 不抓取页面内容）' }),
+    ]);
+    for (const link of result.links) {
+      linkSection.append(el('div', { class: 'china-link-card' }, [
+        el('div', { class: 'china-link-head' }, [
+          el('strong', { text: link.sourceName }),
+          el('span', { class: link.requiresAccount ? 'pill warn' : 'pill ok',
+            text: link.requiresAccount ? '需账号' : '免费' }),
+        ]),
+        el('p', { class: 'china-link-mode', text: `集成模式：${link.mode}` }),
+        el('p', { class: 'china-link-note', text: link.note ?? '' }),
+        el('p', { class: 'china-link-honesty', text: link.honesty ?? '' }),
+        el('div', { class: 'china-link-actions' }, [
+          el('button', {
+            class: 'text-button', text: '在系统浏览器打开',
+            onClick: () => api.openExternal(link.url).catch(() => toast('外部打开失败', 'error')),
+          }),
+        ]),
+      ]));
+    }
+    container.append(linkSection);
+  }
 }
 
 async function runSearch(event) {
@@ -268,6 +293,38 @@ function addSourceEvidence(record) {
   $('#evidence-count').textContent = String(state.evidence.length);
   renderRightContent();
   toast('已加入证据板');
+}
+
+function renderSourcePickers() {
+  const groups = {
+    intl: $('#sources-intl'),
+    china: $('#sources-china'),
+  };
+  if (!groups.intl || !groups.china) return;
+  clear(groups.intl); clear(groups.china);
+  const sources = state.sources;
+  if (!sources.length) {
+    groups.intl.append(el('p', { class: 'empty', text: '暂无国际 API 来源' }));
+    groups.china.append(el('p', { class: 'empty', text: '暂无国内来源' }));
+    return;
+  }
+  for (const src of sources) {
+    const label = el('label', { class: `source-chip ${src.kind === 'link' ? 'link-kind' : 'api-kind'}` }, [
+      el('input', {
+        type: 'checkbox', name: 'source', value: src.id,
+        checked: ['openalex', 'pubmed', 'pubscholar'].includes(src.id) ? 'checked' : null,
+      }),
+      el('span', { class: 'source-name', text: src.name }),
+      el('span', {
+        class: 'source-kind',
+        text: src.kind === 'link' ? (src.free ? '免费跳转' : '需登录跳转') : '真 API',
+      }),
+    ]);
+    if (src.note) label.title = src.note;
+    if (src.region === 'china') groups.china.append(label);
+    else groups.intl.append(label);
+  }
+  groups.china.append(el('p', { class: 'source-disclaimer', text: '国内来源：Selenyx 不抓取页面内容，仅生成系统浏览器跳转链接；需账号的来源请在对应机构登录。' }));
 }
 
 function renderReader(extra = null) {
@@ -723,6 +780,16 @@ async function boot() {
   setupSettings();
   renderRightContent();
   renderReader();
+  // 拉取来源清单，动态渲染检索表单的来源选择区
+  try {
+    const srcResp = await api.listSources();
+    if (srcResp.ok && Array.isArray(srcResp.sources) && srcResp.sources.length) {
+      state.sources = srcResp.sources;
+      renderSourcePickers();
+    }
+  } catch (err) {
+    console.warn('listSources failed', err);
+  }
   sites.forEach((site) => $('#browser-site').append(el('option', { value: site.id, text: site.name })));
   $$('.nav-item[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
   $('#literature-search-form').addEventListener('submit', runSearch);

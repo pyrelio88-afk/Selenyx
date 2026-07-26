@@ -76,8 +76,14 @@
             <button type="submit" class="primary-button">检索</button>
           </form>
           <div class="search-options">
-            <label><input type="checkbox" name="source" value="openalex" checked> OpenAlex</label>
-            <label><input type="checkbox" name="source" value="pubmed" checked> PubMed</label>
+            <div class="source-group">
+              <h4>国际原生 API（真检索）</h4>
+              <div id="sources-intl" class="source-list"></div>
+            </div>
+            <div class="source-group">
+              <h4>国内学术来源（系统浏览器跳转）</h4>
+              <div id="sources-china" class="source-list"></div>
+            </div>
             <span id="search-audit" class="audit-text">尚未发起联网请求</span>
           </div>
           <div id="search-state" class="empty-state">

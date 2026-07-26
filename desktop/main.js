@@ -240,14 +240,29 @@ function registerIpc() {
   registerHandle('literature:search', async (_event, payload = {}) => {
     const query = String(payload.query ?? '').trim();
     if (!query) throw new TypeError('search query is required');
-    const { search } = await modules();
-    const service = new search.LiteratureSearchService();
-    const result = await service.search(query, {
-      sources: Array.isArray(payload.sources) ? payload.sources : ['openalex', 'pubmed'],
-      limit: payload.limit,
-      page: payload.page,
-    });
+    const { search, registry } = await modules();
+    const requested = Array.isArray(payload.sources) && payload.sources.length
+      ? payload.sources : ['openalex', 'pubmed'];
+    // 分流：api 来源走真检索；link 来源（国内）走 planChinaSearch 返回跳转信封。
+    const apiSources = requested.filter((id) => registry.getSourceMeta(id)?.kind === 'native-api');
+    const linkSources = requested.filter((id) => registry.getSourceMeta(id)?.kind === 'link');
+    const result = { query, sources: requested, records: [], sourceResults: [], errors: [], links: [] };
+    if (apiSources.length) {
+      const service = new search.LiteratureSearchService();
+      const apiResult = await service.search(query, { sources: apiSources, limit: payload.limit, page: payload.page });
+      Object.assign(result, apiResult);
+    }
+    for (const id of linkSources) {
+      const link = registry.searchSource(id, query);
+      result.links.push(link);
+      result.sourceResults.push({ source: id, total: 0, returned: 0, page: 1, audit: { provider: id, mode: link.mode, url: link.url, honesty: link.honesty } });
+    }
     return { ok: true, result };
+  });
+
+  registerHandle('literature:sources', async () => {
+    const { registry } = await modules();
+    return { ok: true, sources: registry.listAllSources() };
   });
 
   registerHandle('provider:list', async () => ({ ok: true, ...publicProviderState() }));
