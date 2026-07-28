@@ -44,5 +44,10 @@ contextBridge.exposeInMainWorld('selenyx', Object.freeze({
       return () => ipcRenderer.removeListener('browser:status', listener);
     },
   }),
+  papers: Object.freeze({
+    import: (payload) => invoke('papers:import', payload || {}),
+    read: (id) => invoke('papers:read', { id }),
+    exists: (id) => invoke('papers:exists', { id }),
+  }),
   platform: process.platform,
 }));

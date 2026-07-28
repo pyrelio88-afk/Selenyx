@@ -4,56 +4,95 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-src https:;">
-  <title>Selenyx — Hermes 研究工作台</title>
+    content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-src 'self' blob: https:;">
+  <title>Selenyx — 证据门科研工作台</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div id="app" class="workbench">
-    <aside id="left-panel" class="left-panel" aria-label="项目与导航">
+    <aside id="left-panel" class="left-panel" aria-label="科研流水线">
       <header class="brand">
         <span class="brand-mark" data-icon="moon" aria-hidden="true"></span>
-        <span class="brand-copy"><strong>Selenyx</strong><small>RESEARCH WORKBENCH</small></span>
+        <span class="brand-copy"><strong>Selenyx</strong><small>EVIDENCE-GATED LAB</small></span>
         <button id="collapse-left" class="icon-button" data-icon="panel-left" aria-label="折叠左栏"></button>
       </header>
-      <button id="new-session" class="new-session"><span data-icon="plus"></span><b>新建研究</b></button>
-      <nav class="nav-list" aria-label="主导航">
-        <p class="nav-label">置顶</p>
-        <button data-view="research" class="nav-item active"><span data-icon="search"></span><b>文献检索</b></button>
+      <button id="new-session" class="new-session"><span data-icon="plus"></span><b>新建研究问题</b></button>
+
+      <nav class="nav-list" aria-label="证据门流水线">
+        <p class="nav-label">1 · 立题</p>
+        <button data-view="question" class="nav-item active"><span data-icon="spark"></span><b>研究问题</b></button>
+
+        <p class="nav-label">2 · 文献</p>
+        <button data-view="research" class="nav-item"><span data-icon="search"></span><b>文献检索</b></button>
+        <button data-view="browser" class="nav-item"><span data-icon="globe"></span><b>获取全文</b></button>
         <button data-view="library" class="nav-item"><span data-icon="library"></span><b>本地文献库</b><em id="library-count">0</em></button>
-        <button data-view="reader" class="nav-item"><span data-icon="reader"></span><b>阅读模式</b></button>
-        <button data-view="browser" class="nav-item"><span data-icon="globe"></span><b>科研浏览器</b></button>
-        <p class="nav-label">工作台</p>
-        <button data-view="chat" class="nav-item"><span data-icon="message"></span><b>科研对话</b></button>
+        <button data-view="reader" class="nav-item"><span data-icon="reader"></span><b>阅读 · PDF</b></button>
+
+        <p class="nav-label">3 · 证据与综合</p>
         <button data-view="evidence" class="nav-item"><span data-icon="link"></span><b>证据链</b><em id="evidence-count">0</em></button>
-        <button data-view="skills" class="nav-item"><span data-icon="spark"></span><b>Nature 科研助手</b></button>
+        <button data-view="skills" class="nav-item"><span data-icon="spark"></span><b>综合路径</b></button>
+
+        <p class="nav-label">4 · 产物</p>
+        <button data-view="write" class="nav-item"><span data-icon="note"></span><b>写作</b></button>
+        <button data-view="figure" class="nav-item"><span data-icon="highlight"></span><b>图表规划</b></button>
+        <button data-view="experiment" class="nav-item"><span data-icon="settings"></span><b>实验日志</b></button>
+        <button data-view="chat" class="nav-item"><span data-icon="message"></span><b>科研对话</b></button>
       </nav>
+
       <section class="sessions">
         <p class="nav-label">当前项目</p>
         <button class="project-row active"><span class="project-dot"></span><span><b>未命名研究</b><small>本地工作区 · 自动保存</small></span></button>
       </section>
       <footer class="left-footer">
         <button id="open-settings" class="nav-item"><span data-icon="settings"></span><b>设置</b></button>
-        <div class="local-state"><span></span><b>本地优先</b><small>Key 仅安全存储</small></div>
+        <div class="local-state"><span></span><b>本地优先</b><small>PDF / Key 仅本机</small></div>
       </footer>
     </aside>
     <div id="left-resizer" class="resizer" role="separator" aria-orientation="vertical" aria-label="调整左栏"></div>
 
     <main class="main-panel">
       <header class="topbar">
-        <div><p id="view-eyebrow">研究工作台</p><h1 id="view-title">文献检索</h1></div>
+        <div><p id="view-eyebrow">证据门流水线</p><h1 id="view-title">研究问题</h1></div>
         <div class="top-actions">
           <span id="runtime-badge" class="runtime-badge pending">正在自检</span>
           <button id="toggle-right" class="icon-button" data-icon="panel-right" aria-label="切换右栏"></button>
         </div>
       </header>
 
-      <section id="research-view" class="view active">
+      <!-- 1. Question -->
+      <section id="question-view" class="view active">
         <div class="content-column">
           <header class="page-intro">
-            <p class="kicker">DISCOVER</p>
-            <h2>先找到可核验的文献，再形成判断。</h2>
-            <p>API 检索、站点跳转和本地收藏明确分开。现场编造的标题在真实数据源应返回 0 条。</p>
+            <p class="kicker">QUESTION · GATE 0</p>
+            <h2>先立题，再检索。未确认边界不进入联网。</h2>
+            <p>对齐 Claude Scholar 证据门：question → discover → read → evidence → claim → writing。Nature Skills 作为阶段能力，不再堆成技能墙。</p>
+          </header>
+          <div class="question-card">
+            <label for="research-question-input">你的研究问题</label>
+            <textarea id="research-question-input" rows="5" placeholder="例如：生成式 AI 是否会系统性削弱科研写作的可核验性？现有证据中支持与反驳各是什么？"></textarea>
+            <div class="assistant-prompts" id="question-prompts">
+              <button type="button" class="assistant-prompt" data-prompt="围绕我的研究主题做可追溯文献综述，并建立支持/反驳证据链">文献综述</button>
+              <button type="button" class="assistant-prompt" data-prompt="把研究想法拆成可证伪假设、变量、对照与停止条件">实验立题</button>
+              <button type="button" class="assistant-prompt" data-prompt="核验当前主张的支持、反驳与限定性证据">证据核验</button>
+              <button type="button" class="assistant-prompt" data-prompt="根据审稿意见形成逐条回应、行动与证据清单">审稿回复</button>
+            </div>
+            <div class="assistant-actions">
+              <button id="question-start" class="primary-button">确认问题并生成路径</button>
+              <button id="question-to-search" class="secondary-button">已有问题，去检索</button>
+            </div>
+            <p class="paper-hint">路径会本地保存。检索必须真 API；PDF 需你手动下载后导入阅读器。</p>
+          </div>
+          <div id="question-plan-preview" class="assistant-tasks" hidden></div>
+        </div>
+      </section>
+
+      <!-- 2. Search -->
+      <section id="research-view" class="view">
+        <div class="content-column">
+          <header class="page-intro">
+            <p class="kicker">DISCOVER · GATE 1</p>
+            <h2>真检索。编造标题应返回 0 条。</h2>
+            <p>API 结果、站点跳转、本地收藏严格分开。命中后：浏览器获取全文 → 本地下载 PDF → 导入阅读。现场编造的标题在真实数据源应返回 0 条。</p>
           </header>
           <div class="segment-tabs" role="tablist" aria-label="检索范围">
             <button class="active" data-search-tab="china">中国文献</button>
@@ -73,37 +112,127 @@
               <option value="broad">主题检索：允许相关结果</option>
               <option value="exact">精确标题：只保留高度匹配</option>
             </select>
-            <span>防止把关键词相关论文冒充成现场标题的命中结果。</span>
+            <span>防止把关键词相关论文冒充成现场标题命中。</span>
           </div>
           <div id="source-controls" class="source-controls"></div>
           <p id="search-audit" class="audit-line">尚未发起请求。网页入口不会被计作 API 成功。</p>
           <div id="source-statuses" class="source-statuses"></div>
           <div id="search-state" class="empty-state">
-            <span data-icon="search"></span><h3>从一个问题开始</h3>
-            <p>默认先展示中国学术入口；切换到国际聚合可调用 OpenAlex、PubMed 与 Crossref 真实 API。</p>
+            <span data-icon="search"></span><h3>从一个已确认的问题开始</h3>
+            <p>国际聚合默认 OpenAlex / PubMed / Crossref。中国页多为合法站点跳转。</p>
           </div>
           <div id="search-results" class="result-list" aria-live="polite"></div>
         </div>
       </section>
 
-      <section id="library-view" class="view"><div class="content-column"><header class="section-heading"><div><p class="kicker">LOCAL LIBRARY</p><h2>本地文献库</h2></div><button id="manual-add" class="secondary-button"><span data-icon="plus"></span>手动添加</button></header><div id="library-results" class="result-list"></div></div></section>
-      <section id="reader-view" class="view"><div class="reader-layout"><article id="reader-document" class="paper"></article><div class="reader-tools" aria-label="阅读工具"><button data-reader-action="highlight"><span data-icon="highlight"></span>高亮</button><button data-reader-action="note"><span data-icon="note"></span>批注</button><button data-reader-action="translate">L1 翻译</button><button data-reader-action="summarize">L1 总结</button><button data-reader-action="evidence"><span data-icon="link"></span>加入证据</button></div></div></section>
-      <section id="browser-view" class="view"><div class="browser-page"><header class="browser-toolbar"><button id="browser-home" class="icon-button" data-icon="home" aria-label="浏览器首页"></button><input id="browser-url" aria-label="网址或关键词" placeholder="输入网址或关键词（免费站点优先内嵌）"><button id="browser-go" class="primary-button">前往</button><button id="browser-reload" class="secondary-button" type="button">刷新</button><button id="browser-save-page" class="secondary-button" type="button">收藏当前页</button><button id="browser-open-external" class="secondary-button" type="button">系统浏览器</button></header><div id="browser-homepage"><div class="browser-heading"><div><p class="kicker">CHINA FIRST</p><h2>科研站点</h2><p>免费/公益站点优先内嵌；登录墙与付费库可添加为自定义站点，并随时改用系统浏览器。</p></div><button id="browser-add-site" class="secondary-button">添加站点</button></div><div id="browser-sites" class="site-groups"></div></div><div id="browser-host" class="browser-host" hidden><div id="browser-status" class="browser-fallback"></div></div></div></section>
-      <section id="chat-view" class="view"><div class="content-column message-column"><header class="page-intro compact"><p class="kicker">EVIDENCE CHAT</p><h2>围绕当前文献与证据提问</h2><p>未配置 Key 时只运行离线 L1，绝不模拟模型回答。</p></header><div id="messages" class="messages"></div></div></section>
-      <section id="evidence-view" class="view"><div class="content-column"><header class="section-heading"><div><p class="kicker">CLAIM · EVIDENCE</p><h2>证据链</h2></div></header><div id="evidence-board"></div></div></section>
+      <section id="library-view" class="view">
+        <div class="content-column">
+          <header class="section-heading">
+            <div><p class="kicker">LIBRARY · SCREEN</p><h2>本地文献库</h2></div>
+            <div class="heading-actions">
+              <button id="import-pdf" class="primary-button"><span data-icon="plus"></span>导入 PDF</button>
+              <button id="manual-add" class="secondary-button"><span data-icon="plus"></span>手动添加</button>
+            </div>
+          </header>
+          <p class="paper-hint">推荐闭环：检索 → 获取全文（浏览器）→ 系统下载 PDF → 这里导入 → 阅读批注。</p>
+          <div id="library-results" class="result-list"></div>
+        </div>
+      </section>
+
+      <section id="reader-view" class="view">
+        <div class="reader-shell">
+          <div class="reader-toolbar">
+            <div class="reader-toolbar-left">
+              <button id="reader-import-pdf" class="secondary-button" type="button">导入 PDF</button>
+              <button id="reader-prev-page" class="icon-button" type="button" aria-label="上一页">‹</button>
+              <span id="reader-page-label" class="reader-page-label">—</span>
+              <button id="reader-next-page" class="icon-button" type="button" aria-label="下一页">›</button>
+              <button id="reader-zoom-out" class="icon-button" type="button" aria-label="缩小">−</button>
+              <button id="reader-zoom-in" class="icon-button" type="button" aria-label="放大">+</button>
+            </div>
+            <div class="reader-tools" aria-label="阅读工具">
+              <button data-reader-action="highlight"><span data-icon="highlight"></span>高亮</button>
+              <button data-reader-action="note"><span data-icon="note"></span>批注</button>
+              <button data-reader-action="translate">L1 翻译</button>
+              <button data-reader-action="summarize">L1 总结</button>
+              <button data-reader-action="evidence"><span data-icon="link"></span>加入证据</button>
+              <button data-reader-action="card">论文卡片</button>
+            </div>
+          </div>
+          <div class="reader-layout">
+            <article id="reader-document" class="paper"></article>
+            <div id="pdf-stage" class="pdf-stage" hidden>
+              <div id="pdf-scroll" class="pdf-scroll">
+                <canvas id="pdf-canvas"></canvas>
+                <div id="pdf-text-layer" class="pdf-text-layer"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="browser-view" class="view">
+        <div class="browser-page">
+          <header class="browser-toolbar">
+            <button id="browser-home" class="icon-button" data-icon="home" aria-label="浏览器首页"></button>
+            <input id="browser-url" aria-label="网址或关键词" placeholder="输入网址或关键词；免费站优先内嵌">
+            <button id="browser-go" class="primary-button">前往</button>
+            <button id="browser-reload" class="secondary-button" type="button">刷新</button>
+            <button id="browser-save-page" class="secondary-button" type="button">收藏当前页</button>
+            <button id="browser-import-pdf" class="secondary-button" type="button">导入已下载 PDF</button>
+            <button id="browser-open-external" class="secondary-button" type="button">系统浏览器</button>
+          </header>
+          <div id="browser-homepage">
+            <div class="browser-heading">
+              <div>
+                <p class="kicker">ACQUIRE FULL TEXT</p>
+                <h2>获取全文</h2>
+                <p>应用内打开可嵌站点；登录墙自动走系统浏览器。下载完成后点「导入已下载 PDF」进入阅读批注。</p>
+              </div>
+              <button id="browser-add-site" class="secondary-button">添加站点</button>
+            </div>
+            <div id="browser-sites" class="site-groups"></div>
+          </div>
+          <div id="browser-host" class="browser-host" hidden>
+            <div id="browser-status" class="browser-fallback"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="chat-view" class="view">
+        <div class="content-column message-column">
+          <header class="page-intro compact">
+            <p class="kicker">EVIDENCE CHAT</p>
+            <h2>围绕当前文献与证据提问</h2>
+            <p>未配置 Key 时只运行离线 L1，绝不模拟模型回答。</p>
+          </header>
+          <div id="messages" class="messages"></div>
+        </div>
+      </section>
+
+      <section id="evidence-view" class="view">
+        <div class="content-column">
+          <header class="section-heading">
+            <div><p class="kicker">CLAIM · EVIDENCE GATE</p><h2>证据链</h2></div>
+          </header>
+          <p class="paper-hint">未审阅证据不得提升为结论。支持 / 反驳 / 限定必须显式标记。</p>
+          <div id="evidence-board"></div>
+        </div>
+      </section>
+
       <section id="skills-view" class="view">
         <div class="content-column assistant-column">
           <header class="page-intro">
-            <p class="kicker">NATURE RESEARCH ASSISTANT</p>
-            <h2>把研究问题推进成可核验的工作流。</h2>
-            <p>Nature Skills 已收进助手的内部能力层，不再作为技能卡片陈列。助手围绕问题、文献、阅读、证据、综合和审阅持续工作。</p>
+            <p class="kicker">SYNTHESIZE</p>
+            <h2>综合路径 · Nature 能力内化</h2>
+            <p>不是技能超市。助手按证据门推进：问题、检索、精读、证据、综合、写作、审阅。</p>
           </header>
           <section class="assistant-intake" aria-labelledby="assistant-intake-title">
             <div>
               <h3 id="assistant-intake-title">研究目标</h3>
-              <p>先用离线规则拆解；联网与模型增强只在真正需要时调用。</p>
+              <p>可与「研究问题」页同步；此处用于调整或重建路径。</p>
             </div>
-            <textarea id="assistant-brief" rows="4" placeholder="例如：梳理生成式 AI 对科研写作可靠性的影响，并找出相互矛盾的证据。"></textarea>
+            <textarea id="assistant-brief" rows="4" placeholder="研究问题…"></textarea>
             <div class="assistant-prompts" aria-label="研究目标示例">
               <button class="assistant-prompt" data-prompt="围绕我的研究问题做文献综述，并建立可追溯证据链">文献综述</button>
               <button class="assistant-prompt" data-prompt="核验当前主张的支持、反驳与限定性证据">证据核验</button>
@@ -111,14 +240,14 @@
               <button class="assistant-prompt" data-prompt="根据审稿意见形成逐条回应、行动与证据清单">审稿回复</button>
             </div>
             <div class="assistant-actions">
-              <button id="assistant-create" class="primary-button">生成研究路径</button>
+              <button id="assistant-create" class="primary-button">生成 / 更新路径</button>
               <button id="assistant-clear" class="secondary-button">清空</button>
             </div>
           </section>
           <div id="assistant-empty" class="assistant-empty">
             <span data-icon="spark"></span>
-            <h3>不是“选一个技能”，而是持续推进同一个研究问题</h3>
-            <p>助手会把检索、筛选、精读、证据和写作串成一条本地持久化路径。</p>
+            <h3>从「研究问题」页确认边界后，路径会出现在这里</h3>
+            <p>每一步带 evidence gate；未过门不得静默推进。</p>
           </div>
           <section id="assistant-workspace" class="assistant-workspace" hidden>
             <header class="assistant-plan-head">
@@ -133,22 +262,109 @@
               <button id="assistant-enhance" class="secondary-button">用 BYOK 模型审阅计划</button>
             </div>
             <pre id="assistant-model-output" class="assistant-model-output" hidden></pre>
-            <p class="assistant-boundary">离线：问题拆解、批注、确定性摘要、证据组织与计划恢复。联网：真实文献检索。L2：仅在本地配置 BYOK 后增强综合与写作。</p>
+            <p class="assistant-boundary">离线：问题拆解、批注、确定性摘要、证据组织。联网：真实检索。L2：仅 BYOK 后增强。</p>
           </section>
         </div>
       </section>
 
+      <section id="write-view" class="view">
+        <div class="content-column">
+          <header class="page-intro">
+            <p class="kicker">WRITE · FROM EVIDENCE</p>
+            <h2>写作工作台</h2>
+            <p>只允许基于已审阅证据起草。无 Key 时生成结构提纲，不伪造引文。</p>
+          </header>
+          <div class="draft-toolbar">
+            <button id="write-from-evidence" class="primary-button">从已审阅证据生成提纲</button>
+            <button id="write-save" class="secondary-button">保存草稿</button>
+          </div>
+          <textarea id="write-draft" class="draft-area" rows="18" placeholder="写作草稿将保存在本地工作区…"></textarea>
+        </div>
+      </section>
+
+      <section id="figure-view" class="view">
+        <div class="content-column">
+          <header class="page-intro">
+            <p class="kicker">FIGURE · NATURE STYLE</p>
+            <h2>图表规划</h2>
+            <p>规划可视编码与图注结构。真正出图需本地 Python/R；此处不假装已生成图像。</p>
+          </header>
+          <div class="draft-toolbar">
+            <button id="figure-scaffold" class="primary-button">生成图表规划骨架</button>
+            <button id="figure-save" class="secondary-button">保存</button>
+          </div>
+          <textarea id="figure-draft" class="draft-area" rows="16" placeholder="图表目标、数据列、编码、图注、可复现命令占位…"></textarea>
+        </div>
+      </section>
+
+      <section id="experiment-view" class="view">
+        <div class="content-column">
+          <header class="page-intro">
+            <p class="kicker">EXPERIMENT LOG</p>
+            <h2>实验日志</h2>
+            <p>分栏记录假设、操作、观察与异常。缺失字段显式保留，不补造数据。</p>
+          </header>
+          <div class="draft-toolbar">
+            <button id="experiment-scaffold" class="primary-button">生成日志模板</button>
+            <button id="experiment-save" class="secondary-button">保存</button>
+          </div>
+          <textarea id="experiment-draft" class="draft-area" rows="16" placeholder="粘贴原始记录或从模板开始…"></textarea>
+        </div>
+      </section>
+
       <footer id="composer" class="composer">
-        <div class="composer-inner"><textarea id="composer-input" rows="1" placeholder="询问当前研究或证据…" aria-label="消息"></textarea><button id="send-message" class="send-button" data-icon="send" aria-label="发送"></button><div class="composer-meta"><button id="provider-pill">离线 L1</button><span>本地上下文 · 不上传</span><span class="spacer"></span><span>Enter 发送</span></div></div>
+        <div class="composer-inner">
+          <textarea id="composer-input" rows="1" placeholder="询问当前研究或证据…" aria-label="消息"></textarea>
+          <button id="send-message" class="send-button" data-icon="send" aria-label="发送"></button>
+          <div class="composer-meta">
+            <button id="provider-pill">离线 L1</button>
+            <span>本地上下文 · 不上传</span>
+            <span class="spacer"></span>
+            <span>Enter 发送</span>
+          </div>
+        </div>
       </footer>
     </main>
 
     <div id="right-resizer" class="resizer" role="separator" aria-orientation="vertical" aria-label="调整右栏"></div>
-    <aside id="right-panel" class="right-panel" aria-label="当前上下文"><header><p class="kicker">CONTEXT</p><h2 id="context-title">检索上下文</h2></header><div id="right-content" class="right-content"></div></aside>
+    <aside id="right-panel" class="right-panel" aria-label="当前上下文">
+      <header><p class="kicker">CONTEXT</p><h2 id="context-title">研究上下文</h2></header>
+      <div id="right-content" class="right-content"></div>
+    </aside>
   </div>
 
-  <div id="manual-modal" class="modal-backdrop" hidden><form id="manual-form" class="modal-card"><header><div><p class="kicker">LOCAL RECORD</p><h2>手动添加文献</h2></div><button type="button" data-close-modal="manual-modal" class="icon-button" data-icon="close" aria-label="关闭"></button></header><label>标题<input name="title" required></label><div class="form-grid"><label>作者（逗号分隔）<input name="authors"></label><label>年份<input name="year" inputmode="numeric"></label><label>DOI<input name="doi"></label><label>来源<input name="venue"></label></div><label>摘要<textarea name="abstract" rows="5"></textarea></label><footer><button type="button" data-close-modal="manual-modal" class="secondary-button">取消</button><button class="primary-button">保存到本地</button></footer></form></div>
-  <div id="settings-modal" class="modal-backdrop" hidden><div class="settings-dialog" role="dialog" aria-modal="true"><aside><header><div><p class="kicker">SELENYX</p><h2>设置</h2></div><button id="close-settings" class="icon-button" data-icon="close" aria-label="关闭"></button></header><nav id="settings-nav"></nav></aside><section id="settings-content"></section></div></div>
+  <div id="manual-modal" class="modal-backdrop" hidden>
+    <form id="manual-form" class="modal-card">
+      <header>
+        <div><p class="kicker">LOCAL RECORD</p><h2>手动添加文献</h2></div>
+        <button type="button" data-close-modal="manual-modal" class="icon-button" data-icon="close" aria-label="关闭"></button>
+      </header>
+      <label>标题<input name="title" required></label>
+      <div class="form-grid">
+        <label>作者（逗号分隔）<input name="authors"></label>
+        <label>年份<input name="year" inputmode="numeric"></label>
+        <label>DOI<input name="doi"></label>
+        <label>来源<input name="venue"></label>
+      </div>
+      <label>摘要<textarea name="abstract" rows="5"></textarea></label>
+      <footer>
+        <button type="button" data-close-modal="manual-modal" class="secondary-button">取消</button>
+        <button class="primary-button">保存到本地</button>
+      </footer>
+    </form>
+  </div>
+  <div id="settings-modal" class="modal-backdrop" hidden>
+    <div class="settings-dialog" role="dialog" aria-modal="true">
+      <aside>
+        <header>
+          <div><p class="kicker">SELENYX</p><h2>设置</h2></div>
+          <button id="close-settings" class="icon-button" data-icon="close" aria-label="关闭"></button>
+        </header>
+        <nav id="settings-nav"></nav>
+      </aside>
+      <section id="settings-content"></section>
+    </div>
+  </div>
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

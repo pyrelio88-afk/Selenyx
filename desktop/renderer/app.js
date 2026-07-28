@@ -6,12 +6,11 @@ import { setupReader, renderReader, renderEvidence, renderRight } from './module
 import { setupBrowser, renderSites, syncBrowserBounds } from './modules/browserWorkbench.js';
 import { setupSettings, refreshProviders } from './modules/settings.js';
 import { setupAssistant, renderAssistant } from './modules/assistant.js';
+import { setupDrafts, hydrateDrafts } from './modules/drafts.js';
 
-// Keep honest boundary copy discoverable for contract tests and future UI surfaces.
 const honestUiCopy = Object.freeze(['真实检索返回 0 条', '改用系统浏览器', '离线 L1', 'L2 · 内容将发送至所选提供方']);
 void honestUiCopy;
 
-// Security boundary: renderer uses only window.selenyx and never calls fetch or reads files.
 function applyAccent() {
   const accent = localStorage.getItem('selenyx.ui.accent');
   if (/^#[0-9a-f]{6}$/i.test(accent ?? '')) document.documentElement.style.setProperty('--accent', accent);
@@ -66,7 +65,7 @@ function renderProjectRow() {
   const title = row.querySelector('b');
   const sub = row.querySelector('small');
   if (title) title.textContent = name;
-  if (sub) sub.textContent = '本地工作区 · 自动保存';
+  if (sub) sub.textContent = '证据门工作区 · 自动保存';
 }
 
 async function renameProject() {
@@ -79,9 +78,9 @@ async function renameProject() {
 }
 
 async function startNewResearch() {
-  const name = (window.prompt('新建研究名称', `研究 ${new Date().toLocaleDateString()}`) || '').trim();
+  const name = (window.prompt('新建研究问题 / 项目名', `研究 ${new Date().toLocaleDateString()}`) || '').trim();
   if (!name) return;
-  const ok = window.confirm('将清空当前检索结果、本地收藏、证据与助手路径（浏览器自定义站点会保留）。确定继续？');
+  const ok = window.confirm('将清空检索结果、收藏、证据、草稿与路径（自定义站点保留）。确定？');
   if (!ok) return;
   await workspaceEvent({ type: 'workspace:reset', name });
   state.searchResult = null;
@@ -98,10 +97,12 @@ async function startNewResearch() {
   renderReader();
   renderEvidence();
   renderAssistant();
+  hydrateDrafts();
   renderRight();
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
-  await setView('research');
-  toast(`已创建：${name}`);
+  if ($('#research-question-input')) $('#research-question-input').value = name;
+  await setView('question');
+  toast(`已新建：${name} · 请先确认研究边界`);
 }
 
 async function sendMessage() {
@@ -113,7 +114,7 @@ async function sendMessage() {
   renderMessages();
   const active = state.providers.profiles?.find((item) => item.id === state.providers.activeId);
   if (!active) {
-    state.messages.push({ role: 'assistant', text: '未配置可用模型。当前只能运行离线 L1 技能；我不会假装已经调用大模型。', meta: '离线 L1 · 未联网' });
+    state.messages.push({ role: 'assistant', text: '未配置可用模型。当前只能运行离线 L1；我不会假装已经调用大模型。', meta: '离线 L1 · 未联网' });
     renderMessages();
     return;
   }
@@ -128,6 +129,7 @@ async function sendMessage() {
 
 function viewChanged(view) {
   renderRight();
+  hydrateDrafts();
   if (view === 'library') renderLibrary();
   if (view === 'reader') renderReader();
   if (view === 'evidence') renderEvidence();
@@ -146,7 +148,7 @@ async function boot() {
   state.workspace = workspace.workspace;
   state.sources = sources.ok ? sources.sources : [];
   state.skills = skills.ok ? skills.skills : [];
-  state.searchTab = state.workspace.sourcePreferences.searchTab || 'china';
+  state.searchTab = state.workspace.sourcePreferences.searchTab || 'international';
   state.selectedSource = state.workspace.library.find((item) => item.id === state.workspace.ui.selectedSourceId) ?? null;
   applyLayout();
   updateCounts();
@@ -156,10 +158,11 @@ async function boot() {
   renderEvidence();
   renderRight();
   renderAssistant();
+  hydrateDrafts();
   await refreshProviders();
   const active = state.providers.profiles?.find((item) => item.id === state.providers.activeId);
   $('#provider-pill').textContent = active ? `${active.name} · ${active.model}` : '离线 L1';
-  $('#runtime-badge').textContent = health.ok ? `R0.8 RC · ${health.platform}` : '自检失败';
+  $('#runtime-badge').textContent = health.ok ? `R0.9 · ${health.platform}` : '自检失败';
   $('#runtime-badge').className = `runtime-badge ${health.ok ? 'ready' : 'error'}`;
 
   setViewHook(viewChanged);
@@ -168,6 +171,7 @@ async function boot() {
   setupBrowser();
   setupSettings();
   setupAssistant();
+  setupDrafts();
   setupResizer($('#left-resizer'), 'left');
   setupResizer($('#right-resizer'), 'right');
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
@@ -192,14 +196,17 @@ async function boot() {
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }
   });
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
-  // Prefer research on cold start when library is empty and last session died on a broken browser tab.
-  let startView = state.workspace.ui.lastView || 'research';
-  if (startView === 'browser' && !(state.workspace.library?.length) && !(state.workspace.ui.browserRecent || []).some((id) => ['arxiv', 'pubscholar', 'pubmed', 'openalex'].includes(id))) {
-    startView = 'research';
-  }
+
+  // Evidence-gated default: no plan → question first
+  let startView = state.workspace.ui.lastView || 'question';
+  const known = Object.keys({
+    question: 1, research: 1, library: 1, reader: 1, browser: 1, chat: 1, evidence: 1, skills: 1, write: 1, figure: 1, experiment: 1,
+  });
+  if (!known.includes(startView)) startView = 'question';
+  if (!state.workspace.assistant?.plan && !state.workspace.library?.length) startView = 'question';
   await setView(startView, false);
-  if (startView === 'research') {
-    toast('提示：真检索请切到「国际聚合」；中国文献多为站点跳转。浏览器里 arXiv/PubScholar 可内嵌，知网等会走系统浏览器。', 'info');
+  if (startView === 'question') {
+    toast('R0.9：先立题 → 真检索 → 获取全文/导入 PDF → 证据门 → 写作', 'info');
   }
 }
 

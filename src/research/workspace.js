@@ -13,10 +13,11 @@ function emptyWorkspace() {
     annotations: [],
     evidence: [],
     assistant: { plan: null, history: [] },
+    drafts: { writing: '', figureBrief: '', experimentLog: '' },
     sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'china' },
     ui: {
       leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false,
-      lastView: 'research', selectedSourceId: null,
+      lastView: 'question', selectedSourceId: null,
       browserSites: [], browserFavorites: [], browserRecent: [],
     },
     updatedAt: nowIso(),
@@ -42,6 +43,12 @@ function normalizeRecord(input) {
     externalIds: Object.fromEntries(Object.entries(externalIds)
       .map(([key, value]) => [text(key, 80), text(value, 500)]).filter(([key, value]) => key && value)),
     savedAt: text(source.savedAt, 80) || nowIso(),
+    localPdf: source.localPdf && typeof source.localPdf === 'object' ? {
+      id: text(source.localPdf.id, 300),
+      name: text(source.localPdf.name, 500),
+      bytes: Number(source.localPdf.bytes) || 0,
+      importedAt: text(source.localPdf.importedAt, 80) || nowIso(),
+    } : null,
   };
 }
 
@@ -67,6 +74,7 @@ function upsertRecord(library, input) {
     authors: record.authors.length ? record.authors : library[index].authors,
     abstract: record.abstract || library[index].abstract,
     externalIds: { ...library[index].externalIds, ...record.externalIds },
+    localPdf: record.localPdf || library[index].localPdf || null,
     savedAt: library[index].savedAt,
   };
   const next = [...library];
@@ -116,6 +124,11 @@ function normalizeWorkspace(input) {
       annotations: Array.isArray(raw.annotations) ? raw.annotations.filter((item) => object(item).id).slice(0, 20_000) : [],
       evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((item) => object(item).id).slice(0, 20_000) : [],
       assistant: normalizeAssistant(raw.assistant),
+      drafts: {
+        writing: text(object(raw.drafts).writing, 200_000),
+        figureBrief: text(object(raw.drafts).figureBrief, 50_000),
+        experimentLog: text(object(raw.drafts).experimentLog, 50_000),
+      },
       sourcePreferences: { ...fallback.sourcePreferences, ...object(raw.sourcePreferences) },
       ui: { ...fallback.ui, ...object(raw.ui) },
       updatedAt: text(raw.updatedAt, 80) || fallback.updatedAt,
@@ -146,6 +159,7 @@ function applyWorkspaceEvent(current, event) {
       id: text(item.id, 300) || `annotation:${randomUUID()}`, sourceId: text(item.sourceId, 300),
       content: text(item.content), quote: text(item.quote), anchor: anchor(item.anchor),
       style: ['highlight', 'underline', 'note'].includes(item.style) ? item.style : 'note',
+      page: Number.isInteger(item.page) && item.page > 0 ? item.page : null,
       createdAt: text(item.createdAt, 80) || nowIso(),
     };
     state.annotations.push(result);
@@ -177,7 +191,8 @@ function applyWorkspaceEvent(current, event) {
       browserFavorites: state.ui.browserFavorites,
     };
     const next = emptyWorkspace();
-    next.ui = { ...next.ui, ...keepUi, lastView: 'research' };
+    next.ui = { ...next.ui, ...keepUi, lastView: 'question' };
+    next.drafts = { writing: '', figureBrief: '', experimentLog: '' };
     next.meta = {
       name: text(action.name, 120) || `研究 ${new Date().toLocaleString()}`,
       createdAt: nowIso(),
@@ -199,6 +214,23 @@ function applyWorkspaceEvent(current, event) {
     state.sourcePreferences = { ...state.sourcePreferences, ...object(action.patch) };
   } else if (action.type === 'ui:patch') {
     state.ui = { ...state.ui, ...object(action.patch) };
+  } else if (action.type === 'draft:patch') {
+    state.drafts = { ...(state.drafts || { writing: '', figureBrief: '', experimentLog: '' }), ...object(action.patch) };
+    result = state.drafts;
+  } else if (action.type === 'library:attachPdf') {
+    const id = text(action.id, 300);
+    const localPdf = object(action.localPdf);
+    if (!id || !text(localPdf.id)) throw new TypeError('attachPdf 需要文献 id 与 localPdf');
+    state.library = state.library.map((item) => item.id === id ? {
+      ...item,
+      localPdf: {
+        id: text(localPdf.id, 300),
+        name: text(localPdf.name, 500) || 'paper.pdf',
+        bytes: Number(localPdf.bytes) || 0,
+        importedAt: text(localPdf.importedAt, 80) || nowIso(),
+      },
+    } : item);
+    result = state.library.find((item) => item.id === id) || null;
   } else {
     throw new TypeError(`unknown workspace event: ${text(action.type, 100)}`);
   }

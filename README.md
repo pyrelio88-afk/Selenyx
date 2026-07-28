@@ -1,3 +1,5 @@
+> **Current track: R0.9 evidence-gated workbench (PDF reader + research pipeline sidebar)**
+
 # Selenyx
 
 > Local-first research assistant for evidence-aware, long-running scholarly work.

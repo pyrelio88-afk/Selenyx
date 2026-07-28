@@ -120,6 +120,7 @@ function buildResearchPlan(input, context = {}) {
   }
   if (classification.intents.includes('write')) {
     tasks.push(task('write', '从证据链起草', '只使用已审阅证据生成写作提纲；模型润色不得改变数值与主张强度。', {
+      route: 'write',
       capability: 'nature-writing',
       level: 'L2',
       evidenceGate: '未被证据支持的句子必须标为推测或待核验',

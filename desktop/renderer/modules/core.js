@@ -96,9 +96,17 @@ function updateCounts() {
 }
 
 const viewNames = {
-  research: ['研究工作台', '文献检索'], library: ['本地工作区', '本地文献库'],
-  reader: ['深度阅读', '阅读模式'], browser: ['站点导航', '科研浏览器'],
-  chat: ['长链路协作', '科研对话'], evidence: ['主张与依据', '证据链'], skills: ['研究编排', 'Nature 科研助手'],
+  question: ['立题闸门', '研究问题'],
+  research: ['发现文献', '文献检索'],
+  library: ['筛选与入库', '本地文献库'],
+  reader: ['精读闸门', '阅读 · PDF'],
+  browser: ['获取全文', '科研浏览器'],
+  chat: ['长链路协作', '科研对话'],
+  evidence: ['主张与依据', '证据链'],
+  skills: ['综合路径', '证据门编排'],
+  write: ['产物 · 写作', '写作工作台'],
+  figure: ['产物 · 图表', '图表规划'],
+  experiment: ['产物 · 实验', '实验日志'],
 };
 let viewHook = () => {};
 
@@ -118,9 +126,13 @@ async function setView(view, persist = true) {
 function setViewHook(callback) { viewHook = callback; }
 function selectedText() {
   const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || !$('#reader-document').contains(selection.anchorNode)) return null;
+  if (!selection || selection.isCollapsed) return null;
   const quote = selection.toString().trim();
   if (!quote) return null;
+  const anchorNode = selection.anchorNode;
+  const inAbstract = $('#reader-document')?.contains(anchorNode);
+  const inPdf = $('#pdf-text-layer')?.contains(anchorNode) || $('#pdf-stage')?.contains(anchorNode);
+  if (!inAbstract && !inPdf) return null;
   const abstract = state.selectedSource?.abstract ?? '';
   const start = abstract.indexOf(quote);
   return { quote, anchor: { start: Math.max(0, start), end: Math.max(0, start) + quote.length } };

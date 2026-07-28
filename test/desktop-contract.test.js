@@ -189,7 +189,7 @@ test('desktop: packaged app copies the shared engine', () => {
 });
 
 test('desktop: version matches R0.8 release candidate', () => {
-  assert.equal(desktopPackage.version, '0.8.0-rc.5');
+  assert.equal(desktopPackage.version, '0.9.0-rc.1');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {
@@ -227,7 +227,7 @@ test('desktop: literature search emits progressive per-source status', () => {
 });
 
 test('desktop: Nature is presented as a research assistant rather than skill cards', () => {
-  assert.match(html, /NATURE RESEARCH ASSISTANT/);
+  assert.match(html, /SYNTHESIZE|NATURE RESEARCH ASSISTANT|证据门/);
   assert.match(html, /id="assistant-tasks"/);
   assert.doesNotMatch(html, /id="skill-grid"/);
   assert.match(renderer, /assistant: Object\.freeze|api\.assistant/);
@@ -237,4 +237,16 @@ test('desktop: assistant IPC is narrow and explicit', () => {
   assert.match(preload, /assistant: Object\.freeze/);
   assert.match(main, /registerHandle\('assistant:plan'/);
   assert.match(main, /registerHandle\('assistant:update'/);
+});
+test('desktop: papers IPC supports local PDF import', () => {
+  assert.match(main, /papers:import/);
+  assert.match(main, /papers:read/);
+  assert.match(preload, /papers: Object\.freeze/);
+});
+test('desktop: sidebar exposes evidence-gated research stages', () => {
+  assert.match(html, /data-view=\"question\"/);
+  assert.match(html, /data-view=\"write\"/);
+  assert.match(html, /data-view=\"figure\"/);
+  assert.match(html, /data-view=\"experiment\"/);
+  assert.match(html, /阅读 · PDF|导入 PDF/);
 });

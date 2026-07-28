@@ -1,6 +1,6 @@
 {
   "name": "selenyx-desktop",
-  "version": "0.8.0-rc.5",
+  "version": "0.9.0-rc.1",
   "private": true,
   "description": "Selenyx Desktop — local-first research assistant",
   "main": "main.js",
@@ -71,5 +71,8 @@
       "icon": "assets/icon.png",
       "category": "Education"
     }
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38"
   }
 }

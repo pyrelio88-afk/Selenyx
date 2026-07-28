@@ -113,8 +113,10 @@ async function saveRecord(record, button) {
 
 function card(record, local = false) {
   const saved = state.workspace?.library?.some((item) => item.id === record.id);
+  const lib = state.workspace?.library?.find((item) => item.id === record.id);
+  const hasPdf = Boolean(record.localPdf || lib?.localPdf);
   const actions = el('div', { className: 'result-actions' });
-  actions.append(el('button', { className: 'text-button', text: '进入阅读', onClick: async () => {
+  actions.append(el('button', { className: 'text-button', text: hasPdf ? '阅读 PDF' : '进入阅读', onClick: async () => {
     if (!saved) await saveRecord(record);
     state.selectedSource = state.workspace.library.find((item) => item.id === record.id) ?? record;
     await workspaceEvent({ type: 'ui:patch', patch: { selectedSourceId: state.selectedSource.id } });
@@ -124,13 +126,21 @@ function card(record, local = false) {
     await saveRecord(record, event.currentTarget);
   } }));
   if (record.url) {
-    actions.append(el('button', { className: 'text-button', text: '应用内打开', onClick: () => openExternalOrBrowser(record.url, record.title || '全文') }));
-    actions.append(el('button', { className: 'text-button', text: '外部全文', onClick: () => api.openExternal(record.url) }));
+    actions.append(el('button', { className: 'text-button', text: '获取全文', onClick: () => openExternalOrBrowser(record.url, record.title || '全文') }));
+    actions.append(el('button', { className: 'text-button', text: '系统浏览器', onClick: () => api.openExternal(record.url) }));
+  }
+  if (local || saved) {
+    actions.append(el('button', { className: 'text-button', text: hasPdf ? '更换 PDF' : '导入 PDF', onClick: async () => {
+      const { importPdfFlow } = await import('./reader.js');
+      const target = state.workspace.library.find((item) => item.id === record.id) ?? record;
+      state.selectedSource = target;
+      await importPdfFlow(target);
+    } }));
   }
   return el('article', { className: `result-card ${record.reality === 'example' ? 'example' : ''}` }, [
     el('h3', { text: record.title }),
-    el('div', { className: 'meta', text: `${record.authors?.join('、') || '作者未知'} · ${record.venue || '来源未知'} · ${record.year || '年份未知'}${local ? ' · 本地收藏' : ''}` }),
-    el('p', { className: 'abstract', text: record.abstract || '暂无摘要；可进入阅读页查看元数据和外部全文入口。' }),
+    el('div', { className: 'meta', text: `${record.authors?.join('、') || '作者未知'} · ${record.venue || '来源未知'} · ${record.year || '年份未知'}${local ? ' · 本地' : ''}${hasPdf ? ' · PDF' : ''}` }),
+    el('p', { className: 'abstract', text: record.abstract || '暂无摘要；获取全文并导入 PDF 后可精读批注。' }),
     actions,
   ]);
 }

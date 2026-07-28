@@ -6,12 +6,14 @@ const {
   ipcMain,
   safeStorage,
   shell,
+  dialog,
 } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 
-const APP_VERSION = '0.8.0-rc.5';
+const APP_VERSION = '0.9.0-rc.1';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;
@@ -628,6 +630,64 @@ function registerIpc() {
     const url = urlPolicy.validateExternalUrl(payload.url);
     await shell.openExternal(url);
     return { ok: true };
+  });
+
+  function papersDir() {
+    const dir = path.join(app.getPath('userData'), 'papers');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  function resolvePaperPath(id) {
+    const safe = path.basename(String(id || ''));
+    if (!safe || safe !== String(id || '') || !safe.endsWith('.pdf')) {
+      throw new TypeError('非法 PDF 标识');
+    }
+    const full = path.join(papersDir(), safe);
+    if (!full.startsWith(papersDir())) throw new TypeError('路径越界');
+    return full;
+  }
+
+  registerHandle('papers:import', async (_event, payload = {}) => {
+    if (!mainWindow) throw new Error('window is unavailable');
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '导入本地 PDF 到阅读器',
+      properties: ['openFile'],
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (result.canceled || !result.filePaths?.[0]) return { ok: false, canceled: true };
+    const sourcePath = result.filePaths[0];
+    const stat = fs.statSync(sourcePath);
+    if (stat.size > 80 * 1024 * 1024) throw new Error('PDF 超过 80MB，请先压缩再导入');
+    const id = `${crypto.randomUUID()}.pdf`;
+    const dest = path.join(papersDir(), id);
+    fs.copyFileSync(sourcePath, dest);
+    return {
+      ok: true,
+      localPdf: {
+        id,
+        name: path.basename(sourcePath),
+        bytes: stat.size,
+        importedAt: new Date().toISOString(),
+      },
+      suggestedTitle: path.basename(sourcePath, path.extname(sourcePath)),
+    };
+  });
+
+  registerHandle('papers:read', async (_event, payload = {}) => {
+    const full = resolvePaperPath(payload.id);
+    if (!fs.existsSync(full)) return { ok: false, error: { message: 'PDF 文件不存在' } };
+    const buf = fs.readFileSync(full);
+    return { ok: true, base64: buf.toString('base64'), bytes: buf.length };
+  });
+
+  registerHandle('papers:exists', async (_event, payload = {}) => {
+    try {
+      const full = resolvePaperPath(payload.id);
+      return { ok: true, exists: fs.existsSync(full) };
+    } catch {
+      return { ok: true, exists: false };
+    }
   });
 }
 

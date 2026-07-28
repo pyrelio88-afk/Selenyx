@@ -10,3 +10,7 @@ desktop/logs/
 .DS_Store
 Thumbs.db
 outputs/
+
+artifacts/
+desktop/nul
+
