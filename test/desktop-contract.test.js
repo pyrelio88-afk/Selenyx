@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 const html = fs.readFileSync(new URL('../desktop/renderer/index.html', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../desktop/renderer/styles.css', import.meta.url), 'utf8');
-const renderer = ['app.js', 'modules/core.js', 'modules/search.js', 'modules/reader.js', 'modules/browser.js', 'modules/settings.js'].map((file) => fs.readFileSync(new URL('../desktop/renderer/' + file, import.meta.url), 'utf8')).join('\n');
+const renderer = ['app.js', 'modules/core.js', 'modules/search.js', 'modules/reader.js', 'modules/browserWorkbench.js', 'modules/settings.js'].map((file) => fs.readFileSync(new URL('../desktop/renderer/' + file, import.meta.url), 'utf8')).join('\n');
 const preload = fs.readFileSync(new URL('../desktop/preload.js', import.meta.url), 'utf8');
 const main = fs.readFileSync(new URL('../desktop/main.js', import.meta.url), 'utf8');
 const desktopPackage = JSON.parse(fs.readFileSync(new URL('../desktop/package.json', import.meta.url), 'utf8'));
@@ -174,7 +174,7 @@ test('desktop: browser has explicit blocked fallback status', () => {
 });
 
 test('desktop: browser has a finite loading timeout', () => {
-  assert.match(main, /15_000/);
+  assert.match(main, /45_000/);
 });
 
 test('desktop: packaged app copies the shared engine', () => {
@@ -183,7 +183,7 @@ test('desktop: packaged app copies the shared engine', () => {
 });
 
 test('desktop: version matches R0.8 release candidate', () => {
-  assert.equal(desktopPackage.version, '0.8.0-rc.1');
+  assert.equal(desktopPackage.version, '0.8.0-rc.2');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {

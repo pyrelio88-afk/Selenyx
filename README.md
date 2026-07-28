@@ -221,8 +221,11 @@ The suite covers the legacy evidence engine plus:
 - no-key and no-synthetic-fallback guarantees
 - desktop CSP, preload surface, security flags, layout contract, and settings contract
 
-The current local result is 368 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
+The current local result is 375 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
 
+## Nature Skills adapter
+
+Selenyx includes a native adapter for 18 workflows from `Yuan1z0825/nature-skills` pinned at commit `ca9f57e80e8bc100eb06ebfbfff406c126e5b256`. Offline-capable workflows run as L1, writing and review workflows use the active local BYOK provider, and Python/R/Office-dependent workflows show their runtime requirements instead of simulating completion. See `THIRD_PARTY_NOTICES.md` and `src/skills/nature-license.txt`.
 ## Current limitations
 
 - R0.7 is published as a private GitHub Pre-release (Release ID `360001980`) without installer attachments; access requires repository permission.

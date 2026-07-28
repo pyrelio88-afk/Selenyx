@@ -155,6 +155,11 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .site-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
 .site-card { min-height: 82px; display: flex; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-raised); cursor: pointer; text-align: left; }
 .site-card:hover { border-color: var(--accent); }
+.site-card-main { min-width: 0; flex: 1; display: flex; gap: 10px; align-items: flex-start; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.site-mark { width: 32px; height: 32px; display: grid; flex: none; place-items: center; border-radius: 7px; background: var(--paper-soft); color: var(--accent); font-weight: 650; }
+.site-card-actions { display: flex; flex-direction: column; gap: 4px; margin-left: auto; }
+.site-card-actions button { padding: 2px 4px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-faint); cursor: pointer; font-size: 9px; }
+.site-card-actions button:hover { background: var(--accent-soft); color: var(--accent); }
 .site-card > span:first-child { width: 32px; height: 32px; display: grid; flex: none; place-items: center; border-radius: 7px; background: var(--paper-soft); color: var(--accent); font-weight: 650; }
 .site-card b, .site-card small { display: block; }
 .site-card small { margin-top: 2px; color: var(--ink-faint); font-size: 10px; }
@@ -170,9 +175,21 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .evidence-card blockquote { margin: 0; color: var(--ink); }
 .evidence-card p { margin: 5px 0 0; color: var(--ink-faint); font-size: 10px; }
 .skill-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
-.skill-card { padding: 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-raised); }
-.skill-card h3 { margin: 0 0 4px; font-size: 14px; }
-.skill-card p { margin: 0; color: var(--ink-soft); font-size: 11px; }
+.skill-card { min-height: 154px; display: flex; flex-direction: column; padding: 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper-raised); }
+.skill-card:hover { border-color: var(--line-strong); }
+.skill-card header { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.skill-card h3 { margin: 0; font-size: 14px; }
+.skill-card p { margin: 8px 0 12px; color: var(--ink-soft); font-size: 11px; line-height: 1.55; }
+.skill-card footer { display: flex; gap: 6px; align-items: center; margin-top: auto; }
+.skill-badge { padding: 3px 6px; border-radius: 4px; background: var(--paper-soft); color: var(--ink-faint); font-size: 9px; letter-spacing: .04em; }
+.skill-badge.l1 { background: #edf6ef; color: #356644; }
+.skill-badge.l2 { background: var(--accent-soft); color: var(--accent); }
+.skill-card .skill-action { margin-left: auto; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); cursor: pointer; font-size: 10px; }
+.skill-card .skill-action:hover { border-color: var(--accent); color: var(--accent); }
+.skill-dialog-description { color: var(--ink-soft); line-height: 1.55; }
+.skill-requirements { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+.skill-requirements span { padding: 4px 6px; border-radius: 5px; background: #fff8e9; color: #76501b; font-size: 10px; }
+.skill-dialog pre { max-height: 280px; margin: 6px 0 0; padding: 12px; overflow: auto; border: 1px solid var(--line); border-radius: 7px; background: var(--paper-soft); color: var(--ink); font: 11px/1.6 ui-monospace,Consolas,monospace; white-space: pre-wrap; }
 .composer { padding: 8px 18px 12px; background: var(--paper); }
 .composer-inner { width: min(var(--content-width),calc(100% - 16px)); margin: auto; padding: 8px 9px 5px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--paper-raised); }
 .composer textarea { width: calc(100% - 42px); max-height: 120px; padding: 5px 7px; resize: none; border: 0; outline: 0; background: transparent; }

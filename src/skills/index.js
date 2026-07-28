@@ -12,6 +12,9 @@ import { selfDuplicate, checkAgainstCorpus } from './plagiarism.js';
 import { translateText, translateTerms, GLOSSARY } from './translate.js';
 import { summarizeExtractive, summarizeDeep } from './summarize.js';
 import { AnnotationStore, COLORS } from './annotate.js';
+import {
+  listNatureSkills, getNatureSkill, executeNatureL1, buildNatureMessages, NATURE_UPSTREAM,
+} from './nature.js';
 
 const REGISTRY = [
   { id: 'aigc-check', name: 'AIGC 率检测', fn: checkAigc, offline: true, desc: '五维启发式评估 AI 疑似度并标红高风险句' },
@@ -24,11 +27,17 @@ const REGISTRY = [
 ];
 
 function listSkills() {
-  return REGISTRY.map(({ id, name, offline, desc }) => ({ id, name, offline, desc }));
+  const native = REGISTRY.map(({ id, name, offline, desc }) => ({
+    id, name, offline, desc, family: 'selenyx', mode: offline ? 'l1' : 'l2',
+  }));
+  return [...native, ...listNatureSkills()];
 }
 
 function getSkill(id) {
-  return REGISTRY.find((s) => s.id === id) || null;
+  const native = REGISTRY.find((s) => s.id === id);
+  if (native) return { ...native, family: 'selenyx', mode: native.offline ? 'l1' : 'l2' };
+  const nature = getNatureSkill(id);
+  return nature ? { ...nature, family: 'nature' } : null;
 }
 
 export {
@@ -38,4 +47,5 @@ export {
   summarizeExtractive, summarizeDeep,
   AnnotationStore, COLORS,
   listSkills, getSkill,
+  executeNatureL1, buildNatureMessages, NATURE_UPSTREAM,
 };

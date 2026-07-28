@@ -181,10 +181,11 @@ test('annotate: JSON 往返不丢数据', () => {
 
 // ---------- registry ----------
 
-test('skills 注册表: 7 个内置技能全部离线可用', () => {
+test('skills 注册表: 7 个 Selenyx 原生技能离线可用', () => {
   const skills = listSkills();
-  assert.equal(skills.length, 7);
-  for (const s of skills) assert.equal(s.offline, true, `${s.id} 应离线可用`);
+  const native = skills.filter((skill) => skill.family === 'selenyx');
+  assert.equal(native.length, 7);
+  for (const s of native) assert.equal(s.offline, true, `${s.id} 应离线可用`);
   assert.ok(getSkill('aigc-check'));
   assert.equal(getSkill('nonexistent'), null);
 });

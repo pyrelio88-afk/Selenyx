@@ -38,7 +38,7 @@ function renderControls() {
     const pubScholar = sourceById(primaryChina[0]);
     if (pubScholar) host.append(el('div', { className: 'source-lead' }, [
       el('div', { className: 'source-logo', text: 'PS' }),
-      el('div', {}, [el('h3', { text: pubScholar.name }), el('p', { text: '中科院公益入口 · 默认主搜索，不抓取网页内容' })]),
+      el('div', {}, [el('h3', { text: pubScholar.name }), el('p', { text: '中国平台入口优先 · 同步用 OpenAlex/Crossref 开放 API 返回可收藏记录' })]),
       el('span', { className: 'access-tag', text: '优先入口' }),
     ]));
     const list = el('div', { className: 'source-list' });
@@ -60,7 +60,7 @@ function renderControls() {
 }
 
 function selectedSources() {
-  if (state.searchTab === 'china') return ['pubscholar', ...$$('#source-controls input:checked').map((node) => node.value)];
+  if (state.searchTab === 'china') return ['pubscholar', 'openalex', 'crossref', ...$$('#source-controls input:checked').map((node) => node.value)];
   if (state.searchTab === 'international') return $$('#source-controls input:checked').map((node) => node.value);
   return [];
 }

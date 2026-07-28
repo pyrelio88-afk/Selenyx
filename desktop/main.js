@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const APP_VERSION = '0.8.0-rc.1';
+const APP_VERSION = '0.8.0-rc.2';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;
@@ -164,6 +164,14 @@ function ensureBrowserView() {
       .catch(() => {});
     return { action: 'deny' };
   });
+  const markBrowserReady = () => {
+    if (browserLoadTimer) clearTimeout(browserLoadTimer);
+    browserLoadTimer = null;
+    const url = browserView?.webContents?.getURL();
+    if (url && url !== 'about:blank') notifyBrowser({ state: 'ready', url });
+  };
+  browserView.webContents.on('dom-ready', markBrowserReady);
+  browserView.webContents.on('did-stop-loading', markBrowserReady);
   browserView.webContents.on('did-start-loading', () => {
     notifyBrowser({ state: 'loading', url: browserView.webContents.getURL() });
   });
@@ -220,11 +228,38 @@ function registerIpc() {
 
   registerHandle('skill:run', async (_event, payload = {}) => {
     if (typeof payload.id !== 'string') throw new TypeError('skill id is required');
-    const { skills } = await modules();
+    const { skills, providers } = await modules();
     const skill = skills.getSkill(payload.id);
     if (!skill) throw new TypeError(`unknown skill: ${payload.id}`);
     // Desktop never accepts a renderer-provided provider object or Key.
-    return { ok: true, result: await skill.fn(payload.input) };
+    if (skill.family === 'nature') {
+      if (skill.mode === 'l1') {
+        return { ok: true, result: { type: 'text', level: 'L1', text: skills.executeNatureL1(skill.id, payload.input) } };
+      }
+      if (skill.mode === 'route') {
+        return { ok: true, result: { type: 'route', route: skill.route, message: skill.desc } };
+      }
+      if (skill.mode === 'external') {
+        return { ok: true, result: { type: 'unavailable', code: 'EXTERNAL_RUNTIME_REQUIRED', message: skill.desc, requirements: skill.requirements ?? [] } };
+      }
+      const current = providerState();
+      const stored = current.profiles.find((item) => item.id === current.activeId);
+      if (!stored) {
+        const error = new Error('此 Nature 技能需要模型增强；请先在“提供方”中配置并启用本地 BYOK 模型');
+        error.code = 'NO_PROVIDER';
+        throw error;
+      }
+      const { encryptedApiKey, ...profile } = stored;
+      const response = await providers.chatWithProvider(
+        profile, decryptKey(encryptedApiKey), skills.buildNatureMessages(skill.id, payload.input),
+        { temperature: 0.2, maxTokens: 4_096 },
+      );
+      return { ok: true, result: { type: 'text', level: 'L2', text: response.content, model: response.model } };
+    }
+    if (typeof skill.fn !== 'function') {
+      return { ok: true, result: { type: 'route', route: 'reader', message: skill.desc } };
+    }
+    return { ok: true, result: { type: 'text', level: 'L1', text: await skill.fn(payload.input) } };
   });
 
   registerHandle('profile:read', async () => {
@@ -393,8 +428,12 @@ function registerIpc() {
         message: '站点长时间没有完成加载，可能受登录、网络或站点策略限制。',
         workaround: 'open-external',
       });
-    }, 15_000);
-    await view.webContents.loadURL(url);
+    }, 45_000);
+    view.webContents.loadURL(url).catch((error) => {
+      if (!view.webContents.isDestroyed()) notifyBrowser({
+        state: 'blocked', url, message: error.message, workaround: 'open-external',
+      });
+    });
     return { ok: true, url };
   });
 

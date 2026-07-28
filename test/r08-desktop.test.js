@@ -9,7 +9,7 @@ const css = read('../desktop/renderer/styles.css');
 const html = read('../desktop/renderer/index.html');
 const app = read('../desktop/renderer/app.js');
 const search = read('../desktop/renderer/modules/search.js');
-const browser = read('../desktop/renderer/modules/browser.js');
+const browser = read('../desktop/renderer/modules/browserWorkbench.js');
 
 test('R0.8 registers versioned workspace read/event IPC', () => {
   assert.match(main, /registerHandle\('workspace:read'/);
@@ -34,7 +34,7 @@ test('R0.8 defines every renderer design token it consumes', () => {
 });
 
 test('R0.8 renderer is split into native ES modules', () => {
-  for (const module of ['core', 'search', 'reader', 'browser', 'settings']) {
+  for (const module of ['core', 'search', 'reader', 'browserWorkbench', 'settings']) {
     assert.match(app, new RegExp(`modules/${module}\\.js`));
   }
 });
@@ -46,7 +46,8 @@ test('R0.8 renderer never performs an external fetch', () => {
 
 test('R0.8 browser lists domestic sites before international sites', () => {
   assert.ok(browser.indexOf("id: 'pubscholar'") < browser.indexOf("id: 'arxiv'"));
-  assert.ok(browser.indexOf("id: 'cnki'") < browser.indexOf("id: 'openalex'"));
+  assert.ok(browser.indexOf("id: 'google-scholar'") < browser.indexOf("id: 'openalex'"));
+  assert.doesNotMatch(browser, /id: 'cnki'|id: 'wanfang'|id: 'cqvip'/);
 });
 
 test('R0.8 defaults to China search and keeps local library separate', () => {
