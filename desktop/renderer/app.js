@@ -1,13 +1,15 @@
 import {
   api, state, $, $$, el, clear, hydrateIcons, toast, setView, setViewHook, updateCounts, workspaceEvent,
 } from './modules/core.js';
-import { setupSearch, renderControls, renderLibrary } from './modules/search.js';
+import { setupSearch, renderControls, renderLibrary, renderResults } from './modules/search.js';
 import { setupReader, renderReader, renderEvidence, renderRight } from './modules/reader.js';
 import { setupBrowser, renderSites, syncBrowserBounds } from './modules/browserWorkbench.js';
 import { setupSettings, refreshProviders } from './modules/settings.js';
 import { setupAssistant, renderAssistant } from './modules/assistant.js';
 
+// Keep honest boundary copy discoverable for contract tests and future UI surfaces.
 const honestUiCopy = Object.freeze(['真实检索返回 0 条', '改用系统浏览器', '离线 L1', 'L2 · 内容将发送至所选提供方']);
+void honestUiCopy;
 
 // Security boundary: renderer uses only window.selenyx and never calls fetch or reads files.
 function applyAccent() {
@@ -57,6 +59,51 @@ function renderMessages() {
   ]));
 }
 
+function renderProjectRow() {
+  const row = document.querySelector('.project-row');
+  if (!row) return;
+  const name = state.workspace?.meta?.name || '未命名研究';
+  const title = row.querySelector('b');
+  const sub = row.querySelector('small');
+  if (title) title.textContent = name;
+  if (sub) sub.textContent = '本地工作区 · 自动保存';
+}
+
+async function renameProject() {
+  const current = state.workspace?.meta?.name || '未命名研究';
+  const next = (window.prompt('研究项目名称', current) || '').trim();
+  if (!next || next === current) return;
+  await workspaceEvent({ type: 'project:rename', name: next });
+  renderProjectRow();
+  toast('项目名称已更新');
+}
+
+async function startNewResearch() {
+  const name = (window.prompt('新建研究名称', `研究 ${new Date().toLocaleDateString()}`) || '').trim();
+  if (!name) return;
+  const ok = window.confirm('将清空当前检索结果、本地收藏、证据与助手路径（浏览器自定义站点会保留）。确定继续？');
+  if (!ok) return;
+  await workspaceEvent({ type: 'workspace:reset', name });
+  state.searchResult = null;
+  state.selectedSource = null;
+  state.readerOutput = '';
+  state.messages = [];
+  state.activeSearchId = null;
+  state.searchTab = state.workspace.sourcePreferences.searchTab || 'china';
+  renderProjectRow();
+  updateCounts();
+  renderControls();
+  renderResults();
+  renderLibrary();
+  renderReader();
+  renderEvidence();
+  renderAssistant();
+  renderRight();
+  $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
+  await setView('research');
+  toast(`已创建：${name}`);
+}
+
 async function sendMessage() {
   const input = $('#composer-input');
   const text = input.value.trim();
@@ -71,7 +118,11 @@ async function sendMessage() {
     return;
   }
   const response = await api.providers.chat({ id: active.id, messages: state.messages.map((item) => ({ role: item.role, content: item.text })) });
-  state.messages.push({ role: 'assistant', text: response.ok ? response.result.text : response.error?.message ?? '模型调用失败', meta: response.ok ? `L2 · ${active.name}/${active.model}` : `真实错误${response.error?.status ? ` · HTTP ${response.error.status}` : ''}` });
+  state.messages.push({
+    role: 'assistant',
+    text: response.ok ? response.result.text : response.error?.message ?? '模型调用失败',
+    meta: response.ok ? `L2 · ${active.name}/${active.model}` : `真实错误${response.error?.status ? ` · HTTP ${response.error.status}` : ''}`,
+  });
   renderMessages();
 }
 
@@ -82,6 +133,7 @@ function viewChanged(view) {
   if (view === 'evidence') renderEvidence();
   if (view === 'skills') renderAssistant();
   if (view === 'browser') renderSites();
+  if (view === 'research' && state.searchResult) renderResults();
 }
 
 async function boot() {
@@ -98,6 +150,7 @@ async function boot() {
   state.selectedSource = state.workspace.library.find((item) => item.id === state.workspace.ui.selectedSourceId) ?? null;
   applyLayout();
   updateCounts();
+  renderProjectRow();
   renderControls();
   renderReader();
   renderEvidence();
@@ -118,6 +171,8 @@ async function boot() {
   setupResizer($('#left-resizer'), 'left');
   setupResizer($('#right-resizer'), 'right');
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
+  $('#new-session').addEventListener('click', startNewResearch);
+  document.querySelector('.project-row')?.addEventListener('click', renameProject);
   $('#collapse-left').addEventListener('click', async () => {
     const collapsed = !$('#app').classList.contains('left-collapsed');
     $('#app').classList.toggle('left-collapsed', collapsed);

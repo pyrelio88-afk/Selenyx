@@ -1,0 +1,17 @@
+{
+  "requestedUrl": "https://arxiv.org",
+  "ipc": {
+    "ok": true,
+    "url": "https://arxiv.org/",
+    "navigationId": 1
+  },
+  "state": "ready",
+  "currentUrl": "https://arxiv.org/",
+  "attached": true,
+  "bounds": {
+    "x": 183,
+    "y": 120,
+    "width": 1000,
+    "height": 707
+  }
+}

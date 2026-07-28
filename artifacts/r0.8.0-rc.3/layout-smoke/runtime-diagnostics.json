@@ -1,0 +1,824 @@
+[
+  {
+    "name": "health",
+    "state": "resolved",
+    "value": {
+      "ok": true,
+      "version": "0.8.0-rc.3",
+      "platform": "win32",
+      "packaged": false,
+      "online": true,
+      "secureStorageAvailable": true
+    }
+  },
+  {
+    "name": "workspace",
+    "state": "resolved",
+    "value": {
+      "ok": true,
+      "workspace": {
+        "schemaVersion": 1,
+        "library": [],
+        "annotations": [],
+        "evidence": [],
+        "assistant": {
+          "plan": {
+            "id": "plan:686e1105-f533-4a91-91c6-7e0983c38b55",
+            "question": "梳理生成式 AI 对科研写作可靠性的影响，并找出相互矛盾的证据",
+            "intent": "evidence",
+            "intents": [
+              "evidence",
+              "write"
+            ],
+            "stage": "evidence",
+            "confidence": 0.7999999999999999,
+            "localContext": {
+              "libraryCount": 0,
+              "evidenceCount": 0,
+              "selectedSourceId": null
+            },
+            "tasks": [
+              {
+                "id": "task:bc02837d-809b-4871-917f-1efc89762ccf",
+                "stage": "question",
+                "title": "界定问题与检索边界",
+                "description": "把“梳理生成式 AI 对科研写作可靠性的影响，并找出相互矛盾的证据”拆成对象、变量、时间范围和排除条件。",
+                "route": null,
+                "capability": "nature-literature-pipeline",
+                "level": "L1",
+                "evidenceGate": "用户确认问题边界后进入联网检索",
+                "status": "pending"
+              },
+              {
+                "id": "task:c4f96d29-6996-4901-a754-eab9f5d2ad7d",
+                "stage": "discover",
+                "title": "从真实来源检索",
+                "description": "调用 OpenAlex、PubMed、Crossref 等原生 API；网页入口与 API 结果分开显示。",
+                "route": "research",
+                "capability": "nature-academic-search",
+                "level": "L1",
+                "evidenceGate": "至少一个原生 API 返回，或明确记录全部失败原因",
+                "status": "pending"
+              },
+              {
+                "id": "task:ce5d2a20-08b2-4339-a56e-863a77a48e18",
+                "stage": "screen",
+                "title": "筛选并收藏候选文献",
+                "description": "按相关性、年份、来源和重复项筛选，保留排除理由。",
+                "route": "library",
+                "capability": "nature-ref-verifier",
+                "level": "L1",
+                "evidenceGate": "候选文献必须带真实来源 ID 或标记为手工录入",
+                "status": "pending"
+              },
+              {
+                "id": "task:cd4b5eff-eb31-4845-84ae-6228e6bba7c2",
+                "stage": "read",
+                "title": "精读与结构化摘录",
+                "description": "在阅读页核对摘要/全文边界，离线完成批注、确定性摘要和术语翻译。",
+                "route": "reader",
+                "capability": "nature-reader",
+                "level": "L1",
+                "evidenceGate": "每条摘录保留原文、来源与字符范围",
+                "status": "pending"
+              },
+              {
+                "id": "task:f6dff022-b31e-4fcf-9321-d84fde3bcd45",
+                "stage": "evidence",
+                "title": "建立主张—证据链",
+                "description": "把支持、反驳和限定性证据分开，未审阅证据不得提升为结论。",
+                "route": "evidence",
+                "capability": "nature-citation",
+                "level": "L1",
+                "evidenceGate": "关键主张至少有一条已审阅证据；矛盾不得静默丢弃",
+                "status": "active"
+              },
+              {
+                "id": "task:eae3b7c4-ee81-48b8-a72a-66710d6db15c",
+                "stage": "synthesize",
+                "title": "综合并标注不确定性",
+                "description": "先用本地结构生成综合框架；配置 BYOK 后才允许模型增强表述。",
+                "route": "skills",
+                "capability": "nature-literature-pipeline",
+                "level": "L1/L2",
+                "evidenceGate": "结论必须能回到证据记录；缺证据处保留待办",
+                "status": "pending"
+              },
+              {
+                "id": "task:dc5cb493-77fd-4b48-8dc0-10dfd9fa0825",
+                "stage": "write",
+                "title": "从证据链起草",
+                "description": "只使用已审阅证据生成写作提纲；模型润色不得改变数值与主张强度。",
+                "route": null,
+                "capability": "nature-writing",
+                "level": "L2",
+                "evidenceGate": "未被证据支持的句子必须标为推测或待核验",
+                "status": "pending"
+              },
+              {
+                "id": "task:1ee2d5f9-24fc-4037-b0d6-808d03638492",
+                "stage": "review",
+                "title": "反向审阅与引用核验",
+                "description": "检查反例、矛盾、引用错配、过度外推和数据可用性。",
+                "route": null,
+                "capability": "nature-reviewer",
+                "level": "L1/L2",
+                "evidenceGate": "所有阻断项均解决或显式接受风险",
+                "status": "pending"
+              }
+            ],
+            "boundaries": {
+              "offline": "问题拆解、批注、确定性摘要、证据组织和计划持久化可离线使用。",
+              "network": "新文献检索需要真实网络与来源 API；站点跳转不计作 API 成功。",
+              "model": "写作、综合与审稿的 L2 增强需要用户配置 BYOK；无 Key 时不会生成伪模型回答。"
+            },
+            "createdAt": "2026-07-28T17:42:15.188Z",
+            "updatedAt": "2026-07-28T17:42:15.188Z"
+          },
+          "history": [
+            {
+              "at": "2026-07-28T17:42:15.189Z",
+              "action": "plan:set",
+              "detail": "梳理生成式 AI 对科研写作可靠性的影响，并找出相互矛盾的证据"
+            }
+          ]
+        },
+        "sourcePreferences": {
+          "international": [
+            "openalex",
+            "pubmed",
+            "crossref"
+          ],
+          "searchTab": "china"
+        },
+        "ui": {
+          "leftWidth": 180,
+          "rightWidth": 240,
+          "leftCollapsed": false,
+          "rightCollapsed": false,
+          "lastView": "browser",
+          "selectedSourceId": null,
+          "browserSites": [
+            {
+              "id": "custom:1573a5d9-6dd6-451f-9d21-938a4eeb735c",
+              "name": "中国知网（自定义）",
+              "url": "https://www.cnki.net/",
+              "region": "custom",
+              "note": "www.cnki.net"
+            }
+          ],
+          "browserFavorites": [],
+          "browserRecent": [
+            "nstl",
+            "retry:1785259069057",
+            "sinomed",
+            "chinaxiv",
+            "pubscholar",
+            "retry:1785258789785",
+            "recent:1785258787825",
+            "ncpssd"
+          ]
+        },
+        "updatedAt": "2026-07-28T17:46:04.629Z"
+      }
+    }
+  },
+  {
+    "name": "sources",
+    "state": "resolved",
+    "value": {
+      "ok": true,
+      "sources": [
+        {
+          "id": "pubscholar",
+          "name": "PubScholar 公益学术平台",
+          "nameEn": "PubScholar",
+          "region": "china",
+          "free": true,
+          "access": "free",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://pubscholar.cn",
+          "searchUrlTemplate": null,
+          "note": "中科院文献情报中心公益平台，免费、无登录墙，优先级最高"
+        },
+        {
+          "id": "chinaxiv",
+          "name": "ChinaXiv 预印本",
+          "nameEn": "ChinaXiv",
+          "region": "china",
+          "free": true,
+          "access": "free",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://chinaxiv.org",
+          "searchUrlTemplate": null,
+          "note": "中科院运营的中文预印本平台，免费"
+        },
+        {
+          "id": "nstl",
+          "name": "NSTL 国家科技图书文献中心",
+          "nameEn": "NSTL",
+          "region": "china",
+          "free": true,
+          "access": "free",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://www.nstl.gov.cn",
+          "searchUrlTemplate": null,
+          "note": "国家级科技文献保障平台，文摘免费"
+        },
+        {
+          "id": "ncpssd",
+          "name": "国家哲学社会科学文献中心",
+          "nameEn": "NCPSSD",
+          "region": "china",
+          "free": true,
+          "access": "free",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://www.ncpssd.cn",
+          "searchUrlTemplate": null,
+          "note": "社科领域国家级免费平台"
+        },
+        {
+          "id": "sinomed",
+          "name": "SinoMed 中国生物医学文献",
+          "nameEn": "SinoMed",
+          "region": "china",
+          "free": false,
+          "access": "institutional",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://www.sinomed.ac.cn",
+          "searchUrlTemplate": null,
+          "note": "医学生物领域中文核心库，机构订阅"
+        },
+        {
+          "id": "cnki",
+          "name": "中国知网 CNKI",
+          "nameEn": "CNKI",
+          "region": "china",
+          "free": false,
+          "access": "paid",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://www.cnki.net",
+          "searchUrlTemplate": null,
+          "note": "商业平台，登录墙严格，仅提供检索跳转"
+        },
+        {
+          "id": "wanfang",
+          "name": "万方数据",
+          "nameEn": "Wanfang",
+          "region": "china",
+          "free": false,
+          "access": "paid",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://www.wanfangdata.com.cn",
+          "searchUrlTemplate": null,
+          "note": "商业平台，仅检索跳转"
+        },
+        {
+          "id": "cqvip",
+          "name": "维普 CQVIP",
+          "nameEn": "CQVIP",
+          "region": "china",
+          "free": false,
+          "access": "paid",
+          "kind": "link",
+          "capabilities": [
+            "search-link",
+            "external-browser"
+          ],
+          "homeUrl": "https://qikan.cqvip.com",
+          "searchUrlTemplate": null,
+          "note": "商业平台，仅检索跳转"
+        },
+        {
+          "id": "openalex",
+          "name": "OpenAlex",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://openalex.org",
+          "searchUrlTemplate": null,
+          "note": "开放学术图谱，跨学科聚合"
+        },
+        {
+          "id": "pubmed",
+          "name": "PubMed",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://pubmed.ncbi.nlm.nih.gov",
+          "searchUrlTemplate": null,
+          "note": "生物医学与生命科学"
+        },
+        {
+          "id": "crossref",
+          "name": "Crossref",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://search.crossref.org",
+          "searchUrlTemplate": null,
+          "note": "DOI 元数据，覆盖广泛"
+        },
+        {
+          "id": "arxiv",
+          "name": "arXiv",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://arxiv.org",
+          "searchUrlTemplate": null,
+          "note": "预印本，物理、数学、计算机与生医"
+        },
+        {
+          "id": "europepmc",
+          "name": "Europe PMC",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://europepmc.org",
+          "searchUrlTemplate": null,
+          "note": "生医全文与预印本"
+        },
+        {
+          "id": "semantic",
+          "name": "Semantic Scholar",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://www.semanticscholar.org",
+          "searchUrlTemplate": null,
+          "note": "论文元数据、摘要与引用"
+        },
+        {
+          "id": "unpaywall",
+          "name": "Unpaywall",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://unpaywall.org",
+          "searchUrlTemplate": null,
+          "note": "开放获取全文定位"
+        },
+        {
+          "id": "doaj",
+          "name": "DOAJ",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "free",
+          "free": true,
+          "capabilities": [
+            "search",
+            "metadata"
+          ],
+          "homeUrl": "https://doaj.org",
+          "searchUrlTemplate": null,
+          "note": "开放获取期刊目录"
+        },
+        {
+          "id": "core",
+          "name": "CORE",
+          "region": "intl",
+          "kind": "native-api",
+          "access": "key",
+          "free": false,
+          "capabilities": [
+            "search",
+            "metadata",
+            "requires-key"
+          ],
+          "homeUrl": "https://core.ac.uk",
+          "searchUrlTemplate": null,
+          "note": "全球开放获取聚合"
+        }
+      ]
+    }
+  },
+  {
+    "name": "skills",
+    "state": "resolved",
+    "value": {
+      "ok": true,
+      "skills": [
+        {
+          "id": "aigc-check",
+          "name": "AIGC 率检测",
+          "offline": true,
+          "desc": "五维启发式评估 AI 疑似度并标红高风险句",
+          "family": "selenyx",
+          "mode": "l1"
+        },
+        {
+          "id": "humanize",
+          "name": "表达自然化（降 AIGC）",
+          "offline": true,
+          "desc": "套话替换 + 句式去模板化，可选 LLM 深度改写",
+          "family": "selenyx",
+          "mode": "l1"
+        },
+        {
+          "id": "plagiarism-self",
+          "name": "自重复查重",
+          "offline": true,
+          "desc": "文档内部 n-gram 重复块检测",
+          "family": "selenyx",
+          "mode": "l1"
+        },
+        {
+          "id": "plagiarism-corpus",
+          "name": "库内查重",
+          "offline": true,
+          "desc": "与本地语料库做指纹比对",
+          "family": "selenyx",
+          "mode": "l1"
+        },
+        {
+          "id": "translate",
+          "name": "学术翻译",
+          "offline": true,
+          "desc": "术语库离线对照 + LLM 整段翻译（引用保护）",
+          "family": "selenyx",
+          "mode": "l1"
+        },
+        {
+          "id": "summarize",
+          "name": "六段式总结",
+          "offline": true,
+          "desc": "problem/methods/results/limitations/takeaway/relevance",
+          "family": "selenyx",
+          "mode": "l1"
+        },
+        {
+          "id": "annotate",
+          "name": "文献批注",
+          "offline": true,
+          "desc": "标红/高亮/笔记数据层，导出读书笔记",
+          "family": "selenyx",
+          "mode": "l1"
+        },
+        {
+          "id": "nature-academic-search",
+          "name": "Nature 学术搜索",
+          "category": "文献",
+          "mode": "route",
+          "route": "research",
+          "desc": "接入 Selenyx 真实文献检索与逐来源状态，不伪造搜索结果。",
+          "requirements": [
+            "网络连接"
+          ],
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-citation",
+          "name": "Nature 引文追踪",
+          "category": "文献",
+          "mode": "route",
+          "route": "research",
+          "desc": "从真实检索结果进入引文与来源核验流程。",
+          "requirements": [
+            "可解析的 DOI、PMID 或标题"
+          ],
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-data",
+          "name": "Nature 数据可用性",
+          "category": "写作",
+          "mode": "l2",
+          "desc": "审查数据、代码与材料可用性声明，区分事实、缺口和待确认项。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-downloader",
+          "name": "Nature 合法全文获取",
+          "category": "文献",
+          "mode": "route",
+          "route": "browser",
+          "desc": "优先开放获取与出版社入口；登录墙只给出合法绕行方案。",
+          "requirements": [
+            "网络连接；部分来源需机构权限"
+          ],
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-experiment-log",
+          "name": "Nature 实验日志",
+          "category": "实验",
+          "mode": "l1",
+          "offline": true,
+          "desc": "将原始实验记录整理为可追溯的 Markdown 日志，不补造缺失数据。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          }
+        },
+        {
+          "id": "nature-figure",
+          "name": "Nature 科研绘图",
+          "category": "产物",
+          "mode": "external",
+          "desc": "规划科研图表与可视编码；实际绘图需 Python/R 和对应数据环境。",
+          "requirements": [
+            "Python 或 R",
+            "本地数据文件"
+          ],
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-literature-pipeline",
+          "name": "Nature 文献流水线",
+          "category": "文献",
+          "mode": "route",
+          "route": "research",
+          "desc": "连接检索、收藏、阅读、批注与证据链的本地工作流。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-paper-card",
+          "name": "Nature 论文卡片",
+          "category": "阅读",
+          "mode": "l1",
+          "offline": true,
+          "desc": "从粘贴文本生成 16 节来源约束论文卡片；缺失信息明确标注。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          }
+        },
+        {
+          "id": "nature-paper-to-patent",
+          "name": "论文转专利交底",
+          "category": "产物",
+          "mode": "external",
+          "desc": "生成证据映射的专利交底工作计划；正式文档需 Office/Python 环境和人工法律复核。",
+          "requirements": [
+            "Office/Python 文档运行时",
+            "专利代理人复核"
+          ],
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-paper2ppt",
+          "name": "论文转学术汇报",
+          "category": "产物",
+          "mode": "external",
+          "desc": "设计证据驱动的论文汇报结构；PPTX 生成需演示文稿运行时。",
+          "requirements": [
+            "PPTX 运行时",
+            "原文与图表文件"
+          ],
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-polishing",
+          "name": "Nature 学术润色",
+          "category": "写作",
+          "mode": "l2",
+          "desc": "在不改变主张和数值的前提下润色学术文本，并列出实质改动。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-proposal-writer",
+          "name": "Nature 研究计划书",
+          "category": "写作",
+          "mode": "l2",
+          "desc": "以问题、证据、方法、风险和可证伪里程碑组织研究计划。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-reader",
+          "name": "Nature 深度阅读",
+          "category": "阅读",
+          "mode": "route",
+          "route": "reader",
+          "desc": "接入本地阅读器、翻译、总结、批注与证据链；全文翻译不冒充离线能力。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-ref-verifier",
+          "name": "Nature 参考文献核验",
+          "category": "核验",
+          "mode": "l1",
+          "offline": true,
+          "desc": "离线检查引用条目的年份、DOI、重复项和待联网核验项。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          }
+        },
+        {
+          "id": "nature-response",
+          "name": "Nature 审稿回复",
+          "category": "写作",
+          "mode": "l2",
+          "desc": "逐条生成“意见—行动—证据—定位”的回复草案，不虚构已完成实验。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-reviewer",
+          "name": "Nature 模拟审稿",
+          "category": "核验",
+          "mode": "l2",
+          "desc": "按证据强度、方法、统计和可复现性审阅稿件，区分致命与可修问题。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-statistics",
+          "name": "Nature 统计报告",
+          "category": "核验",
+          "mode": "external",
+          "desc": "规划统计分析与报告检查；数值计算必须交给经验证的 Python/R 环境。",
+          "requirements": [
+            "Python 或 R",
+            "原始数据与分析方案"
+          ],
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        },
+        {
+          "id": "nature-writing",
+          "name": "Nature 科学写作",
+          "category": "写作",
+          "mode": "l2",
+          "desc": "基于用户给定事实和证据起草论文段落，未知内容保留占位符。",
+          "family": "nature",
+          "upstream": {
+            "repository": "https://github.com/Yuan1z0825/nature-skills",
+            "commit": "ca9f57e80e8bc100eb06ebfbfff406c126e5b256",
+            "license": "Apache-2.0",
+            "adapted": true
+          },
+          "offline": false
+        }
+      ]
+    }
+  }
+]

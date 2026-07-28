@@ -1,4 +1,4 @@
-import { api, state, $, el, clear, icon, toast, workspaceEvent } from './core.js';
+import { api, state, $, el, clear, icon, toast, workspaceEvent, setView } from './core.js';
 
 const builtInSites = [
   { id: 'pubscholar', name: 'PubScholar', url: 'https://pubscholar.cn', region: 'china', note: '中科院公益学术平台' },
@@ -131,12 +131,35 @@ async function openSite(site) {
   $('#browser-url').value = url;
   $('#browser-homepage').hidden = true;
   $('#browser-host').hidden = false;
+  // Wait two frames so CSS layout settles before sending bounds to WebContentsView.
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const recent = [site.id, ...(state.workspace.ui.browserRecent ?? []).filter((id) => id !== site.id)].slice(0, 8);
   workspaceEvent({ type: 'ui:patch', patch: { browserRecent: recent } }).catch(() => {});
   renderStatus({ state: 'loading', url });
-  const response = await api.browser.show({ url, bounds: browserBounds() });
+  let bounds = browserBounds();
+  if (bounds.width < 40 || bounds.height < 40) {
+    // Fallback when host has not been painted yet (common on first open).
+    const main = $('.main-panel')?.getBoundingClientRect?.() ?? { left: 220, top: 120, width: 900, height: 700 };
+    bounds = {
+      x: Math.round(main.left + 12),
+      y: Math.round(main.top + 56),
+      width: Math.max(320, Math.round(main.width - 24)),
+      height: Math.max(240, Math.round(main.height - 72)),
+    };
+  }
+  const response = await api.browser.show({ url, bounds });
   syncBrowserBounds(true);
   if (!response.ok) renderStatus({ state: 'blocked', url, message: response.error?.message ?? '站点无法加载' });
+}
+
+async function openExternalOrBrowser(url, name = '当前地址') {
+  try {
+    const href = safeUrl(url);
+    await setView('browser');
+    await openSite({ id: `link:${Date.now()}`, name, url: href, region: 'custom', note: '来自检索' });
+  } catch (error) {
+    toast(error.message, 'error');
+  }
 }
 
 function renderStatus(status) {
@@ -221,4 +244,4 @@ function setupBrowser() {
   document.addEventListener('selenyx:layout', () => syncBrowserBounds());
 }
 
-export { setupBrowser, renderSites, showHome, safeUrl, resolveInput, browserBounds, syncBrowserBounds };
+export { setupBrowser, renderSites, showHome, safeUrl, resolveInput, browserBounds, syncBrowserBounds, openSite, openExternalOrBrowser };

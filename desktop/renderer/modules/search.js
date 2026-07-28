@@ -1,5 +1,6 @@
 import { api, state, $, $$, el, clear, toast, workspaceEvent, setView } from './core.js';
 import { renderRight } from './reader.js';
+import { openExternalOrBrowser } from './browserWorkbench.js';
 
 const defaultIntl = ['openalex', 'pubmed', 'crossref'];
 const primaryChina = ['pubscholar'];
@@ -97,22 +98,35 @@ function applySearchProgress(progress) {
   $('#search-audit').textContent = `正在检索：${finished}/${results.length} 个来源已返回；失败来源不会影响其他结果。`;
   renderStatuses();
 }
+
+async function saveRecord(record, button) {
+  const result = await workspaceEvent({ type: 'library:save', record });
+  if (button) {
+    button.textContent = result?.merged ? '已合并' : '已收藏';
+    button.disabled = true;
+  }
+  renderLibrary();
+  renderRight();
+  toast(result?.merged ? '已与本地重复文献合并' : '已保存到 workspace.json');
+  return result;
+}
+
 function card(record, local = false) {
   const saved = state.workspace?.library?.some((item) => item.id === record.id);
   const actions = el('div', { className: 'result-actions' });
   actions.append(el('button', { className: 'text-button', text: '进入阅读', onClick: async () => {
-    state.selectedSource = record;
-    await workspaceEvent({ type: 'ui:patch', patch: { selectedSourceId: record.id } });
+    if (!saved) await saveRecord(record);
+    state.selectedSource = state.workspace.library.find((item) => item.id === record.id) ?? record;
+    await workspaceEvent({ type: 'ui:patch', patch: { selectedSourceId: state.selectedSource.id } });
     setView('reader');
   } }));
   if (!saved) actions.append(el('button', { className: 'text-button', text: '收藏到本地', onClick: async (event) => {
-    const result = await workspaceEvent({ type: 'library:save', record });
-    event.currentTarget.textContent = result?.merged ? '已合并' : '已收藏';
-    event.currentTarget.disabled = true;
-    renderLibrary();
-    toast(result?.merged ? '已与本地重复文献合并' : '已保存到 workspace.json');
+    await saveRecord(record, event.currentTarget);
   } }));
-  if (record.url) actions.append(el('button', { className: 'text-button', text: '外部全文', onClick: () => api.openExternal(record.url) }));
+  if (record.url) {
+    actions.append(el('button', { className: 'text-button', text: '应用内打开', onClick: () => openExternalOrBrowser(record.url, record.title || '全文') }));
+    actions.append(el('button', { className: 'text-button', text: '外部全文', onClick: () => api.openExternal(record.url) }));
+  }
   return el('article', { className: `result-card ${record.reality === 'example' ? 'example' : ''}` }, [
     el('h3', { text: record.title }),
     el('div', { className: 'meta', text: `${record.authors?.join('、') || '作者未知'} · ${record.venue || '来源未知'} · ${record.year || '年份未知'}${local ? ' · 本地收藏' : ''}` }),
@@ -121,33 +135,64 @@ function card(record, local = false) {
   ]);
 }
 
+function linkCard(link) {
+  const source = sourceById(link.sourceId);
+  return el('article', { className: 'result-card site-link' }, [
+    el('h3', { text: source?.name ?? link.sourceName }),
+    el('div', { className: 'meta', text: link.requiresAccount ? '站点跳转 · 可能需要登录或付费' : '站点跳转 · 公益/开放入口' }),
+    el('p', { className: 'abstract', text: link.honesty }),
+    el('div', { className: 'result-actions' }, [
+      el('button', { className: 'text-button', text: '应用内打开', onClick: () => openExternalOrBrowser(link.url, source?.name ?? link.sourceName) }),
+      el('button', { className: 'text-button', text: '系统浏览器', onClick: () => api.openExternal(link.url) }),
+      el('button', { className: 'text-button', text: '复制链接', onClick: async () => { await navigator.clipboard.writeText(link.url); toast('链接已复制'); } }),
+    ]),
+  ]);
+}
+
+async function collectAllVisible() {
+  const records = state.searchResult?.records ?? [];
+  if (!records.length) return toast('当前没有可收藏的 API 结果', 'error');
+  let saved = 0;
+  let merged = 0;
+  for (const record of records) {
+    const result = await workspaceEvent({ type: 'library:save', record });
+    if (result?.merged) merged += 1;
+    else saved += 1;
+  }
+  renderResults();
+  renderLibrary();
+  renderRight();
+  toast(`收藏完成：新增 ${saved} · 合并 ${merged}`);
+}
+
 function renderResults() {
   renderStatuses();
   const host = $('#search-results');
   clear(host);
   const result = state.searchResult;
   const records = result?.records ?? [];
-  $('#search-state').hidden = Boolean(records.length || result?.links?.length || result?.errors?.length);
-  records.forEach((record) => host.append(card(record)));
-  for (const link of result?.links ?? []) {
-    const source = sourceById(link.sourceId);
-    host.append(el('article', { className: 'result-card' }, [
-      el('h3', { text: source?.name ?? link.sourceName }),
-      el('div', { className: 'meta', text: link.requiresAccount ? '站点跳转 · 可能需要登录或付费' : '站点跳转 · 公益/开放入口' }),
-      el('p', { className: 'abstract', text: link.honesty }),
+  const links = result?.links ?? [];
+  const errors = result?.errors ?? [];
+  const hasPayload = Boolean(records.length || links.length || errors.length);
+  $('#search-state').hidden = hasPayload;
+  if (hasPayload) {
+    host.append(el('div', { className: 'result-toolbar', id: 'search-results-toolbar' }, [
+      el('b', { text: `${records.length} 条可收藏 · ${links.length} 个站点入口 · ${errors.length} 个失败` }),
       el('div', { className: 'result-actions' }, [
-        el('button', { className: 'text-button', text: '在系统浏览器检索', onClick: () => api.openExternal(link.url) }),
-        el('button', { className: 'text-button', text: '复制链接', onClick: async () => { await navigator.clipboard.writeText(link.url); toast('链接已复制'); } }),
-      ]),
+        records.length ? el('button', { className: 'secondary-button', text: '全部收藏到本地', onClick: collectAllVisible }) : null,
+        el('button', { className: 'secondary-button', text: '打开文献库', onClick: () => setView('library') }),
+      ].filter(Boolean)),
     ]));
   }
-  for (const error of result?.errors ?? []) {
+  records.forEach((record) => host.append(card(record)));
+  links.forEach((link) => host.append(linkCard(link)));
+  for (const error of errors) {
     host.append(el('div', { className: 'result-card' }, [
       el('h3', { text: `${sourceById(error.source)?.name ?? error.source} 检索失败` }),
       el('p', { className: 'abstract', text: `${error.message}${error.status ? `（HTTP ${error.status}）` : ''}` }),
     ]));
   }
-  if (result && !records.length && !result.links?.length && !result.errors?.length) {
+  if (result && !hasPayload) {
     host.append(el('div', { className: 'empty-state' }, [el('h3', { text: '真实检索返回 0 条' }), el('p', { text: '没有生成或补写任何论文。请调整关键词后重试。' })]));
   }
 }
@@ -169,6 +214,7 @@ async function runSearch(event) {
     state.searchResult = { query, records: state.workspace.library.filter((record) => `${record.title} ${record.authors?.join(' ')}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), sourceResults: [], links: [], errors: [] };
     $('#search-audit').textContent = '仅检索本地 workspace.json · 未联网';
     renderResults();
+    renderRight();
     return;
   }
   const sources = selectedSources();
@@ -181,11 +227,12 @@ async function runSearch(event) {
     sourceResults: sources.map((source) => ({ source, status: 'searching', count: 0 })),
   };
   renderResults();
+  renderRight();
   button.disabled = true;
   button.textContent = '检索中…';
   $('#search-audit').textContent = `正在请求 ${sources.length} 个来源；每个 API 有独立超时与重试。`;
   try {
-    const response = await api.searchLiterature({ query, sources, limit: 10, requestId, matchMode: $("#search-mode").value });
+    const response = await api.searchLiterature({ query, sources, limit: 10, requestId, matchMode: $('#search-mode').value });
     if (requestId !== state.activeSearchId) return;
     if (!response.ok) throw new Error(response.error?.message ?? '检索失败');
     state.searchResult = response.result;
@@ -193,7 +240,10 @@ async function runSearch(event) {
     $('#search-audit').textContent = `${new Date().toLocaleTimeString()} · ${response.result.records.length} 条可收藏记录 · ${response.result.links.length} 个站点入口${suffix}`;
     renderResults();
     renderRight();
-    requestAnimationFrame(() => $('#search-results').scrollIntoView({ block: 'start' }));
+    requestAnimationFrame(() => {
+      const toolbar = $('#search-results-toolbar') || $('#search-results');
+      toolbar?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
   } catch (error) {
     if (requestId === state.activeSearchId) {
       $('#search-audit').textContent = `检索没有完成：${error.message}`;
@@ -214,9 +264,12 @@ function setupSearch() {
     $$('.segment-tabs button').forEach((node) => node.classList.toggle('active', node === button));
     await workspaceEvent({ type: 'preferences:patch', patch: { searchTab: state.searchTab } });
     renderControls();
-    $('#search-results').replaceChildren();
-    $('#source-statuses').replaceChildren();
-    $('#search-state').hidden = false;
+    // Keep previous results visible unless user starts a new search; only clear statuses for the inactive tab chrome.
+    if (!state.searchResult) {
+      $('#search-results').replaceChildren();
+      $('#source-statuses').replaceChildren();
+      $('#search-state').hidden = false;
+    }
   }));
   $('#literature-search-form').addEventListener('submit', runSearch);
   $('#manual-add').addEventListener('click', () => { $('#manual-modal').hidden = false; });
@@ -234,6 +287,7 @@ function setupSearch() {
     event.currentTarget.reset();
     $('#manual-modal').hidden = true;
     renderLibrary();
+    renderRight();
     toast('文献已保存到本地');
   });
   $$('[data-close-modal]').forEach((button) => button.addEventListener('click', () => { $(`#${button.dataset.closeModal}`).hidden = true; }));

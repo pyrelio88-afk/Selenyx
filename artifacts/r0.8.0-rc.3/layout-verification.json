@@ -1,0 +1,36 @@
+{
+  "initialRect": {
+    "x": 183,
+    "y": 120,
+    "width": 1000,
+    "height": 707
+  },
+  "afterLeftRect": {
+    "x": 343,
+    "y": 120,
+    "width": 840,
+    "height": 707
+  },
+  "afterLeftNative": {
+    "x": 343,
+    "y": 120,
+    "width": 840,
+    "height": 707
+  },
+  "afterRightRect": {
+    "x": 343,
+    "y": 120,
+    "width": 680,
+    "height": 707
+  },
+  "afterRightNative": {
+    "x": 343,
+    "y": 120,
+    "width": 680,
+    "height": 707
+  },
+  "leftChanged": true,
+  "rightChanged": true,
+  "nativeMatchesLeft": true,
+  "nativeMatchesRight": true
+}

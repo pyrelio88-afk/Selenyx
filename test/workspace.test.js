@@ -71,3 +71,31 @@ test('Chinese search plans are clone-safe values, never Promise fields', async (
   assert.equal(typeof result.url, 'string');
   assert.equal(typeof structuredClone(result).url, 'string');
 });
+
+test('workspace can reset while keeping browser custom sites', () => {
+  let state = emptyWorkspace();
+  state = applyWorkspaceEvent(state, {
+    type: 'ui:patch',
+    patch: { browserSites: [{ id: 'custom:1', name: 'CNKI', url: 'https://www.cnki.net/', region: 'custom' }] },
+  }).state;
+  state = applyWorkspaceEvent(state, { type: 'library:save', record: paper() }).state;
+  const reset = applyWorkspaceEvent(state, { type: 'workspace:reset', name: '新课题' });
+  assert.equal(reset.state.meta.name, '新课题');
+  assert.equal(reset.state.library.length, 0);
+  assert.equal(reset.state.ui.browserSites.length, 1);
+});
+
+test('workspace evidence relation can be updated after review', () => {
+  let state = emptyWorkspace();
+  state = applyWorkspaceEvent(state, { type: 'library:save', record: paper() }).state;
+  const added = applyWorkspaceEvent(state, {
+    type: 'evidence:add',
+    evidence: { sourceId: state.library[0].id, quote: 'example quote', method: 'abstract' },
+  });
+  state = added.state;
+  const id = added.result.id;
+  state = applyWorkspaceEvent(state, { type: 'evidence:review', id, review: 'accepted' }).state;
+  state = applyWorkspaceEvent(state, { type: 'evidence:relation', id, relation: 'contradicts' }).state;
+  assert.equal(state.evidence[0].review, 'accepted');
+  assert.equal(state.evidence[0].relation, 'contradicts');
+});

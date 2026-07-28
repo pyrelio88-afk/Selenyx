@@ -13,8 +13,14 @@ The product language is intentionally quiet and restrained: paper white, cinnaba
 
 R0.8 is an **unpublished release candidate** on `refactor/r0.8-hermes-workbench`. R0.7 remains unchanged.
 
-- Git history: a single root commit (see the v0.7.0 Release metadata).
-- **400 automated tests pass locally**, including resize synchronization, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
+- **402 automated tests pass locally**, including workspace reset, evidence relation review, resize synchronization, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
+- Critical usability fixes in this handoff:
+  - empty-state no longer covers real search results
+  - search results get a sticky toolbar + bulk save
+  - reader annotations work without perfect text selection
+  - embedded browser waits for layout before painting bounds
+- Architecture diagram: [`docs/architecture.svg`](docs/architecture.svg)
+- Open-source lessons: [`docs/OPEN-SOURCE-LESSONS.zh-CN.md`](docs/OPEN-SOURCE-LESSONS.zh-CN.md)
 - 9 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
 - 8 China sources: PubScholar, ChinaXiv, NSTL, NCPSSD, SinoMed, CNKI, Wanfang, CQVIP (R0.6: 0).
 - China sources are presented as honesty-guarded browser handoffs (search-link mode), never page scraping.

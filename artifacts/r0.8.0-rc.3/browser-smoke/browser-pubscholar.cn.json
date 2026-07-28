@@ -1,0 +1,17 @@
+{
+  "requestedUrl": "https://pubscholar.cn",
+  "ipc": {
+    "ok": true,
+    "url": "https://pubscholar.cn/",
+    "navigationId": 1
+  },
+  "state": "ready",
+  "currentUrl": "https://pubscholar.cn/",
+  "attached": true,
+  "bounds": {
+    "x": 183,
+    "y": 120,
+    "width": 1000,
+    "height": 707
+  }
+}

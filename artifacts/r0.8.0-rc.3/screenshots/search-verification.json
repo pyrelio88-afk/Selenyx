@@ -1,0 +1,41 @@
+{
+  "audit": "10:43:20 · 20 条可收藏记录 · 5 个站点入口",
+  "statuses": [
+    "PubScholar 公益学术平台：站点跳转",
+    "OpenAlex：完成 · 10 条",
+    "Crossref：完成 · 10 条",
+    "ChinaXiv 预印本：站点跳转",
+    "NSTL 国家科技图书文献中心：站点跳转",
+    "国家哲学社会科学文献中心：站点跳转",
+    "SinoMed 中国生物医学文献：站点跳转"
+  ],
+  "titles": [
+    "Multiplex Genome Engineering Using CRISPR/Cas Systems",
+    "Genome engineering using the CRISPR-Cas9 system",
+    "The new frontier of genome engineering with CRISPR-Cas9",
+    "CRISPR Provides Acquired Resistance Against Viruses in Prokaryotes",
+    "Development and Applications of CRISPR-Cas9 for Genome Engineering",
+    "Genome-Scale CRISPR-Cas9 Knockout Screening in Human Cells",
+    "Nucleic acid detection with CRISPR-Cas13a/C2c2",
+    "Improved vectors and genome-wide libraries for CRISPR screening",
+    "Repurposing CRISPR as an RNA-Guided Platform for Sequence-Specific Control of Gene Expression",
+    "Cpf1 Is a Single RNA-Guided Endonuclease of a Class 2 CRISPR-Cas System",
+    "Cultivating CRISPR",
+    "My CRISPR Book",
+    "Too Much Compromise in Today's CRISPR Pipelines",
+    "CRISPR to the Core",
+    "Amplifying CRISPR: Next-Generation Diagnostics",
+    "New Insights into CRISPR Arrays",
+    "Keep Calm and CRISPR On",
+    "CRISPR on the Move in 2019",
+    "Commissions, Consensus, and CRISPR",
+    "“CRISPR” Mutations: Inaccurate Linguistic Variations and Misrepresentation of the CRISPR Acronym",
+    "PubScholar 公益学术平台",
+    "ChinaXiv 预印本",
+    "NSTL 国家科技图书文献中心",
+    "国家哲学社会科学文献中心",
+    "SinoMed 中国生物医学文献"
+  ],
+  "resultCards": 25,
+  "runtime": "R0.8 RC · win32"
+}

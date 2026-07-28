@@ -8,6 +8,7 @@ const object = (value) => value && typeof value === 'object' && !Array.isArray(v
 function emptyWorkspace() {
   return {
     schemaVersion: SCHEMA_VERSION,
+    meta: { name: '未命名研究', createdAt: nowIso() },
     library: [],
     annotations: [],
     evidence: [],
@@ -106,15 +107,20 @@ function normalizeWorkspace(input) {
     try { library = upsertRecord(library, candidate).library; } catch {}
   }
   return {
-    ...fallback, library,
-    annotations: Array.isArray(raw.annotations) ? raw.annotations.filter((item) => object(item).id).slice(0, 20_000) : [],
-    evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((item) => object(item).id).slice(0, 20_000) : [],
-    assistant: normalizeAssistant(raw.assistant),
-    sourcePreferences: { ...fallback.sourcePreferences, ...object(raw.sourcePreferences) },
-    ui: { ...fallback.ui, ...object(raw.ui) },
-    updatedAt: text(raw.updatedAt, 80) || fallback.updatedAt,
-    schemaVersion: SCHEMA_VERSION,
-  };
+      ...fallback, library,
+      meta: {
+        name: text(object(raw.meta).name, 120) || fallback.meta.name,
+        createdAt: text(object(raw.meta).createdAt, 80) || fallback.meta.createdAt,
+        updatedAt: text(object(raw.meta).updatedAt, 80) || null,
+      },
+      annotations: Array.isArray(raw.annotations) ? raw.annotations.filter((item) => object(item).id).slice(0, 20_000) : [],
+      evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((item) => object(item).id).slice(0, 20_000) : [],
+      assistant: normalizeAssistant(raw.assistant),
+      sourcePreferences: { ...fallback.sourcePreferences, ...object(raw.sourcePreferences) },
+      ui: { ...fallback.ui, ...object(raw.ui) },
+      updatedAt: text(raw.updatedAt, 80) || fallback.updatedAt,
+      schemaVersion: SCHEMA_VERSION,
+    };
 }
 
 function anchor(input) {
@@ -158,6 +164,29 @@ function applyWorkspaceEvent(current, event) {
   } else if (action.type === 'evidence:review') {
     const review = ['unreviewed', 'accepted', 'rejected', 'needs-check'].includes(action.review) ? action.review : 'unreviewed';
     state.evidence = state.evidence.map((item) => item.id === action.id ? { ...item, review } : item);
+  } else if (action.type === 'evidence:relation') {
+    const relation = ['supports', 'contradicts', 'qualifies'].includes(action.relation) ? action.relation : 'supports';
+    state.evidence = state.evidence.map((item) => item.id === action.id ? { ...item, relation } : item);
+  } else if (action.type === 'workspace:reset') {
+    const keepUi = {
+      leftWidth: state.ui.leftWidth,
+      rightWidth: state.ui.rightWidth,
+      leftCollapsed: state.ui.leftCollapsed,
+      rightCollapsed: state.ui.rightCollapsed,
+      browserSites: state.ui.browserSites,
+      browserFavorites: state.ui.browserFavorites,
+    };
+    const next = emptyWorkspace();
+    next.ui = { ...next.ui, ...keepUi, lastView: 'research' };
+    next.meta = {
+      name: text(action.name, 120) || `研究 ${new Date().toLocaleString()}`,
+      createdAt: nowIso(),
+    };
+    Object.assign(state, next);
+    result = { name: next.meta.name };
+  } else if (action.type === 'project:rename') {
+    state.meta = { ...(state.meta || {}), name: text(action.name, 120) || '未命名研究', updatedAt: nowIso() };
+    result = state.meta;
   } else if (action.type === 'assistant:set') {
     state.assistant = normalizeAssistant({
       plan: action.plan,
