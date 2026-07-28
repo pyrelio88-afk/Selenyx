@@ -26,7 +26,7 @@
         <p class="nav-label">工作台</p>
         <button data-view="chat" class="nav-item"><span data-icon="message"></span><b>科研对话</b></button>
         <button data-view="evidence" class="nav-item"><span data-icon="link"></span><b>证据链</b><em id="evidence-count">0</em></button>
-        <button data-view="skills" class="nav-item"><span data-icon="spark"></span><b>离线技能</b></button>
+        <button data-view="skills" class="nav-item"><span data-icon="spark"></span><b>Nature 科研助手</b></button>
       </nav>
       <section class="sessions">
         <p class="nav-label">当前项目</p>
@@ -66,6 +66,15 @@
             <input id="literature-query" autocomplete="off" placeholder="输入论文标题、关键词、作者或 DOI…" required>
             <button type="submit" class="primary-button">检索</button>
           </form>
+          <div class="search-options">
+            <label for="search-mode">匹配方式</label>
+            <select id="search-mode">
+              <option value="auto">智能：长标题自动精确匹配</option>
+              <option value="broad">主题检索：允许相关结果</option>
+              <option value="exact">精确标题：只保留高度匹配</option>
+            </select>
+            <span>防止把关键词相关论文冒充成现场标题的命中结果。</span>
+          </div>
           <div id="source-controls" class="source-controls"></div>
           <p id="search-audit" class="audit-line">尚未发起请求。网页入口不会被计作 API 成功。</p>
           <div id="source-statuses" class="source-statuses"></div>
@@ -82,7 +91,52 @@
       <section id="browser-view" class="view"><div class="browser-page"><header class="browser-toolbar"><button id="browser-home" class="icon-button" data-icon="home" aria-label="浏览器首页"></button><input id="browser-url" aria-label="网址或关键词" placeholder="输入网址或关键词"><button id="browser-go" class="primary-button">前往</button></header><div id="browser-homepage"><div class="browser-heading"><div><p class="kicker">CHINA FIRST</p><h2>科研站点</h2><p>国内平台优先，登录墙、验证码与禁嵌会明确提示。</p></div><button id="browser-add-site" class="secondary-button">添加站点</button></div><div id="browser-sites" class="site-groups"></div></div><div id="browser-host" class="browser-host" hidden><div id="browser-status" class="browser-fallback"></div></div></div></section>
       <section id="chat-view" class="view"><div class="content-column message-column"><header class="page-intro compact"><p class="kicker">EVIDENCE CHAT</p><h2>围绕当前文献与证据提问</h2><p>未配置 Key 时只运行离线 L1，绝不模拟模型回答。</p></header><div id="messages" class="messages"></div></div></section>
       <section id="evidence-view" class="view"><div class="content-column"><header class="section-heading"><div><p class="kicker">CLAIM · EVIDENCE</p><h2>证据链</h2></div></header><div id="evidence-board"></div></div></section>
-      <section id="skills-view" class="view"><div class="content-column"><header class="section-heading"><div><p class="kicker">NATIVE · NATURE</p><h2>科研技能中心</h2><p>Selenyx 离线能力与 Nature Skills 原生适配；模型、网络和外部运行时边界会明确显示。</p></div></header><div id="skill-grid" class="skill-grid"></div></div></section>
+      <section id="skills-view" class="view">
+        <div class="content-column assistant-column">
+          <header class="page-intro">
+            <p class="kicker">NATURE RESEARCH ASSISTANT</p>
+            <h2>把研究问题推进成可核验的工作流。</h2>
+            <p>Nature Skills 已收进助手的内部能力层，不再作为技能卡片陈列。助手围绕问题、文献、阅读、证据、综合和审阅持续工作。</p>
+          </header>
+          <section class="assistant-intake" aria-labelledby="assistant-intake-title">
+            <div>
+              <h3 id="assistant-intake-title">研究目标</h3>
+              <p>先用离线规则拆解；联网与模型增强只在真正需要时调用。</p>
+            </div>
+            <textarea id="assistant-brief" rows="4" placeholder="例如：梳理生成式 AI 对科研写作可靠性的影响，并找出相互矛盾的证据。"></textarea>
+            <div class="assistant-prompts" aria-label="研究目标示例">
+              <button class="assistant-prompt" data-prompt="围绕我的研究问题做文献综述，并建立可追溯证据链">文献综述</button>
+              <button class="assistant-prompt" data-prompt="核验当前主张的支持、反驳与限定性证据">证据核验</button>
+              <button class="assistant-prompt" data-prompt="把研究想法拆成可证伪假设、实验变量和复现计划">实验规划</button>
+              <button class="assistant-prompt" data-prompt="根据审稿意见形成逐条回应、行动与证据清单">审稿回复</button>
+            </div>
+            <div class="assistant-actions">
+              <button id="assistant-create" class="primary-button">生成研究路径</button>
+              <button id="assistant-clear" class="secondary-button">清空</button>
+            </div>
+          </section>
+          <div id="assistant-empty" class="assistant-empty">
+            <span data-icon="spark"></span>
+            <h3>不是“选一个技能”，而是持续推进同一个研究问题</h3>
+            <p>助手会把检索、筛选、精读、证据和写作串成一条本地持久化路径。</p>
+          </div>
+          <section id="assistant-workspace" class="assistant-workspace" hidden>
+            <header class="assistant-plan-head">
+              <div><p class="kicker">ACTIVE RESEARCH</p><h3 id="assistant-question"></h3></div>
+              <div class="assistant-plan-meta"><span id="assistant-stage"></span><b id="assistant-progress"></b></div>
+            </header>
+            <div class="assistant-progress-track"><span id="assistant-progress-bar"></span></div>
+            <div id="assistant-context" class="assistant-context"></div>
+            <div id="assistant-tasks" class="assistant-tasks"></div>
+            <div class="assistant-plan-actions">
+              <button id="assistant-next" class="primary-button">进入下一步</button>
+              <button id="assistant-enhance" class="secondary-button">用 BYOK 模型审阅计划</button>
+            </div>
+            <pre id="assistant-model-output" class="assistant-model-output" hidden></pre>
+            <p class="assistant-boundary">离线：问题拆解、批注、确定性摘要、证据组织与计划恢复。联网：真实文献检索。L2：仅在本地配置 BYOK 后增强综合与写作。</p>
+          </section>
+        </div>
+      </section>
 
       <footer id="composer" class="composer">
         <div class="composer-inner"><textarea id="composer-input" rows="1" placeholder="询问当前研究或证据…" aria-label="消息"></textarea><button id="send-message" class="send-button" data-icon="send" aria-label="发送"></button><div class="composer-meta"><button id="provider-pill">离线 L1</button><span>本地上下文 · 不上传</span><span class="spacer"></span><span>Enter 发送</span></div></div>
@@ -94,7 +148,7 @@
   </div>
 
   <div id="manual-modal" class="modal-backdrop" hidden><form id="manual-form" class="modal-card"><header><div><p class="kicker">LOCAL RECORD</p><h2>手动添加文献</h2></div><button type="button" data-close-modal="manual-modal" class="icon-button" data-icon="close" aria-label="关闭"></button></header><label>标题<input name="title" required></label><div class="form-grid"><label>作者（逗号分隔）<input name="authors"></label><label>年份<input name="year" inputmode="numeric"></label><label>DOI<input name="doi"></label><label>来源<input name="venue"></label></div><label>摘要<textarea name="abstract" rows="5"></textarea></label><footer><button type="button" data-close-modal="manual-modal" class="secondary-button">取消</button><button class="primary-button">保存到本地</button></footer></form></div>
-  <div id="skill-modal" class="modal-backdrop" hidden><div class="modal-card skill-dialog" role="dialog" aria-modal="true" aria-labelledby="skill-modal-title"><header><div><p id="skill-modal-kicker" class="kicker">RESEARCH SKILL</p><h2 id="skill-modal-title">科研技能</h2></div><button type="button" data-close-modal="skill-modal" class="icon-button" data-icon="close" aria-label="关闭"></button></header><p id="skill-modal-description" class="skill-dialog-description"></p><div id="skill-modal-requirements" class="skill-requirements"></div><label for="skill-input">研究材料<textarea id="skill-input" rows="8" placeholder="粘贴摘要、正文、参考文献或实验原始记录…"></textarea></label><div id="skill-output-wrap" hidden><label for="skill-output">运行结果</label><pre id="skill-output"></pre></div><footer><button type="button" data-close-modal="skill-modal" class="secondary-button">关闭</button><button id="skill-run" type="button" class="primary-button">运行</button></footer></div></div>  <div id="settings-modal" class="modal-backdrop" hidden><div class="settings-dialog" role="dialog" aria-modal="true"><aside><header><div><p class="kicker">SELENYX</p><h2>设置</h2></div><button id="close-settings" class="icon-button" data-icon="close" aria-label="关闭"></button></header><nav id="settings-nav"></nav></aside><section id="settings-content"></section></div></div>
+  <div id="settings-modal" class="modal-backdrop" hidden><div class="settings-dialog" role="dialog" aria-modal="true"><aside><header><div><p class="kicker">SELENYX</p><h2>设置</h2></div><button id="close-settings" class="icon-button" data-icon="close" aria-label="关闭"></button></header><nav id="settings-nav"></nav></aside><section id="settings-content"></section></div></div>
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
   <script type="module" src="./app.js"></script>
 </body>

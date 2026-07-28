@@ -14,7 +14,7 @@ The product language is intentionally quiet and restrained: paper white, cinnaba
 R0.8 is an **unpublished release candidate** on `refactor/r0.8-hermes-workbench`. R0.7 remains unchanged.
 
 - Git history: a single root commit (see the v0.7.0 Release metadata).
-- **368 automated tests pass locally** (352 inherited + 16 R0.8 workspace, renderer, source-order and regression tests).
+- **400 automated tests pass locally**, including resize synchronization, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
 - 9 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
 - 8 China sources: PubScholar, ChinaXiv, NSTL, NCPSSD, SinoMed, CNKI, Wanfang, CQVIP (R0.6: 0).
 - China sources are presented as honesty-guarded browser handoffs (search-link mode), never page scraping.
@@ -221,11 +221,11 @@ The suite covers the legacy evidence engine plus:
 - no-key and no-synthetic-fallback guarantees
 - desktop CSP, preload surface, security flags, layout contract, and settings contract
 
-The current local result is 375 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
+The current local result is 400 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
 
 ## Nature Skills adapter
 
-Selenyx includes a native adapter for 18 workflows from `Yuan1z0825/nature-skills` pinned at commit `ca9f57e80e8bc100eb06ebfbfff406c126e5b256`. Offline-capable workflows run as L1, writing and review workflows use the active local BYOK provider, and Python/R/Office-dependent workflows show their runtime requirements instead of simulating completion. See `THIRD_PARTY_NOTICES.md` and `src/skills/nature-license.txt`.
+Selenyx retains a native adapter for 18 workflows from `Yuan1z0825/nature-skills` pinned at commit `ca9f57e80e8bc100eb06ebfbfff406c126e5b256`, but no longer exposes them as isolated skill cards. They now serve an eight-stage research workflow: question, discovery, screening, reading, evidence, synthesis, writing, and review. Offline-capable work runs as L1; L2 writing/review uses the active local BYOK provider, and external-runtime work shows its requirements instead of simulating completion. See `THIRD_PARTY_NOTICES.md` and `src/skills/nature-license.txt`.
 ## Current limitations
 
 - R0.7 is published as a private GitHub Pre-release (Release ID `360001980`) without installer attachments; access requires repository permission.

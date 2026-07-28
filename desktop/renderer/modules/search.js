@@ -1,4 +1,5 @@
 import { api, state, $, $$, el, clear, toast, workspaceEvent, setView } from './core.js';
+import { renderRight } from './reader.js';
 
 const defaultIntl = ['openalex', 'pubmed', 'crossref'];
 const primaryChina = ['pubscholar'];
@@ -77,6 +78,25 @@ function renderStatuses() {
   }
 }
 
+function applySearchProgress(progress) {
+  if (!progress || progress.requestId !== state.activeSearchId || !state.searchResult) return;
+  const next = {
+    source: progress.source,
+    status: progress.status,
+    count: progress.count ?? 0,
+    httpStatus: progress.httpStatus ?? null,
+    error: progress.error ?? null,
+    latencyMs: progress.latencyMs ?? null,
+  };
+  const results = [...(state.searchResult.sourceResults ?? [])];
+  const index = results.findIndex((item) => item.source === progress.source);
+  if (index >= 0) results[index] = { ...results[index], ...next };
+  else results.push(next);
+  state.searchResult.sourceResults = results;
+  const finished = results.filter((item) => item.status !== 'searching').length;
+  $('#search-audit').textContent = `正在检索：${finished}/${results.length} 个来源已返回；失败来源不会影响其他结果。`;
+  renderStatuses();
+}
 function card(record, local = false) {
   const saved = state.workspace?.library?.some((item) => item.id === record.id);
   const actions = el('div', { className: 'result-actions' });
@@ -154,24 +174,41 @@ async function runSearch(event) {
   const sources = selectedSources();
   if (!sources.length) return toast('请至少选择一个来源', 'error');
   const button = $('#literature-search-form button');
+  const requestId = crypto.randomUUID();
+  state.activeSearchId = requestId;
+  state.searchResult = {
+    requestId, query, records: [], links: [], errors: [],
+    sourceResults: sources.map((source) => ({ source, status: 'searching', count: 0 })),
+  };
+  renderResults();
   button.disabled = true;
   button.textContent = '检索中…';
-  $('#search-audit').textContent = `正在请求 ${sources.length} 个来源；各来源独立结算。`;
+  $('#search-audit').textContent = `正在请求 ${sources.length} 个来源；每个 API 有独立超时与重试。`;
   try {
-    const response = await api.searchLiterature({ query, sources, limit: 10 });
+    const response = await api.searchLiterature({ query, sources, limit: 10, requestId, matchMode: $("#search-mode").value });
+    if (requestId !== state.activeSearchId) return;
     if (!response.ok) throw new Error(response.error?.message ?? '检索失败');
     state.searchResult = response.result;
-    $('#search-audit').textContent = `${new Date().toLocaleTimeString()} · ${response.result.records.length} 条可收藏记录 · ${response.result.links.length} 个站点入口`;
+    const suffix = response.result.isPartial ? ' · 部分来源失败，成功结果已保留' : response.result.isFailure ? ' · 所有 API 均失败' : '';
+    $('#search-audit').textContent = `${new Date().toLocaleTimeString()} · ${response.result.records.length} 条可收藏记录 · ${response.result.links.length} 个站点入口${suffix}`;
     renderResults();
+    renderRight();
+    requestAnimationFrame(() => $('#search-results').scrollIntoView({ block: 'start' }));
   } catch (error) {
-    toast(error.message, 'error');
+    if (requestId === state.activeSearchId) {
+      $('#search-audit').textContent = `检索没有完成：${error.message}`;
+      toast(error.message, 'error');
+    }
   } finally {
-    button.disabled = false;
-    button.textContent = '检索';
+    if (requestId === state.activeSearchId) {
+      button.disabled = false;
+      button.textContent = '检索';
+    }
   }
 }
 
 function setupSearch() {
+  api.onSearchStatus(applySearchProgress);
   $$('.segment-tabs button').forEach((button) => button.addEventListener('click', async () => {
     state.searchTab = button.dataset.searchTab;
     $$('.segment-tabs button').forEach((node) => node.classList.toggle('active', node === button));

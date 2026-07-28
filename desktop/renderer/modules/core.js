@@ -7,6 +7,7 @@ const state = {
   searchTab: 'china',
   sources: [],
   searchResult: null,
+  activeSearchId: null,
   workspace: null,
   selectedSource: null,
   readerOutput: '',
@@ -96,7 +97,7 @@ function updateCounts() {
 const viewNames = {
   research: ['研究工作台', '文献检索'], library: ['本地工作区', '本地文献库'],
   reader: ['深度阅读', '阅读模式'], browser: ['站点导航', '科研浏览器'],
-  chat: ['长链路协作', '科研对话'], evidence: ['主张与依据', '证据链'], skills: ['确定性算法', '离线技能'],
+  chat: ['长链路协作', '科研对话'], evidence: ['主张与依据', '证据链'], skills: ['研究编排', 'Nature 科研助手'],
 };
 let viewHook = () => {};
 

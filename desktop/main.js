@@ -11,13 +11,25 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const APP_VERSION = '0.8.0-rc.2';
+const APP_VERSION = '0.8.0-rc.3';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;
+let browserViewAttached = false;
+let browserNavigationId = 0;
+let browserCurrentUrl = '';
 let moduleCache = null;
+let modulePromise = null;
 const captureArgument = process.argv.find((item) => item.startsWith('--capture-ui='));
 const captureDirectory = captureArgument ? path.resolve(captureArgument.slice('--capture-ui='.length)) : null;
+const captureViewArgument = process.argv.find((item) => item.startsWith('--capture-view='));
+const captureView = captureViewArgument ? captureViewArgument.slice('--capture-view='.length) : 'research';
+const captureSearchArgument = process.argv.find((item) => item.startsWith('--capture-search='));
+const captureSearch = captureSearchArgument ? decodeURIComponent(captureSearchArgument.slice('--capture-search='.length)) : null;
+const verifyLayoutArgument = process.argv.find((item) => item.startsWith('--verify-browser-layout='));
+const verifyLayoutFile = verifyLayoutArgument ? path.resolve(verifyLayoutArgument.slice('--verify-browser-layout='.length)) : null;
+const verifyBrowserArgument = process.argv.find((item) => item.startsWith('--verify-browser-url='));
+const verifyBrowserUrl = verifyBrowserArgument ? decodeURIComponent(verifyBrowserArgument.slice('--verify-browser-url='.length)) : null;
 
 function engineRoot() {
   return app.isPackaged
@@ -53,18 +65,27 @@ function writeJsonAtomic(file, value) {
 
 async function modules() {
   if (moduleCache) return moduleCache;
-  const root = engineRoot();
-  const [skills, profile, search, registry, workspace, providers, urlPolicy] = await Promise.all([
-    import(pathToFileURL(path.join(root, 'skills', 'index.js')).href),
-    import(pathToFileURL(path.join(root, 'scholar', 'profile.js')).href),
-    import(pathToFileURL(path.join(root, 'research', 'search.js')).href),
-    import(pathToFileURL(path.join(root, 'research', 'sourceRegistry.js')).href),
-    import(pathToFileURL(path.join(root, 'research', 'workspace.js')).href),
-    import(pathToFileURL(path.join(root, 'providers', 'profiles.js')).href),
-    import(pathToFileURL(path.join(root, 'security', 'urlPolicy.js')).href),
-  ]);
-  moduleCache = { skills, profile, search, registry, workspace, providers, urlPolicy };
-  return moduleCache;
+  if (modulePromise) return modulePromise;
+  modulePromise = (async () => {
+    const root = engineRoot();
+    const [skills, profile, search, registry, workspace, providers, urlPolicy, assistant] = await Promise.all([
+      import(pathToFileURL(path.join(root, 'skills', 'index.js')).href),
+      import(pathToFileURL(path.join(root, 'scholar', 'profile.js')).href),
+      import(pathToFileURL(path.join(root, 'research', 'search.js')).href),
+      import(pathToFileURL(path.join(root, 'research', 'sourceRegistry.js')).href),
+      import(pathToFileURL(path.join(root, 'research', 'workspace.js')).href),
+      import(pathToFileURL(path.join(root, 'providers', 'profiles.js')).href),
+      import(pathToFileURL(path.join(root, 'security', 'urlPolicy.js')).href),
+      import(pathToFileURL(path.join(root, 'research', 'assistant.js')).href),
+    ]);
+    moduleCache = { skills, profile, search, registry, workspace, providers, urlPolicy, assistant };
+    return moduleCache;
+  })();
+  try {
+    return await modulePromise;
+  } finally {
+    if (!moduleCache) modulePromise = null;
+  }
 }
 
 function publicError(error) {
@@ -138,16 +159,28 @@ function notifyBrowser(status) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('browser:status', status);
 }
 
-function closeBrowserView() {
+function detachBrowserView() {
   if (browserLoadTimer) clearTimeout(browserLoadTimer);
   browserLoadTimer = null;
-  if (mainWindow && browserView) mainWindow.contentView.removeChildView(browserView);
+  if (mainWindow && browserView && browserViewAttached) mainWindow.contentView.removeChildView(browserView);
+  browserViewAttached = false;
+}
+
+function closeBrowserView() {
+  detachBrowserView();
   if (browserView && !browserView.webContents.isDestroyed()) browserView.webContents.close();
   browserView = null;
+  browserCurrentUrl = '';
 }
 
 function ensureBrowserView() {
-  if (browserView) return browserView;
+  if (browserView) {
+    if (!browserViewAttached) {
+      mainWindow.contentView.addChildView(browserView);
+      browserViewAttached = true;
+    }
+    return browserView;
+  }
   browserView = new WebContentsView({
     webPreferences: {
       contextIsolation: true,
@@ -165,6 +198,7 @@ function ensureBrowserView() {
     return { action: 'deny' };
   });
   const markBrowserReady = () => {
+    if (!browserViewAttached) return;
     if (browserLoadTimer) clearTimeout(browserLoadTimer);
     browserLoadTimer = null;
     const url = browserView?.webContents?.getURL();
@@ -173,6 +207,7 @@ function ensureBrowserView() {
   browserView.webContents.on('dom-ready', markBrowserReady);
   browserView.webContents.on('did-stop-loading', markBrowserReady);
   browserView.webContents.on('did-start-loading', () => {
+    if (!browserViewAttached) return;
     notifyBrowser({ state: 'loading', url: browserView.webContents.getURL() });
   });
   browserView.webContents.on('did-finish-load', () => {
@@ -193,6 +228,7 @@ function ensureBrowserView() {
     });
   });
   mainWindow.contentView.addChildView(browserView);
+  browserViewAttached = true;
   return browserView;
 }
 
@@ -200,13 +236,13 @@ function validateBounds(payload = {}) {
   const bounds = {
     x: Math.max(0, Math.trunc(Number(payload.x) || 0)),
     y: Math.max(0, Math.trunc(Number(payload.y) || 0)),
-    width: Math.max(320, Math.trunc(Number(payload.width) || 320)),
-    height: Math.max(240, Math.trunc(Number(payload.height) || 240)),
+    width: Math.max(1, Math.trunc(Number(payload.width) || 1)),
+    height: Math.max(1, Math.trunc(Number(payload.height) || 1)),
   };
   const content = mainWindow?.getContentBounds();
   if (content) {
-    bounds.width = Math.min(bounds.width, Math.max(320, content.width - bounds.x));
-    bounds.height = Math.min(bounds.height, Math.max(240, content.height - bounds.y));
+    bounds.width = Math.min(bounds.width, Math.max(1, content.width - bounds.x));
+    bounds.height = Math.min(bounds.height, Math.max(1, content.height - bounds.y));
   }
   return bounds;
 }
@@ -277,48 +313,94 @@ function registerIpc() {
     return { ok: true };
   });
 
-  registerHandle('literature:search', async (_event, payload = {}) => {
+  registerHandle('assistant:plan', async (_event, payload = {}) => {
+    const { assistant } = await modules();
+    return { ok: true, plan: assistant.buildResearchPlan(payload.question, payload.context) };
+  });
+
+  registerHandle('assistant:update', async (_event, payload = {}) => {
+    const { assistant } = await modules();
+    return { ok: true, plan: assistant.updateResearchPlan(payload.plan, payload.taskId, payload.status) };
+  });
+  registerHandle('literature:search', async (event, payload = {}) => {
     const query = String(payload.query ?? '').trim();
     if (!query) throw new TypeError('search query is required');
+    const requestId = String(payload.requestId ?? 'search');
     const { search, registry } = await modules();
     const requested = [...new Set(Array.isArray(payload.sources) && payload.sources.length
       ? payload.sources.map(String) : ['openalex', 'pubmed', 'crossref'])];
     const known = requested.filter((id) => registry.getSourceMeta(id));
-    const settled = await Promise.allSettled(known.map((id) => registry.searchSource(id, query, {
-      limit: payload.limit, page: payload.page,
-    })));
+    const progress = (source, status, extra = {}) => {
+      if (!event.sender.isDestroyed()) event.sender.send('literature:status', {
+        requestId, query, source, status, ...extra,
+      });
+    };
+    const completed = await Promise.all(known.map(async (id) => {
+      const startedAt = Date.now();
+      progress(id, 'searching');
+      try {
+        const value = await registry.searchSource(id, query, {
+          limit: payload.limit,
+          page: payload.page,
+          timeoutMs: payload.timeoutMs,
+          maxAttempts: payload.maxAttempts,
+          matchMode: payload.matchMode ?? 'auto',
+        });
+        const status = value.kind === 'link' ? 'site-link' : value.records?.length ? 'complete' : 'zero';
+        progress(id, status, { count: value.records?.length ?? 0, latencyMs: Date.now() - startedAt });
+        return { source: id, value, latencyMs: Date.now() - startedAt };
+      } catch (error) {
+        const meta = registry.getSourceMeta(id);
+        const status = error?.code === 'TIMEOUT' ? 'timeout'
+          : error?.status === 429 ? 'rate-limited'
+            : meta?.access === 'key' && [401, 403].includes(error?.status) ? 'requires-key'
+              : 'failed';
+        progress(id, status, {
+          latencyMs: Date.now() - startedAt,
+          httpStatus: error?.status ?? null,
+          error: String(error?.message ?? error),
+        });
+        return { source: id, error, latencyMs: Date.now() - startedAt };
+      }
+    }));
     const records = [];
     const sourceResults = [];
     const errors = [];
     const links = [];
-    settled.forEach((entry, index) => {
-      const source = known[index];
-      if (entry.status === 'rejected') {
-        const error = entry.reason;
+    for (const entry of completed) {
+      const source = entry.source;
+      if (entry.error) {
+        const error = entry.error;
+        const meta = registry.getSourceMeta(source);
+        const status = error?.code === 'TIMEOUT' ? 'timeout'
+          : error?.status === 429 ? 'rate-limited'
+            : meta?.access === 'key' && [401, 403].includes(error?.status) ? 'requires-key'
+              : 'failed';
         errors.push({
           source, name: error?.name ?? 'Error', message: String(error?.message ?? error),
           code: error?.code ?? 'SEARCH_FAILED', status: Number.isInteger(error?.status) ? error.status : null,
         });
-        sourceResults.push({ source, status: error?.status === 429 ? 'rate-limited' : 'failed', httpStatus: error?.status ?? null, count: 0, error: String(error?.message ?? error) });
-        return;
+        sourceResults.push({ source, status, httpStatus: error?.status ?? null, count: 0, error: String(error?.message ?? error), latencyMs: entry.latencyMs });
+        continue;
       }
       const value = entry.value;
       if (value.kind === 'link') {
         const link = { ...value };
         links.push(link);
-        sourceResults.push({ source, status: 'site-link', httpStatus: null, count: 0, error: null, audit: { provider: source, mode: link.mode, url: link.url, honesty: link.honesty } });
-        return;
+        sourceResults.push({ source, status: 'site-link', httpStatus: null, count: 0, error: null, latencyMs: entry.latencyMs, audit: { provider: source, mode: link.mode, url: link.url, honesty: link.honesty } });
+        continue;
       }
       records.push(...(value.records ?? []));
       sourceResults.push({
         source, status: value.records?.length ? 'complete' : 'zero', httpStatus: value.audit?.httpStatus ?? null,
-        count: value.records?.length ?? 0, total: value.total ?? 0, error: null, audit: value.audit ?? null,
+        count: value.records?.length ?? 0, total: value.matchMode === 'exact-title' ? value.records?.length ?? 0 : value.total ?? 0, rawCount: value.rawCount ?? value.records?.length ?? 0, matchMode: value.matchMode ?? 'broad', error: null, latencyMs: entry.latencyMs, audit: value.audit ?? null,
       });
-    });
+    }
+    const successful = sourceResults.some((item) => ['complete', 'zero'].includes(item.status));
     return { ok: true, result: {
-      query, sources: known, records: search.deduplicateRecords(records), sourceResults, errors, links,
-      isPartial: errors.length > 0 && sourceResults.some((item) => ['complete', 'zero'].includes(item.status)),
-      isFailure: errors.length > 0 && !sourceResults.some((item) => ['complete', 'zero'].includes(item.status)),
+      requestId, query, sources: known, records: search.deduplicateRecords(records), sourceResults, errors, links,
+      isPartial: errors.length > 0 && successful,
+      isFailure: errors.length > 0 && !successful,
     } };
   });
 
@@ -420,21 +502,36 @@ function registerIpc() {
     const { urlPolicy } = await modules();
     const url = urlPolicy.validateBrowserUrl(payload.url);
     const view = ensureBrowserView();
+    const navigationId = ++browserNavigationId;
+    browserCurrentUrl = url;
+    if (browserLoadTimer) clearTimeout(browserLoadTimer);
     view.setBounds(validateBounds(payload.bounds));
+    notifyBrowser({ state: 'loading', url, navigationId });
     browserLoadTimer = setTimeout(() => {
+      if (navigationId !== browserNavigationId || !browserViewAttached) return;
+      detachBrowserView();
       notifyBrowser({
         state: 'blocked',
         url,
-        message: '站点长时间没有完成加载，可能受登录、网络或站点策略限制。',
+        navigationId,
+        message: '站点长时间没有完成加载。可能是网络、登录、验证码或站点策略限制，已停止等待。',
         workaround: 'open-external',
       });
-    }, 45_000);
-    view.webContents.loadURL(url).catch((error) => {
-      if (!view.webContents.isDestroyed()) notifyBrowser({
-        state: 'blocked', url, message: error.message, workaround: 'open-external',
+    }, 30_000);
+    if (view.webContents.getURL() === url && !view.webContents.isLoading()) {
+      clearTimeout(browserLoadTimer);
+      browserLoadTimer = null;
+      notifyBrowser({ state: 'ready', url, navigationId });
+    } else {
+      view.webContents.loadURL(url).catch((error) => {
+        if (navigationId !== browserNavigationId || view.webContents.isDestroyed()) return;
+        detachBrowserView();
+        notifyBrowser({
+          state: 'blocked', url, navigationId, message: error.message, workaround: 'open-external',
+        });
       });
-    });
-    return { ok: true, url };
+    }
+    return { ok: true, url, navigationId };
   });
 
   registerHandle('browser:bounds', async (_event, payload = {}) => {
@@ -443,7 +540,7 @@ function registerIpc() {
   });
 
   registerHandle('browser:hide', async () => {
-    closeBrowserView();
+    detachBrowserView();
     return { ok: true };
   });
 
@@ -475,6 +572,13 @@ function createWindow() {
       spellcheck: true,
     },
   });
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level >= 2) console.error(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+  });
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[renderer-gone] ${details.reason} (${details.exitCode})`);
+  });
+
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith('file://')) event.preventDefault();
   });
@@ -495,12 +599,150 @@ function createWindow() {
   if (captureDirectory) {
     mainWindow.webContents.once('did-finish-load', async () => {
       fs.mkdirSync(captureDirectory, { recursive: true });
+      let runtimeState = 'pending';
+      for (let attempt = 0; attempt < 150; attempt += 1) {
+        runtimeState = await mainWindow.webContents.executeJavaScript("document.querySelector('#runtime-badge')?.className || 'missing'");
+        if (/ready|error/.test(runtimeState)) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const captureDiagnostics = await mainWindow.webContents.executeJavaScript(`(async () => {
+        const timed = (name, promise) => Promise.race([
+          promise.then((value) => ({ name, state: 'resolved', value })),
+          new Promise((resolve) => setTimeout(() => resolve({ name, state: 'timeout' }), 1500)),
+        ]);
+        return Promise.all([
+          timed('health', window.selenyx.health()),
+          timed('workspace', window.selenyx.readWorkspace()),
+          timed('sources', window.selenyx.listSources()),
+          timed('skills', window.selenyx.listSkills()),
+        ]);
+      })()`);
+      fs.writeFileSync(
+        path.join(captureDirectory, 'runtime-diagnostics.json'),
+        JSON.stringify(captureDiagnostics, null, 2),
+        'utf8'
+      );
+
+      if (captureView !== 'research') {
+        await mainWindow.webContents.executeJavaScript(`document.querySelector('[data-view="${captureView}"]')?.click()`);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      if (captureView === 'skills') {
+        await mainWindow.webContents.executeJavaScript(`(() => {
+          const input = document.querySelector('#assistant-brief');
+          input.value = '梳理生成式 AI 对科研写作可靠性的影响，并找出相互矛盾的证据';
+          document.querySelector('#assistant-create').click();
+        })()`);
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          const ready = await mainWindow.webContents.executeJavaScript("!document.querySelector('#assistant-workspace').hidden");
+          if (ready) break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+      if (verifyBrowserUrl) {
+        await mainWindow.webContents.executeJavaScript("document.querySelector('[data-view=\"browser\"]').click()");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const browserResult = await mainWindow.webContents.executeJavaScript(`(async () => {
+          document.querySelector('#browser-homepage').hidden = true;
+          const host = document.querySelector('#browser-host');
+          host.hidden = false;
+          const rect = host.getBoundingClientRect();
+          return window.selenyx.browser.show({
+            url: ${JSON.stringify(verifyBrowserUrl)},
+            bounds: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+          });
+        })()`);
+        let browserState = 'loading';
+        for (let attempt = 0; attempt < 350; attempt += 1) {
+          browserState = await mainWindow.webContents.executeJavaScript("document.querySelector('#browser-status').hidden ? 'ready' : document.querySelector('#browser-status h3')?.textContent || 'loading'");
+          if (browserState === 'ready' || /无法|限制|失败/.test(browserState)) break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        const browserVerification = {
+          requestedUrl: verifyBrowserUrl,
+          ipc: browserResult,
+          state: browserState,
+          currentUrl: browserView && !browserView.webContents.isDestroyed() ? browserView.webContents.getURL() : null,
+          attached: browserViewAttached,
+          bounds: browserView?.getBounds() ?? null,
+        };
+        const hostname = new URL(verifyBrowserUrl).hostname.replace(/[^a-z0-9.-]/gi, '_');
+        fs.writeFileSync(path.join(captureDirectory, `browser-${hostname}.json`), JSON.stringify(browserVerification, null, 2), 'utf8');
+        detachBrowserView();
+      }
+
+      if (verifyLayoutFile) {
+        await mainWindow.webContents.executeJavaScript("document.querySelector('[data-view=\"browser\"]').click()");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const initialRect = await mainWindow.webContents.executeJavaScript(`(() => {
+          document.querySelector('#browser-homepage').hidden = true;
+          const host = document.querySelector('#browser-host');
+          host.hidden = false;
+          const rect = host.getBoundingClientRect();
+          return { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) };
+        })()`);
+        const view = ensureBrowserView();
+        view.setBounds(validateBounds(initialRect));
+        await mainWindow.webContents.executeJavaScript("document.documentElement.style.setProperty('--left-width', '340px'); document.dispatchEvent(new Event('selenyx:layout'))");
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        const afterLeftRect = await mainWindow.webContents.executeJavaScript(`(() => {
+          const rect = document.querySelector('#browser-host').getBoundingClientRect();
+          return { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) };
+        })()`);
+        const afterLeftNative = browserView.getBounds();
+        await mainWindow.webContents.executeJavaScript("document.documentElement.style.setProperty('--right-width', '400px'); document.dispatchEvent(new Event('selenyx:layout'))");
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        const afterRightRect = await mainWindow.webContents.executeJavaScript(`(() => {
+          const rect = document.querySelector('#browser-host').getBoundingClientRect();
+          return { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) };
+        })()`);
+        const afterRightNative = browserView.getBounds();
+        const layoutVerification = {
+          initialRect,
+          afterLeftRect,
+          afterLeftNative,
+          afterRightRect,
+          afterRightNative,
+          leftChanged: initialRect.x !== afterLeftRect.x && initialRect.width !== afterLeftRect.width,
+          rightChanged: afterLeftRect.width !== afterRightRect.width,
+          nativeMatchesLeft: JSON.stringify(afterLeftRect) === JSON.stringify(afterLeftNative),
+          nativeMatchesRight: JSON.stringify(afterRightRect) === JSON.stringify(afterRightNative),
+        };
+        fs.mkdirSync(path.dirname(verifyLayoutFile), { recursive: true });
+        fs.writeFileSync(verifyLayoutFile, JSON.stringify(layoutVerification, null, 2), 'utf8');
+        detachBrowserView();
+      }
+
+      if (captureSearch) {
+        await mainWindow.webContents.executeJavaScript(`(() => {
+          document.querySelector('[data-view="research"]').click();
+          document.querySelector('#literature-query').value = ${JSON.stringify(captureSearch)};
+          document.querySelector('#search-mode').value = 'broad';
+          document.querySelector('#literature-search-form button').click();
+        })()`);
+        for (let attempt = 0; attempt < 400; attempt += 1) {
+          const settled = await mainWindow.webContents.executeJavaScript("!document.querySelector('#literature-search-form button').disabled && document.querySelector('#search-audit').textContent.includes('条可收藏记录')");
+          if (settled) break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        const searchVerification = await mainWindow.webContents.executeJavaScript(`({
+          audit: document.querySelector('#search-audit').textContent,
+          statuses: [...document.querySelectorAll('#source-statuses .source-status')].map((node) => node.textContent),
+          titles: [...document.querySelectorAll('#search-results .result-card h3')].map((node) => node.textContent),
+          resultCards: document.querySelectorAll('#search-results .result-card').length,
+          runtime: document.querySelector('#runtime-badge').textContent,
+        })`);
+        fs.writeFileSync(path.join(captureDirectory, 'search-verification.json'), JSON.stringify(searchVerification, null, 2), 'utf8');
+      }
+
       for (const [width, height] of [[1440, 900], [1280, 800], [1024, 768]]) {
         mainWindow.setSize(width, height);
-        await new Promise((resolve) => setTimeout(resolve, 450));
+        await new Promise((resolve) => setTimeout(resolve, 350));
         const image = await mainWindow.webContents.capturePage();
-        fs.writeFileSync(path.join(captureDirectory, 'selenyx-r08-' + width + 'x' + height + '.png'), image.toPNG());
+        const suffix = captureSearch ? '-search' : captureView === 'research' ? '' : '-' + captureView;
+        fs.writeFileSync(path.join(captureDirectory, 'selenyx-r08' + suffix + '-' + width + 'x' + height + '.png'), image.toPNG());
       }
+      fs.writeFileSync(path.join(captureDirectory, 'runtime-state.txt'), runtimeState, 'utf8');
       app.quit();
     });
   }

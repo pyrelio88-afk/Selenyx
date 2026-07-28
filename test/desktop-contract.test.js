@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 const html = fs.readFileSync(new URL('../desktop/renderer/index.html', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../desktop/renderer/styles.css', import.meta.url), 'utf8');
-const renderer = ['app.js', 'modules/core.js', 'modules/search.js', 'modules/reader.js', 'modules/browserWorkbench.js', 'modules/settings.js'].map((file) => fs.readFileSync(new URL('../desktop/renderer/' + file, import.meta.url), 'utf8')).join('\n');
+const renderer = ['app.js', 'modules/core.js', 'modules/search.js', 'modules/reader.js', 'modules/browserWorkbench.js', 'modules/settings.js', 'modules/assistant.js'].map((file) => fs.readFileSync(new URL('../desktop/renderer/' + file, import.meta.url), 'utf8')).join('\n');
 const preload = fs.readFileSync(new URL('../desktop/preload.js', import.meta.url), 'utf8');
 const main = fs.readFileSync(new URL('../desktop/main.js', import.meta.url), 'utf8');
 const desktopPackage = JSON.parse(fs.readFileSync(new URL('../desktop/package.json', import.meta.url), 'utf8'));
@@ -174,7 +174,7 @@ test('desktop: browser has explicit blocked fallback status', () => {
 });
 
 test('desktop: browser has a finite loading timeout', () => {
-  assert.match(main, /45_000/);
+  assert.match(main, /30_000/);
 });
 
 test('desktop: packaged app copies the shared engine', () => {
@@ -183,7 +183,7 @@ test('desktop: packaged app copies the shared engine', () => {
 });
 
 test('desktop: version matches R0.8 release candidate', () => {
-  assert.equal(desktopPackage.version, '0.8.0-rc.2');
+  assert.equal(desktopPackage.version, '0.8.0-rc.3');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {
@@ -199,4 +199,36 @@ test('desktop: example styling is visibly distinct', () => {
 test('desktop: L1 and L2 boundary is visible in UI copy', () => {
   assert.match(renderer, /离线 L1/);
   assert.match(renderer, /L2 · 内容将发送至所选提供方/);
+});
+
+test('desktop: embedded browser follows CSS-grid resizes continuously', () => {
+  assert.match(renderer, /new ResizeObserver/);
+  assert.match(renderer, /observer\.observe\(host\)/);
+  assert.match(renderer, /syncBrowserBounds\(\)/);
+  assert.match(renderer, /requestAnimationFrame/);
+});
+
+test('desktop: WebContentsView bounds are not pinned to a 320px minimum', () => {
+  assert.match(main, /width: Math\.max\(1,/);
+  assert.doesNotMatch(main, /bounds\.width = Math\.min\(bounds\.width, Math\.max\(320/);
+});
+
+test('desktop: literature search emits progressive per-source status', () => {
+  assert.match(preload, /literature:status/);
+  assert.match(main, /progress\(id, 'searching'\)/);
+  assert.match(renderer, /activeSearchId/);
+  assert.match(renderer, /部分来源失败/);
+});
+
+test('desktop: Nature is presented as a research assistant rather than skill cards', () => {
+  assert.match(html, /NATURE RESEARCH ASSISTANT/);
+  assert.match(html, /id="assistant-tasks"/);
+  assert.doesNotMatch(html, /id="skill-grid"/);
+  assert.match(renderer, /assistant: Object\.freeze|api\.assistant/);
+});
+
+test('desktop: assistant IPC is narrow and explicit', () => {
+  assert.match(preload, /assistant: Object\.freeze/);
+  assert.match(main, /registerHandle\('assistant:plan'/);
+  assert.match(main, /registerHandle\('assistant:update'/);
 });

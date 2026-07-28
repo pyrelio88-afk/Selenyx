@@ -3,8 +3,9 @@ import {
 } from './modules/core.js';
 import { setupSearch, renderControls, renderLibrary } from './modules/search.js';
 import { setupReader, renderReader, renderEvidence, renderRight } from './modules/reader.js';
-import { setupBrowser, renderSites } from './modules/browserWorkbench.js';
+import { setupBrowser, renderSites, syncBrowserBounds } from './modules/browserWorkbench.js';
 import { setupSettings, refreshProviders } from './modules/settings.js';
+import { setupAssistant, renderAssistant } from './modules/assistant.js';
 
 const honestUiCopy = Object.freeze(['真实检索返回 0 条', '改用系统浏览器', '离线 L1', 'L2 · 内容将发送至所选提供方']);
 
@@ -33,6 +34,7 @@ function setupResizer(node, side) {
       const width = side === 'left' ? pointer.clientX : window.innerWidth - pointer.clientX;
       const value = Math.max(side === 'left' ? 180 : 240, Math.min(side === 'left' ? 360 : 440, width));
       document.documentElement.style.setProperty(side === 'left' ? '--left-width' : '--right-width', `${value}px`);
+      syncBrowserBounds();
     };
     const up = async (pointer) => {
       node.releasePointerCapture(pointer.pointerId);
@@ -45,87 +47,6 @@ function setupResizer(node, side) {
     node.addEventListener('pointermove', move);
     node.addEventListener('pointerup', up);
   });
-}
-
-function skillMode(skill) {
-  if (skill.mode === 'l1') return ['L1 离线', 'l1'];
-  if (skill.mode === 'l2') return ['L2 · BYOK', 'l2'];
-  if (skill.mode === 'route') return ['工作流', 'route'];
-  return ['外部运行时', 'external'];
-}
-
-function showSkillDialog(skill) {
-  state.activeSkill = skill;
-  const [mode] = skillMode(skill);
-  $('#skill-modal-kicker').textContent = `${skill.family === 'nature' ? 'NATURE SKILLS' : 'SELENYX'} · ${mode}`;
-  $('#skill-modal-title').textContent = skill.name ?? skill.id;
-  $('#skill-modal-description').textContent = skill.desc ?? '科研技能';
-  const requirements = $('#skill-modal-requirements');
-  clear(requirements);
-  (skill.requirements ?? []).forEach((item) => requirements.append(el('span', { text: item })));
-  $('#skill-input').value = '';
-  $('#skill-output').textContent = '';
-  $('#skill-output-wrap').hidden = true;
-  $('#skill-input').closest('label').hidden = skill.mode === 'external';
-  $('#skill-run').hidden = skill.mode === 'external';
-  $('#skill-modal').hidden = false;
-  if (skill.mode !== 'external') $('#skill-input').focus();
-}
-
-async function activateSkill(skill) {
-  if (skill.mode === 'route') {
-    const response = await api.runSkill({ id: skill.id, input: '' });
-    if (!response.ok) return toast(response.error?.message ?? '无法打开技能工作流', 'error');
-    await setView(response.result.route);
-    toast(response.result.message ?? '已进入对应工作流');
-    return;
-  }
-  showSkillDialog(skill);
-}
-
-async function runActiveSkill() {
-  const skill = state.activeSkill;
-  if (!skill) return;
-  const button = $('#skill-run');
-  button.disabled = true;
-  button.textContent = '运行中…';
-  try {
-    const response = await api.runSkill({ id: skill.id, input: $('#skill-input').value });
-    if (!response.ok) throw new Error(response.error?.status ? `${response.error.message}（HTTP ${response.error.status}）` : response.error?.message ?? '技能运行失败');
-    const result = response.result;
-    if (result.type === 'route') {
-      $('#skill-modal').hidden = true;
-      await setView(result.route);
-      return;
-    }
-    if (result.type === 'unavailable') {
-      $('#skill-output').textContent = `${result.message}\n\n所需环境：${(result.requirements ?? []).join('、') || '未声明'}`;
-    } else {
-      $('#skill-output').textContent = typeof result.text === 'string' ? result.text : JSON.stringify(result.text, null, 2);
-    }
-    $('#skill-output-wrap').hidden = false;
-  } catch (error) {
-    toast(error.message, 'error');
-  } finally {
-    button.disabled = false;
-    button.textContent = '运行';
-  }
-}
-
-function renderSkills() {
-  const host = $('#skill-grid');
-  clear(host);
-  for (const skill of state.skills) {
-    const [mode, modeClass] = skillMode(skill);
-    host.append(el('article', { className: 'skill-card' }, [
-      el('header', {}, [el('h3', { text: skill.name ?? skill.id }), el('span', { className: `skill-badge ${modeClass}`, text: mode })]),
-      el('p', { text: skill.desc ?? '科研技能' }),
-      el('footer', {}, [
-        el('span', { className: 'skill-badge', text: skill.family === 'nature' ? 'Nature Skills' : 'Selenyx Native' }),
-        el('button', { className: 'skill-action', text: skill.mode === 'route' ? '打开工作流' : skill.mode === 'external' ? '查看要求' : '使用', onClick: () => activateSkill(skill) }),
-      ]),
-    ]));
-  }
 }
 
 function renderMessages() {
@@ -159,7 +80,7 @@ function viewChanged(view) {
   if (view === 'library') renderLibrary();
   if (view === 'reader') renderReader();
   if (view === 'evidence') renderEvidence();
-  if (view === 'skills') renderSkills();
+  if (view === 'skills') renderAssistant();
   if (view === 'browser') renderSites();
 }
 
@@ -181,7 +102,7 @@ async function boot() {
   renderReader();
   renderEvidence();
   renderRight();
-  renderSkills();
+  renderAssistant();
   await refreshProviders();
   const active = state.providers.profiles?.find((item) => item.id === state.providers.activeId);
   $('#provider-pill').textContent = active ? `${active.name} · ${active.model}` : '离线 L1';
@@ -193,6 +114,7 @@ async function boot() {
   setupReader();
   setupBrowser();
   setupSettings();
+  setupAssistant();
   setupResizer($('#left-resizer'), 'left');
   setupResizer($('#right-resizer'), 'right');
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
@@ -200,14 +122,15 @@ async function boot() {
     const collapsed = !$('#app').classList.contains('left-collapsed');
     $('#app').classList.toggle('left-collapsed', collapsed);
     $('#left-panel').classList.toggle('collapsed', collapsed);
+    syncBrowserBounds(true);
     await workspaceEvent({ type: 'ui:patch', patch: { leftCollapsed: collapsed } });
   });
   $('#toggle-right').addEventListener('click', async () => {
     const collapsed = !$('#app').classList.contains('right-collapsed');
     $('#app').classList.toggle('right-collapsed', collapsed);
+    syncBrowserBounds(true);
     await workspaceEvent({ type: 'ui:patch', patch: { rightCollapsed: collapsed } });
   });
-  $('#skill-run').addEventListener('click', runActiveSkill);
   $('#send-message').addEventListener('click', sendMessage);
   window.addEventListener('resize', applyLayout);
   $('#composer-input').addEventListener('keydown', (event) => {
@@ -218,6 +141,7 @@ async function boot() {
 }
 
 boot().catch((error) => {
+  console.error(error?.stack ?? error);
   $('#runtime-badge').textContent = '启动失败';
   $('#runtime-badge').className = 'runtime-badge error';
   toast(error.message, 'error');

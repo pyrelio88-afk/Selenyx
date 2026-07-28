@@ -5,6 +5,8 @@ import { searchEuropePmc } from './sources/europepmc.js';
 import { searchSemanticScholar } from './sources/semantic.js';
 import { searchUnpaywall, searchDoaj, searchCore } from './sources/openaccess.js';
 import { CHINA_SOURCES, getChinaSource, planChinaSearch } from './sources/china.js';
+import { runSearchWithPolicy } from './fetchPolicy.js';
+import { filterSearchRecords } from './queryMatch.js';
 
 // searchCompat imports this registry. Lazy imports avoid an initialisation cycle.
 const searchOpenAlex = async (...args) => (await import('./searchCompat.js')).searchOpenAlex(...args);
@@ -65,8 +67,13 @@ function getSourceMeta(id) {
 
 async function searchSource(id, query, options = {}) {
   if (API_SOURCES[id]) {
-    const result = await API_SOURCES[id].search(query, options);
-    return { kind: 'native-api', sourceId: id, ...result };
+    const result = await runSearchWithPolicy(
+      id,
+      ({ signal }) => API_SOURCES[id].search(query, { ...options, signal }),
+      options,
+    );
+    const matched = filterSearchRecords(result.records, query, options.matchMode ?? 'broad');
+    return { kind: 'native-api', sourceId: id, ...result, records: matched.records, matchMode: matched.matchMode, rawCount: matched.rawCount };
   }
   if (getChinaSource(id)) return { kind: 'link', ...planChinaSearch(id, query, options) };
   throw new Error(`unknown source: ${id}`);

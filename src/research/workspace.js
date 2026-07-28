@@ -1,4 +1,4 @@
-﻿import { randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 const SCHEMA_VERSION = 1;
 const nowIso = () => new Date().toISOString();
@@ -11,6 +11,7 @@ function emptyWorkspace() {
     library: [],
     annotations: [],
     evidence: [],
+    assistant: { plan: null, history: [] },
     sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'china' },
     ui: {
       leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false,
@@ -72,6 +73,31 @@ function upsertRecord(library, input) {
   return { library: next, record: merged, merged: true };
 }
 
+function normalizeAssistant(input) {
+  const raw = object(input);
+  const planRaw = object(raw.plan);
+  const tasks = Array.isArray(planRaw.tasks) ? planRaw.tasks.slice(0, 10).map((candidate) => {
+    const item = object(candidate);
+    return {
+      id: text(item.id, 300), stage: text(item.stage, 80), title: text(item.title, 500),
+      description: text(item.description, 4_000), route: text(item.route, 80) || null,
+      capability: text(item.capability, 120) || null, level: text(item.level, 40) || 'L1',
+      evidenceGate: text(item.evidenceGate, 2_000) || null,
+      status: ['pending', 'active', 'done', 'blocked'].includes(item.status) ? item.status : 'pending',
+    };
+  }).filter((item) => item.id && item.title) : [];
+  const plan = text(planRaw.id, 300) && text(planRaw.question, 20_000) ? {
+    ...planRaw,
+    id: text(planRaw.id, 300), question: text(planRaw.question, 20_000),
+    intent: text(planRaw.intent, 80) || 'discover', stage: text(planRaw.stage, 80) || 'question',
+    tasks,
+  } : null;
+  const history = Array.isArray(raw.history) ? raw.history.slice(-100).map((candidate) => {
+    const item = object(candidate);
+    return { at: text(item.at, 80) || nowIso(), action: text(item.action, 200), detail: text(item.detail, 2_000) };
+  }).filter((item) => item.action) : [];
+  return { plan, history };
+}
 function normalizeWorkspace(input) {
   const fallback = emptyWorkspace();
   const raw = object(input);
@@ -83,6 +109,7 @@ function normalizeWorkspace(input) {
     ...fallback, library,
     annotations: Array.isArray(raw.annotations) ? raw.annotations.filter((item) => object(item).id).slice(0, 20_000) : [],
     evidence: Array.isArray(raw.evidence) ? raw.evidence.filter((item) => object(item).id).slice(0, 20_000) : [],
+    assistant: normalizeAssistant(raw.assistant),
     sourcePreferences: { ...fallback.sourcePreferences, ...object(raw.sourcePreferences) },
     ui: { ...fallback.ui, ...object(raw.ui) },
     updatedAt: text(raw.updatedAt, 80) || fallback.updatedAt,
@@ -131,6 +158,14 @@ function applyWorkspaceEvent(current, event) {
   } else if (action.type === 'evidence:review') {
     const review = ['unreviewed', 'accepted', 'rejected', 'needs-check'].includes(action.review) ? action.review : 'unreviewed';
     state.evidence = state.evidence.map((item) => item.id === action.id ? { ...item, review } : item);
+  } else if (action.type === 'assistant:set') {
+    state.assistant = normalizeAssistant({
+      plan: action.plan,
+      history: [...state.assistant.history, { at: nowIso(), action: 'plan:set', detail: text(action.plan?.question, 2_000) }],
+    });
+    result = state.assistant.plan;
+  } else if (action.type === 'assistant:clear') {
+    state.assistant = { plan: null, history: [...state.assistant.history, { at: nowIso(), action: 'plan:clear', detail: '' }].slice(-100) };
   } else if (action.type === 'preferences:patch') {
     state.sourcePreferences = { ...state.sourcePreferences, ...object(action.patch) };
   } else if (action.type === 'ui:patch') {
@@ -144,6 +179,6 @@ function applyWorkspaceEvent(current, event) {
 
 export {
   SCHEMA_VERSION, emptyWorkspace, normalizeWorkspace, normalizeRecord,
-  identityKeys, upsertRecord, applyWorkspaceEvent,
+  identityKeys, upsertRecord, normalizeAssistant, applyWorkspaceEvent,
 };
 

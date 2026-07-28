@@ -9,6 +9,16 @@ contextBridge.exposeInMainWorld('selenyx', Object.freeze({
   pushProfileEvent: (event) => invoke('profile:event', event),
   searchLiterature: (payload) => invoke('literature:search', payload),
   listSources: () => invoke('literature:sources', {}),
+  onSearchStatus: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, status) => callback(status);
+    ipcRenderer.on('literature:status', listener);
+    return () => ipcRenderer.removeListener('literature:status', listener);
+  },
+  assistant: Object.freeze({
+    plan: (payload) => invoke('assistant:plan', payload),
+    update: (payload) => invoke('assistant:update', payload),
+  }),
   readWorkspace: () => invoke('workspace:read'),
   pushWorkspaceEvent: (event) => invoke('workspace:event', event),
   openExternal: (url) => invoke('external:open', { url }),

@@ -89,9 +89,39 @@ function renderSites() {
   }
 }
 
+let boundsFrame = 0;
+let boundsFallbackTimer = 0;
+let forceNextBoundsSync = false;
+let lastBoundsKey = '';
+
 function browserBounds() {
   const rect = $('#browser-host').getBoundingClientRect();
   return { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) };
+}
+
+async function flushBrowserBounds() {
+  if (boundsFrame) cancelAnimationFrame(boundsFrame);
+  if (boundsFallbackTimer) clearTimeout(boundsFallbackTimer);
+  boundsFrame = 0;
+  boundsFallbackTimer = 0;
+  const force = forceNextBoundsSync;
+  forceNextBoundsSync = false;
+  const host = $('#browser-host');
+  if (!host || host.hidden || state.view !== 'browser') return;
+  const bounds = browserBounds();
+  if (bounds.width < 1 || bounds.height < 1) return;
+  const key = `${bounds.x}:${bounds.y}:${bounds.width}:${bounds.height}`;
+  if (!force && key === lastBoundsKey) return;
+  lastBoundsKey = key;
+  const response = await api.browser.setBounds(bounds);
+  if (!response?.ok) toast(response?.error?.message ?? '网页区域尺寸同步失败', 'error');
+}
+
+function syncBrowserBounds(force = false) {
+  forceNextBoundsSync ||= force;
+  if (boundsFrame || boundsFallbackTimer) return;
+  boundsFrame = requestAnimationFrame(flushBrowserBounds);
+  boundsFallbackTimer = setTimeout(flushBrowserBounds, 80);
 }
 
 async function openSite(site) {
@@ -105,6 +135,7 @@ async function openSite(site) {
   workspaceEvent({ type: 'ui:patch', patch: { browserRecent: recent } }).catch(() => {});
   renderStatus({ state: 'loading', url });
   const response = await api.browser.show({ url, bounds: browserBounds() });
+  syncBrowserBounds(true);
   if (!response.ok) renderStatus({ state: 'blocked', url, message: response.error?.message ?? '站点无法加载' });
 }
 
@@ -181,7 +212,13 @@ function setupBrowser() {
   $('#browser-url').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('#browser-go').click(); });
   $('#browser-add-site').addEventListener('click', () => { $('#site-modal').hidden = false; $('#site-form [name="name"]').focus(); });
   api.browser.onStatus(renderStatus);
-  window.addEventListener('resize', () => { if (!$('#browser-host').hidden) api.browser.setBounds(browserBounds()); });
+  const host = $('#browser-host');
+  const observer = new ResizeObserver(() => syncBrowserBounds());
+  observer.observe(host);
+  observer.observe($('.main-panel'));
+  window.addEventListener('resize', () => syncBrowserBounds(true));
+  window.visualViewport?.addEventListener('resize', () => syncBrowserBounds(true));
+  document.addEventListener('selenyx:layout', () => syncBrowserBounds());
 }
 
-export { setupBrowser, renderSites, showHome, safeUrl, resolveInput };
+export { setupBrowser, renderSites, showHome, safeUrl, resolveInput, browserBounds, syncBrowserBounds };

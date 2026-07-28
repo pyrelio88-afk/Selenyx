@@ -82,7 +82,7 @@ function renderEvidence() {
 function renderRight() {
   const host = $('#right-content');
   clear(host);
-  const titles = { research: '检索上下文', library: '本地文献库', reader: '阅读上下文', browser: '站点状态', chat: '对话上下文', evidence: '证据审阅', skills: '离线能力' };
+  const titles = { research: '检索上下文', library: '本地文献库', reader: '阅读上下文', browser: '站点状态', chat: '对话上下文', evidence: '证据审阅', skills: '研究路径' };
   $('#context-title').textContent = titles[state.view] ?? '当前上下文';
   if (state.view === 'reader' && state.selectedSource) {
     host.append(el('section', { className: 'side-section' }, [
@@ -101,6 +101,19 @@ function renderRight() {
     host.append(el('section', { className: 'side-section' }, [el('h3', { text: '本次检索' }), el('div', { className: 'side-card' }, [el('b', { text: result?.query || '尚未检索' }), el('p', { text: result ? `${result.records.length} 条记录 · ${result.errors.length} 个错误` : '来源状态会逐项显示' })])]));
     return;
   }
+  if (state.view === 'skills') {
+    const plan = state.workspace.assistant?.plan;
+    const active = plan?.tasks?.find((item) => item.status === 'active');
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: 'Nature 科研助手' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: active?.title ?? '尚未建立研究路径' }),
+        el('p', { text: plan ? `${plan.tasks.filter((item) => item.status === 'done').length}/${plan.tasks.length} 步完成 · ${state.workspace.library.length} 篇本地文献 · ${state.workspace.evidence.length} 条证据` : '从一个研究问题开始；技能会由助手在流程中调用。' }),
+      ]),
+    ]));
+    return;
+  }
+
   if (state.view === 'evidence') {
     host.append(el('section', { className: 'side-section' }, [el('h3', { text: '审阅状态' }), el('div', { className: 'side-card' }, [el('b', { text: `${state.workspace.evidence.length} 条证据` }), el('p', { text: '证据保留来源、字符范围、创建方式与审阅状态。' })])]));
     return;
