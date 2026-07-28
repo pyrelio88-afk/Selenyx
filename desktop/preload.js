@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('selenyx', Object.freeze({
     show: (payload) => invoke('browser:show', payload),
     setBounds: (bounds) => invoke('browser:bounds', bounds),
     hide: () => invoke('browser:hide'),
+    reload: () => invoke('browser:reload'),
+    pageMeta: () => invoke('browser:pageMeta'),
     openExternal: (url) => invoke('external:open', { url }),
     onStatus: (callback) => {
       if (typeof callback !== 'function') return () => {};

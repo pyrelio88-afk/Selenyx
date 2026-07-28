@@ -174,8 +174,11 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .site-card b, .site-card small { display: block; }
 .site-card small { margin-top: 2px; color: var(--ink-faint); font-size: 10px; }
 .browser-host { position: relative; width: 100%; min-width: 0; height: calc(100vh - 120px); min-height: 420px; overflow: hidden; contain: layout size; }
-.browser-fallback { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; padding: 30px; color: var(--ink-soft); text-align: center; }
-.browser-fallback .fallback-actions { display: flex; gap: 8px; margin-top: 14px; }
+.browser-fallback { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; padding: 30px; color: var(--ink-soft); text-align: center; background: color-mix(in srgb, var(--paper) 88%, transparent); z-index: 2; }
+.browser-fallback.overlay { backdrop-filter: blur(1px); }
+.browser-fallback .fallback-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+.browser-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--paper-raised); }
+.browser-toolbar input { min-width: 180px; flex: 1; height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; }
 .messages { display: grid; gap: 16px; padding: 22px 0; }
 .message { max-width: 84%; padding: 10px 12px; border-radius: 8px; background: var(--paper-raised); border: 1px solid var(--line); white-space: pre-wrap; }
 .message.user { justify-self: end; background: var(--paper-soft); }

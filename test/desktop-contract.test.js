@@ -174,7 +174,13 @@ test('desktop: browser has explicit blocked fallback status', () => {
 });
 
 test('desktop: browser has a finite loading timeout', () => {
-  assert.match(main, /30_000/);
+  assert.match(main, /60_000/);
+});
+
+test('desktop: browser timeout does not detach the embedded view', () => {
+  assert.match(main, /never detach on timeout|state: 'slow'/);
+  assert.match(main, /browser:pageMeta/);
+  assert.match(main, /browser:reload/);
 });
 
 test('desktop: packaged app copies the shared engine', () => {
@@ -183,7 +189,7 @@ test('desktop: packaged app copies the shared engine', () => {
 });
 
 test('desktop: version matches R0.8 release candidate', () => {
-  assert.equal(desktopPackage.version, '0.8.0-rc.3');
+  assert.equal(desktopPackage.version, '0.8.0-rc.4');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {

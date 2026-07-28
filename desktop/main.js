@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const APP_VERSION = '0.8.0-rc.3';
+const APP_VERSION = '0.8.0-rc.4';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;
@@ -202,10 +202,21 @@ function ensureBrowserView() {
     if (browserLoadTimer) clearTimeout(browserLoadTimer);
     browserLoadTimer = null;
     const url = browserView?.webContents?.getURL();
-    if (url && url !== 'about:blank') notifyBrowser({ state: 'ready', url });
+    if (url && url !== 'about:blank') {
+      browserCurrentUrl = url;
+      notifyBrowser({ state: 'ready', url, title: browserView.webContents.getTitle() });
+    }
   };
   browserView.webContents.on('dom-ready', markBrowserReady);
   browserView.webContents.on('did-stop-loading', markBrowserReady);
+  browserView.webContents.on('page-title-updated', (_event, title) => {
+    if (!browserViewAttached) return;
+    notifyBrowser({ state: 'ready', url: browserView.webContents.getURL(), title });
+  });
+  browserView.webContents.on('did-navigate', (_event, url) => {
+    browserCurrentUrl = url;
+    if (browserViewAttached) notifyBrowser({ state: 'loading', url, title: browserView.webContents.getTitle() });
+  });
   browserView.webContents.on('did-start-loading', () => {
     if (!browserViewAttached) return;
     notifyBrowser({ state: 'loading', url: browserView.webContents.getURL() });
@@ -213,15 +224,20 @@ function ensureBrowserView() {
   browserView.webContents.on('did-finish-load', () => {
     if (browserLoadTimer) clearTimeout(browserLoadTimer);
     browserLoadTimer = null;
-    notifyBrowser({ state: 'ready', url: browserView.webContents.getURL() });
+    const url = browserView.webContents.getURL();
+    browserCurrentUrl = url;
+    notifyBrowser({ state: 'ready', url, title: browserView.webContents.getTitle() });
   });
   browserView.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
+    // -3 ERR_ABORTED is common during redirects; ignore.
+    if (errorCode === -3) return;
     if (browserLoadTimer) clearTimeout(browserLoadTimer);
     browserLoadTimer = null;
+    // Keep the view attached so users can still interact or open externally.
     notifyBrowser({
       state: 'blocked',
-      url: validatedURL,
+      url: validatedURL || browserCurrentUrl,
       errorCode,
       message: errorDescription,
       workaround: 'open-external',
@@ -507,25 +523,25 @@ function registerIpc() {
     if (browserLoadTimer) clearTimeout(browserLoadTimer);
     view.setBounds(validateBounds(payload.bounds));
     notifyBrowser({ state: 'loading', url, navigationId });
+    // Slow academic sites often need >30s; never detach on timeout — that causes blank panels.
     browserLoadTimer = setTimeout(() => {
       if (navigationId !== browserNavigationId || !browserViewAttached) return;
-      detachBrowserView();
       notifyBrowser({
-        state: 'blocked',
-        url,
+        state: 'slow',
+        url: browserView?.webContents?.getURL() || url,
+        title: browserView?.webContents?.getTitle?.() || '',
         navigationId,
-        message: '站点长时间没有完成加载。可能是网络、登录、验证码或站点策略限制，已停止等待。',
+        message: '站点加载较慢，可能受登录、验证码、证书或网络策略限制。内嵌页面仍保留，也可改用系统浏览器。',
         workaround: 'open-external',
       });
-    }, 30_000);
+    }, 60_000);
     if (view.webContents.getURL() === url && !view.webContents.isLoading()) {
       clearTimeout(browserLoadTimer);
       browserLoadTimer = null;
-      notifyBrowser({ state: 'ready', url, navigationId });
+      notifyBrowser({ state: 'ready', url, title: view.webContents.getTitle(), navigationId });
     } else {
       view.webContents.loadURL(url).catch((error) => {
         if (navigationId !== browserNavigationId || view.webContents.isDestroyed()) return;
-        detachBrowserView();
         notifyBrowser({
           state: 'blocked', url, navigationId, message: error.message, workaround: 'open-external',
         });
@@ -542,6 +558,69 @@ function registerIpc() {
   registerHandle('browser:hide', async () => {
     detachBrowserView();
     return { ok: true };
+  });
+
+  registerHandle('browser:reload', async () => {
+    if (!browserView || browserView.webContents.isDestroyed()) throw new Error('浏览器未打开');
+    browserView.webContents.reload();
+    return { ok: true, url: browserView.webContents.getURL() };
+  });
+
+  registerHandle('browser:pageMeta', async () => {
+    if (!browserView || browserView.webContents.isDestroyed() || !browserViewAttached) {
+      return { ok: false, error: { message: '浏览器未打开页面' } };
+    }
+    const url = browserView.webContents.getURL();
+    if (!url || url === 'about:blank') {
+      return { ok: false, error: { message: '当前没有可收藏的页面' } };
+    }
+    let title = browserView.webContents.getTitle() || '';
+    try {
+      const extracted = await browserView.webContents.executeJavaScript(`(() => {
+        const og = document.querySelector('meta[property="og:title"]')?.content
+          || document.querySelector('meta[name="citation_title"]')?.content
+          || document.querySelector('meta[name="DC.title"]')?.content
+          || '';
+        const citationAuthors = [...document.querySelectorAll('meta[name="citation_author"]')]
+          .map((node) => node.content).filter(Boolean);
+        const year = document.querySelector('meta[name="citation_publication_date"]')?.content
+          || document.querySelector('meta[name="citation_date"]')?.content
+          || '';
+        const doi = document.querySelector('meta[name="citation_doi"]')?.content
+          || document.querySelector('meta[name="DC.identifier"]')?.content
+          || '';
+        const abstract = document.querySelector('meta[name="citation_abstract"]')?.content
+          || document.querySelector('meta[name="description"]')?.content
+          || '';
+        const venue = document.querySelector('meta[name="citation_journal_title"]')?.content
+          || document.querySelector('meta[name="citation_conference_title"]')?.content
+          || '';
+        return {
+          title: og || document.title || '',
+          authors: citationAuthors,
+          year,
+          doi,
+          abstract,
+          venue,
+          href: location.href,
+        };
+      })();`, true);
+      if (extracted?.title) title = extracted.title;
+      return {
+        ok: true,
+        meta: {
+          url: extracted?.href || url,
+          title: title || url,
+          authors: Array.isArray(extracted?.authors) ? extracted.authors : [],
+          year: extracted?.year || '',
+          doi: extracted?.doi || '',
+          abstract: extracted?.abstract || '',
+          venue: extracted?.venue || '',
+        },
+      };
+    } catch {
+      return { ok: true, meta: { url, title: title || url, authors: [], year: '', doi: '', abstract: '', venue: '' } };
+    }
   });
 
   registerHandle('external:open', async (_event, payload = {}) => {

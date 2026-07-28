@@ -1,6 +1,6 @@
 {
   "name": "selenyx",
-  "version": "0.8.0-rc.3",
+  "version": "0.8.0-rc.4",
   "description": "Selenyx — 月相科研终端 Agent。静谧如月，严谨如刃。A serene, moonlit research workbench for rigorous evidence-grounded investigation.",
   "type": "module",
   "bin": {

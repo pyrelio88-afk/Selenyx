@@ -15,6 +15,7 @@ const state = {
   skills: [],
   messages: [],
   browserUrl: '',
+  browserTitle: '',
 };
 
 const paths = {

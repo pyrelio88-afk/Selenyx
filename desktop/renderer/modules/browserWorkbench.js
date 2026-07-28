@@ -138,7 +138,6 @@ async function openSite(site) {
   renderStatus({ state: 'loading', url });
   let bounds = browserBounds();
   if (bounds.width < 40 || bounds.height < 40) {
-    // Fallback when host has not been painted yet (common on first open).
     const main = $('.main-panel')?.getBoundingClientRect?.() ?? { left: 220, top: 120, width: 900, height: 700 };
     bounds = {
       x: Math.round(main.left + 12),
@@ -168,24 +167,78 @@ function renderStatus(status) {
     if (!$('#browser-host').hidden) api.browser.setBounds(browserBounds());
     return;
   }
+  if (status.url) {
+    state.browserUrl = status.url;
+    if ($('#browser-url')) $('#browser-url').value = status.url;
+  }
+  if (status.title) state.browserTitle = status.title;
   clear(host);
-  if (status.state === 'ready') { host.hidden = true; return; }
-  host.hidden = false;
+  if (status.state === 'ready') {
+    host.hidden = true;
+    host.classList.remove('overlay');
+    return;
+  }
   const blocked = status.state === 'blocked';
-  if (blocked) api.browser.hide().catch(() => {});
+  const slow = status.state === 'slow';
+  host.hidden = false;
+  host.classList.add('overlay');
+  if (!blocked && !slow) {
+    host.append(
+      icon('search'),
+      el('h3', { text: '正在载入站点…' }),
+      el('p', { text: status.url || state.browserUrl || '' }),
+    );
+    return;
+  }
   host.append(
-    icon(blocked ? 'globe' : 'search'),
-    el('h3', { text: blocked ? '该站点暂时无法在应用内加载' : '正在载入站点…' }),
-    el('p', { text: blocked
-      ? `${status.message || '可能受登录、验证码、证书或网络策略限制。'} 可直接改用系统浏览器，不会停在白屏。`
-      : status.url || '' }),
+    icon('globe'),
+    el('h3', { text: blocked ? '该站点暂时无法在应用内稳定显示' : '站点加载较慢' }),
+    el('p', { text: status.message || '可能受登录、验证码、证书或网络策略限制。内嵌页面仍保留。' }),
   );
-  if (blocked) host.append(el('div', { className: 'fallback-actions' }, [
+  host.append(el('div', { className: 'fallback-actions' }, [
     el('button', { className: 'primary-button', text: '系统浏览器打开', onClick: () => api.browser.openExternal(status.url || state.browserUrl) }),
-    el('button', { className: 'secondary-button', text: '重试', onClick: () => openSite({ id: `retry:${Date.now()}`, name: '重试', url: status.url || state.browserUrl }) }),
+    el('button', { className: 'secondary-button', text: '刷新重试', onClick: () => api.browser.reload().catch(() => openSite({ id: `retry:${Date.now()}`, name: '重试', url: status.url || state.browserUrl })) }),
+    el('button', { className: 'secondary-button', text: '收藏当前页', onClick: () => saveCurrentPage() }),
     el('button', { className: 'secondary-button', text: '复制链接', onClick: async () => { await navigator.clipboard.writeText(status.url || state.browserUrl); toast('链接已复制'); } }),
     el('button', { className: 'secondary-button', text: '返回首页', onClick: showHome }),
+    el('button', { className: 'secondary-button', text: '关闭提示继续浏览', onClick: () => { host.hidden = true; } }),
   ]));
+}
+
+async function saveCurrentPage() {
+  const response = await api.browser.pageMeta();
+  if (!response?.ok) {
+    const url = state.browserUrl || $('#browser-url')?.value;
+    if (!url) return toast(response?.error?.message || '没有可收藏的页面', 'error');
+    return saveMetaAsLiterature({ url, title: state.browserTitle || url });
+  }
+  return saveMetaAsLiterature(response.meta);
+}
+
+async function saveMetaAsLiterature(meta) {
+  const url = String(meta.url || '').trim();
+  const title = String(meta.title || url || '').trim();
+  if (!url || !title) return toast('页面标题或地址为空，无法收藏', 'error');
+  let year = null;
+  const yearMatch = String(meta.year || '').match(/(19|20)\d{2}/);
+  if (yearMatch) year = Number(yearMatch[0]);
+  const doiRaw = String(meta.doi || '');
+  const doi = doiRaw.replace(/^doi:/i, '').replace(/^https?:\/\/doi\.org\//i, '').trim();
+  const record = {
+    id: `web:${crypto.randomUUID()}`,
+    title,
+    authors: Array.isArray(meta.authors) ? meta.authors : [],
+    year,
+    venue: meta.venue || null,
+    abstract: meta.abstract || `来自内置浏览器收藏：${url}`,
+    url,
+    sourceType: 'webpage',
+    reality: 'real',
+    externalIds: doi ? { doi } : {},
+  };
+  const result = await workspaceEvent({ type: 'library:save', record });
+  toast(result?.merged ? '已与本地重复文献合并' : '当前页已收藏到本地文献库');
+  return result;
 }
 
 async function showHome() {
@@ -198,26 +251,34 @@ async function showHome() {
 function ensureSiteDialog() {
   if ($('#site-modal')) return;
   const backdrop = el('div', { id: 'site-modal', className: 'modal-backdrop', hidden: true });
+  const nameInput = el('input', { id: 'site-name-input', name: 'name', required: true, maxlength: '80', placeholder: '例如：机构图书馆 / 自定义数据库' });
+  const urlInput = el('input', { id: 'site-url-input', name: 'url', required: true, inputmode: 'url', placeholder: 'https://www.cnki.net' });
   const form = el('form', { id: 'site-form', className: 'modal-card' }, [
     el('header', {}, [el('div', {}, [el('p', { className: 'kicker', text: 'CUSTOM SITE' }), el('h2', { text: '添加科研站点' })]), el('button', { type: 'button', className: 'icon-button', text: '×', 'aria-label': '关闭', onClick: () => { backdrop.hidden = true; } })]),
-    el('label', {}, ['站点名称', el('input', { name: 'name', required: true, maxlength: '80', placeholder: '例如：我的机构图书馆' })]),
-    el('label', {}, ['站点网址', el('input', { name: 'url', required: true, inputmode: 'url', placeholder: 'https://example.edu' })]),
-    el('footer', {}, [el('button', { type: 'button', className: 'secondary-button', text: '取消', onClick: () => { backdrop.hidden = true; } }), el('button', { className: 'primary-button', text: '保存站点' })]),
+    el('p', { className: 'paper-hint', text: '适合知网、万方、机构库等付费/登录墙站点。免费站点可直接从首页卡片进入。' }),
+    el('label', {}, ['站点名称', nameInput]),
+    el('label', {}, ['站点网址', urlInput]),
+    el('footer', {}, [
+      el('button', { type: 'button', className: 'secondary-button', text: '取消', onClick: () => { backdrop.hidden = true; } }),
+      el('button', { type: 'submit', className: 'primary-button', text: '保存站点' }),
+    ]),
   ]);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const data = new FormData(form);
     try {
-      const name = String(data.get('name') ?? '').trim();
+      const name = String(nameInput.value ?? '').trim();
       if (!name) throw new Error('请输入站点名称');
-      const url = safeUrl(data.get('url'));
+      const url = safeUrl(urlInput.value);
+      if (customSites().some((site) => site.url === url)) throw new Error('该站点已存在');
       const sites = [...customSites(), { id: `custom:${crypto.randomUUID()}`, name, url, region: 'custom', note: new URL(url).hostname }];
       await patchBrowserUi({ browserSites: sites });
       form.reset();
       backdrop.hidden = true;
-      toast('站点已保存，重启后仍会保留');
+      toast('站点已保存，正在打开…');
+      openSite(sites[sites.length - 1]);
     } catch (error) { toast(error.message, 'error'); }
   });
+  backdrop.addEventListener('click', (event) => { if (event.target === backdrop) backdrop.hidden = true; });
   backdrop.append(form);
   document.body.append(backdrop);
 }
@@ -233,7 +294,24 @@ function setupBrowser() {
     } catch (error) { toast(error.message, 'error'); }
   });
   $('#browser-url').addEventListener('keydown', (event) => { if (event.key === 'Enter') $('#browser-go').click(); });
-  $('#browser-add-site').addEventListener('click', () => { $('#site-modal').hidden = false; $('#site-form [name="name"]').focus(); });
+  $('#browser-reload')?.addEventListener('click', async () => {
+    try {
+      if ($('#browser-host').hidden) return toast('请先打开一个站点', 'error');
+      await api.browser.reload();
+    } catch (error) { toast(error.message, 'error'); }
+  });
+  $('#browser-save-page')?.addEventListener('click', () => saveCurrentPage().catch((error) => toast(error.message, 'error')));
+  $('#browser-open-external')?.addEventListener('click', () => {
+    const url = state.browserUrl || $('#browser-url').value;
+    if (!url) return toast('没有可打开的地址', 'error');
+    api.browser.openExternal(url).catch((error) => toast(error.message, 'error'));
+  });
+  $('#browser-add-site').addEventListener('click', () => {
+    ensureSiteDialog();
+    const modal = $('#site-modal');
+    modal.hidden = false;
+    ($('#site-name-input') || $('#site-form input[name="name"]'))?.focus();
+  });
   api.browser.onStatus(renderStatus);
   const host = $('#browser-host');
   const observer = new ResizeObserver(() => syncBrowserBounds());
@@ -244,4 +322,7 @@ function setupBrowser() {
   document.addEventListener('selenyx:layout', () => syncBrowserBounds());
 }
 
-export { setupBrowser, renderSites, showHome, safeUrl, resolveInput, browserBounds, syncBrowserBounds, openSite, openExternalOrBrowser };
+export {
+  setupBrowser, renderSites, showHome, safeUrl, resolveInput,
+  browserBounds, syncBrowserBounds, openSite, openExternalOrBrowser, saveCurrentPage,
+};
