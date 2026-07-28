@@ -189,7 +189,7 @@ test('desktop: packaged app copies the shared engine', () => {
 });
 
 test('desktop: version matches R0.8 release candidate', () => {
-  assert.equal(desktopPackage.version, '0.8.0-rc.4');
+  assert.equal(desktopPackage.version, '0.8.0-rc.5');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {

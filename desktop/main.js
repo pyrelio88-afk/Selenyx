@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const APP_VERSION = '0.8.0-rc.4';
+const APP_VERSION = '0.8.0-rc.5';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;

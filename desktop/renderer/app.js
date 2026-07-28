@@ -192,7 +192,15 @@ async function boot() {
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }
   });
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
-  await setView(state.workspace.ui.lastView || 'research', false);
+  // Prefer research on cold start when library is empty and last session died on a broken browser tab.
+  let startView = state.workspace.ui.lastView || 'research';
+  if (startView === 'browser' && !(state.workspace.library?.length) && !(state.workspace.ui.browserRecent || []).some((id) => ['arxiv', 'pubscholar', 'pubmed', 'openalex'].includes(id))) {
+    startView = 'research';
+  }
+  await setView(startView, false);
+  if (startView === 'research') {
+    toast('提示：真检索请切到「国际聚合」；中国文献多为站点跳转。浏览器里 arXiv/PubScholar 可内嵌，知网等会走系统浏览器。', 'info');
+  }
 }
 
 boot().catch((error) => {

@@ -1,17 +1,36 @@
 import { api, state, $, el, clear, icon, toast, workspaceEvent, setView } from './core.js';
 
 const builtInSites = [
-  { id: 'pubscholar', name: 'PubScholar', url: 'https://pubscholar.cn', region: 'china', note: '中科院公益学术平台' },
-  { id: 'chinaxiv', name: 'ChinaXiv', url: 'https://chinaxiv.org', region: 'china', note: '中文预印本' },
-  { id: 'nstl', name: 'NSTL', url: 'https://www.nstl.gov.cn', region: 'china', note: '国家科技文献中心' },
-  { id: 'ncpssd', name: '国家哲社文献中心', url: 'https://www.ncpssd.cn', region: 'china', note: '哲学社会科学' },
-  { id: 'sinomed', name: 'SinoMed', url: 'https://www.sinomed.ac.cn', region: 'china', note: '生物医学文献' },
-  { id: 'google-scholar', name: 'Google Scholar', url: 'https://scholar.google.com', region: 'intl', note: '免费检索 · 可能受地区网络或验证码限制' },
-  { id: 'arxiv', name: 'arXiv', url: 'https://arxiv.org', region: 'intl', note: '开放预印本' },
-  { id: 'openalex', name: 'OpenAlex', url: 'https://openalex.org', region: 'intl', note: '开放学术图谱' },
-  { id: 'pubmed', name: 'PubMed', url: 'https://pubmed.ncbi.nlm.nih.gov', region: 'intl', note: '生物医学文献' },
-  { id: 'crossref', name: 'Crossref', url: 'https://search.crossref.org', region: 'intl', note: 'DOI 元数据' },
+  { id: 'pubscholar', name: 'PubScholar', url: 'https://pubscholar.cn', region: 'china', note: '中科院公益学术平台 · 优先内嵌', embed: 'try' },
+  { id: 'chinaxiv', name: 'ChinaXiv', url: 'https://chinaxiv.org', region: 'china', note: '中文预印本 · 优先内嵌', embed: 'try' },
+  { id: 'nstl', name: 'NSTL', url: 'https://www.nstl.gov.cn', region: 'china', note: '国家科技文献中心 · 登录墙，默认系统浏览器', embed: 'external' },
+  { id: 'ncpssd', name: '国家哲社文献中心', url: 'https://www.ncpssd.cn', region: 'china', note: '哲学社会科学 · 登录墙，默认系统浏览器', embed: 'external' },
+  { id: 'sinomed', name: 'SinoMed', url: 'https://www.sinomed.ac.cn', region: 'china', note: '生物医学 · 机构墙，默认系统浏览器', embed: 'external' },
+  { id: 'google-scholar', name: 'Google Scholar', url: 'https://scholar.google.com', region: 'intl', note: '免费检索 · 可能验证码，先试内嵌', embed: 'try' },
+  { id: 'arxiv', name: 'arXiv', url: 'https://arxiv.org', region: 'intl', note: '开放预印本 · 优先内嵌', embed: 'try' },
+  { id: 'openalex', name: 'OpenAlex', url: 'https://openalex.org', region: 'intl', note: '开放学术图谱 · 优先内嵌', embed: 'try' },
+  { id: 'pubmed', name: 'PubMed', url: 'https://pubmed.ncbi.nlm.nih.gov', region: 'intl', note: '生物医学文献 · 优先内嵌', embed: 'try' },
+  { id: 'crossref', name: 'Crossref', url: 'https://search.crossref.org', region: 'intl', note: 'DOI 元数据 · 优先内嵌', embed: 'try' },
 ];
+
+// Hosts that almost never embed stably inside Electron (login wall / XFO / captcha shell).
+const EXTERNAL_FIRST_HOSTS = [
+  'cnki.net', 'cnki.com.cn', 'wanfangdata.com.cn', 'cqvip.com', 'vip.com',
+  'ncpssd.cn', 'ncpssd.org', 'sinomed.ac.cn', 'nstl.gov.cn', 'nstl.gov',
+  'webofscience.com', 'clarivate.com', 'scopus.com', 'ieee.org',
+];
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./i, '').toLowerCase(); } catch { return ''; }
+}
+
+function shouldOpenExternalFirst(url, site = null) {
+  if (site?.embed === 'external') return true;
+  if (site?.embed === 'try' || site?.embed === 'force') return false;
+  const host = hostOf(url);
+  if (!host) return false;
+  return EXTERNAL_FIRST_HOSTS.some((item) => host === item || host.endsWith(`.${item}`));
+}
 
 function safeUrl(value) {
   const raw = String(value ?? '').trim();
@@ -124,9 +143,28 @@ function syncBrowserBounds(force = false) {
   boundsFallbackTimer = setTimeout(flushBrowserBounds, 80);
 }
 
-async function openSite(site) {
+async function openSite(site, options = {}) {
   let url;
   try { url = safeUrl(site.url); } catch (error) { toast(error.message, 'error'); return; }
+  const forceEmbed = Boolean(options.forceEmbed);
+  if (!forceEmbed && shouldOpenExternalFirst(url, site)) {
+    state.browserUrl = url;
+    $('#browser-url').value = url;
+    await api.browser.openExternal(url);
+    toast(`${site.name || '该站点'} 有登录墙/禁嵌策略，已用系统浏览器打开（可点“收藏当前页”前请先内嵌可打开的免费站）`);
+    // Keep homepage visible with an honest panel so the app never looks "dead".
+    $('#browser-homepage').hidden = false;
+    $('#browser-host').hidden = true;
+    await api.browser.hide().catch(() => {});
+    renderStatus({
+      state: 'blocked',
+      url,
+      message: `${site.name || hostOf(url)} 不适合应用内嵌。已在系统浏览器打开。若仍要尝试内嵌，可点“强制内嵌”。`,
+    });
+    // Show a small action strip on homepage area via toast only; status host may be hidden.
+    return { mode: 'external', url };
+  }
+
   state.browserUrl = url;
   $('#browser-url').value = url;
   $('#browser-homepage').hidden = true;
@@ -134,7 +172,7 @@ async function openSite(site) {
   // Wait two frames so CSS layout settles before sending bounds to WebContentsView.
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const recent = [site.id, ...(state.workspace.ui.browserRecent ?? []).filter((id) => id !== site.id)].slice(0, 8);
-  workspaceEvent({ type: 'ui:patch', patch: { browserRecent: recent } }).catch(() => {});
+  workspaceEvent({ type: 'ui:patch', patch: { browserRecent: recent, lastView: 'browser' } }).catch(() => {});
   renderStatus({ state: 'loading', url });
   let bounds = browserBounds();
   if (bounds.width < 40 || bounds.height < 40) {
@@ -149,6 +187,7 @@ async function openSite(site) {
   const response = await api.browser.show({ url, bounds });
   syncBrowserBounds(true);
   if (!response.ok) renderStatus({ state: 'blocked', url, message: response.error?.message ?? '站点无法加载' });
+  return { mode: 'embed', url, ok: Boolean(response?.ok) };
 }
 
 async function openExternalOrBrowser(url, name = '当前地址') {
@@ -197,7 +236,8 @@ function renderStatus(status) {
   );
   host.append(el('div', { className: 'fallback-actions' }, [
     el('button', { className: 'primary-button', text: '系统浏览器打开', onClick: () => api.browser.openExternal(status.url || state.browserUrl) }),
-    el('button', { className: 'secondary-button', text: '刷新重试', onClick: () => api.browser.reload().catch(() => openSite({ id: `retry:${Date.now()}`, name: '重试', url: status.url || state.browserUrl })) }),
+    el('button', { className: 'secondary-button', text: '强制内嵌', onClick: () => openSite({ id: `force:${Date.now()}`, name: '强制内嵌', url: status.url || state.browserUrl, embed: 'force' }, { forceEmbed: true }) }),
+    el('button', { className: 'secondary-button', text: '刷新重试', onClick: () => api.browser.reload().catch(() => openSite({ id: `retry:${Date.now()}`, name: '重试', url: status.url || state.browserUrl }, { forceEmbed: true })) }),
     el('button', { className: 'secondary-button', text: '收藏当前页', onClick: () => saveCurrentPage() }),
     el('button', { className: 'secondary-button', text: '复制链接', onClick: async () => { await navigator.clipboard.writeText(status.url || state.browserUrl); toast('链接已复制'); } }),
     el('button', { className: 'secondary-button', text: '返回首页', onClick: showHome }),
