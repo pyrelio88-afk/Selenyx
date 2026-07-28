@@ -17,7 +17,7 @@ function emptyWorkspace() {
     sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'china' },
     ui: {
       leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false,
-      lastView: 'question', selectedSourceId: null,
+      lastView: 'research', selectedSourceId: null,
       browserSites: [], browserFavorites: [], browserRecent: [],
     },
     updatedAt: nowIso(),
@@ -191,7 +191,7 @@ function applyWorkspaceEvent(current, event) {
       browserFavorites: state.ui.browserFavorites,
     };
     const next = emptyWorkspace();
-    next.ui = { ...next.ui, ...keepUi, lastView: 'question' };
+    next.ui = { ...next.ui, ...keepUi, lastView: 'research' };
     next.drafts = { writing: '', figureBrief: '', experimentLog: '' };
     next.meta = {
       name: text(action.name, 120) || `研究 ${new Date().toLocaleString()}`,

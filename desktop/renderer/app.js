@@ -11,6 +11,9 @@ import { setupDrafts, hydrateDrafts } from './modules/drafts.js';
 const honestUiCopy = Object.freeze(['真实检索返回 0 条', '改用系统浏览器', '离线 L1', 'L2 · 内容将发送至所选提供方']);
 void honestUiCopy;
 
+state.projects = [];
+state.activeProjectId = null;
+
 function applyAccent() {
   const accent = localStorage.getItem('selenyx.ui.accent');
   if (/^#[0-9a-f]{6}$/i.test(accent ?? '')) document.documentElement.style.setProperty('--accent', accent);
@@ -58,38 +61,14 @@ function renderMessages() {
   ]));
 }
 
-function renderProjectRow() {
-  const row = document.querySelector('.project-row');
-  if (!row) return;
-  const name = state.workspace?.meta?.name || '未命名研究';
-  const title = row.querySelector('b');
-  const sub = row.querySelector('small');
-  if (title) title.textContent = name;
-  if (sub) sub.textContent = '证据门工作区 · 自动保存';
-}
-
-async function renameProject() {
-  const current = state.workspace?.meta?.name || '未命名研究';
-  const next = (window.prompt('研究项目名称', current) || '').trim();
-  if (!next || next === current) return;
-  await workspaceEvent({ type: 'project:rename', name: next });
-  renderProjectRow();
-  toast('项目名称已更新');
-}
-
-async function startNewResearch() {
-  const name = (window.prompt('新建研究问题 / 项目名', `研究 ${new Date().toLocaleDateString()}`) || '').trim();
-  if (!name) return;
-  const ok = window.confirm('将清空检索结果、收藏、证据、草稿与路径（自定义站点保留）。确定？');
-  if (!ok) return;
-  await workspaceEvent({ type: 'workspace:reset', name });
+function applyWorkspaceSnapshot(workspace) {
+  state.workspace = workspace;
   state.searchResult = null;
-  state.selectedSource = null;
+  state.selectedSource = workspace.library.find((item) => item.id === workspace.ui.selectedSourceId) ?? null;
   state.readerOutput = '';
   state.messages = [];
   state.activeSearchId = null;
-  state.searchTab = state.workspace.sourcePreferences.searchTab || 'china';
-  renderProjectRow();
+  state.searchTab = workspace.sourcePreferences?.searchTab || 'international';
   updateCounts();
   renderControls();
   renderResults();
@@ -99,10 +78,110 @@ async function startNewResearch() {
   renderAssistant();
   hydrateDrafts();
   renderRight();
+  renderProjectList();
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
-  if ($('#research-question-input')) $('#research-question-input').value = name;
-  await setView('question');
-  toast(`已新建：${name} · 请先确认研究边界`);
+}
+
+function renderProjectList() {
+  const host = $('#project-list');
+  if (!host) return;
+  clear(host);
+  const projects = state.projects || [];
+  if (!projects.length) {
+    host.append(el('div', { className: 'side-empty', text: '还没有项目，点上方「新建项目」' }));
+    return;
+  }
+  for (const project of projects) {
+    const row = el('button', {
+      type: 'button',
+      className: `project-row ${project.active || project.id === state.activeProjectId ? 'active' : ''}`,
+      onClick: () => switchProject(project.id),
+    }, [
+      el('span', { className: 'project-dot' }),
+      el('span', {}, [
+        el('b', { text: project.name || '未命名项目' }),
+        el('small', { text: project.active || project.id === state.activeProjectId ? '当前项目 · 自动保存' : '点击切换' }),
+      ]),
+    ]);
+    row.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      projectContextMenu(project);
+    });
+    host.append(row);
+  }
+}
+
+async function refreshProjects() {
+  const response = await api.projects.list();
+  if (!response?.ok) return;
+  state.projects = response.projects || [];
+  state.activeProjectId = response.activeId;
+  renderProjectList();
+}
+
+async function switchProject(id) {
+  if (!id || id === state.activeProjectId) return;
+  const response = await api.projects.switch(id);
+  if (!response?.ok) return toast(response?.error?.message || '切换项目失败', 'error');
+  state.projects = response.projects || [];
+  state.activeProjectId = response.activeId;
+  applyWorkspaceSnapshot(response.workspace);
+  const view = response.workspace?.ui?.lastView || 'research';
+  await setView(view, false);
+  toast(`已切换到：${response.projects.find((item) => item.id === id)?.name || '项目'}`);
+}
+
+async function projectContextMenu(project) {
+  const action = window.prompt(`项目「${project.name}」\n输入 rename 重命名，delete 删除，其它取消`, 'rename');
+  if (!action) return;
+  if (action === 'rename') {
+    const name = (window.prompt('新项目名称', project.name) || '').trim();
+    if (!name) return;
+    const response = await api.projects.rename({ id: project.id, name });
+    if (!response?.ok) return toast(response?.error?.message || '重命名失败', 'error');
+    state.projects = response.projects || [];
+    if (response.workspace) state.workspace = response.workspace;
+    renderProjectList();
+    toast('项目已重命名');
+    return;
+  }
+  if (action === 'delete') {
+    if (!window.confirm(`确定删除项目「${project.name}」？此操作不可恢复。`)) return;
+    const response = await api.projects.remove(project.id);
+    if (!response?.ok) return toast(response?.error?.message || '删除失败', 'error');
+    state.projects = response.projects || [];
+    state.activeProjectId = response.activeId;
+    if (response.workspace) applyWorkspaceSnapshot(response.workspace);
+    else renderProjectList();
+    await setView(state.workspace?.ui?.lastView || 'research', false);
+    toast('项目已删除');
+  }
+}
+
+/** Hermes-style: create project instantly, never lock the user on a gate page. */
+async function startNewResearch() {
+  const name = (window.prompt('新项目名称', `研究 ${new Date().toLocaleDateString()}`) || '').trim();
+  if (!name) return;
+  const response = await api.projects.create({ name });
+  if (!response?.ok) return toast(response?.error?.message || '创建项目失败', 'error');
+  state.projects = response.projects || [];
+  state.activeProjectId = response.activeId;
+  applyWorkspaceSnapshot(response.workspace);
+  if ($('#research-question-input')) $('#research-question-input').value = '';
+  await setView('research', true);
+  toast(`已创建项目「${name}」· 可自由使用侧栏全部功能`);
+}
+
+async function renameProject() {
+  const current = state.workspace?.meta?.name || state.projects.find((item) => item.id === state.activeProjectId)?.name || '未命名项目';
+  const next = (window.prompt('项目名称', current) || '').trim();
+  if (!next || next === current) return;
+  const response = await api.projects.rename({ id: state.activeProjectId, name: next });
+  if (!response?.ok) return toast(response?.error?.message || '重命名失败', 'error');
+  state.projects = response.projects || [];
+  if (response.workspace) state.workspace = response.workspace;
+  renderProjectList();
+  toast('项目名称已更新');
 }
 
 async function sendMessage() {
@@ -141,18 +220,20 @@ function viewChanged(view) {
 async function boot() {
   applyAccent();
   hydrateIcons();
-  const [health, workspace, sources, skills] = await Promise.all([
-    api.health(), api.readWorkspace(), api.listSources(), api.listSkills(),
+  const [health, workspace, sources, skills, projects] = await Promise.all([
+    api.health(), api.readWorkspace(), api.listSources(), api.listSkills(), api.projects.list(),
   ]);
   if (!workspace.ok) throw new Error(workspace.error?.message ?? '无法读取本地工作区');
   state.workspace = workspace.workspace;
   state.sources = sources.ok ? sources.sources : [];
   state.skills = skills.ok ? skills.skills : [];
+  state.projects = projects?.ok ? (projects.projects || []) : [];
+  state.activeProjectId = projects?.ok ? projects.activeId : null;
   state.searchTab = state.workspace.sourcePreferences.searchTab || 'international';
   state.selectedSource = state.workspace.library.find((item) => item.id === state.workspace.ui.selectedSourceId) ?? null;
   applyLayout();
   updateCounts();
-  renderProjectRow();
+  renderProjectList();
   renderControls();
   renderReader();
   renderEvidence();
@@ -174,9 +255,9 @@ async function boot() {
   setupDrafts();
   setupResizer($('#left-resizer'), 'left');
   setupResizer($('#right-resizer'), 'right');
+  // Free navigation: every sidebar item just switches view. No gates.
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
   $('#new-session').addEventListener('click', startNewResearch);
-  document.querySelector('.project-row')?.addEventListener('click', renameProject);
   $('#collapse-left').addEventListener('click', async () => {
     const collapsed = !$('#app').classList.contains('left-collapsed');
     $('#app').classList.toggle('left-collapsed', collapsed);
@@ -197,17 +278,12 @@ async function boot() {
   });
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
 
-  // Evidence-gated default: no plan → question first
-  let startView = state.workspace.ui.lastView || 'question';
-  const known = Object.keys({
-    question: 1, research: 1, library: 1, reader: 1, browser: 1, chat: 1, evidence: 1, skills: 1, write: 1, figure: 1, experiment: 1,
-  });
-  if (!known.includes(startView)) startView = 'question';
-  if (!state.workspace.assistant?.plan && !state.workspace.library?.length) startView = 'question';
+  const known = ['question', 'research', 'library', 'reader', 'browser', 'chat', 'evidence', 'skills', 'write', 'figure', 'experiment'];
+  let startView = state.workspace.ui.lastView || 'research';
+  if (!known.includes(startView)) startView = 'research';
+  // Never force-lock users on the question page.
+  if (startView === 'question' && !state.workspace.assistant?.plan) startView = 'research';
   await setView(startView, false);
-  if (startView === 'question') {
-    toast('R0.9：先立题 → 真检索 → 获取全文/导入 PDF → 证据门 → 写作', 'info');
-  }
 }
 
 boot().catch((error) => {

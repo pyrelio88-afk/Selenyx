@@ -338,3 +338,13 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .reader-layout { display: flex; flex-direction: column; gap: 0; min-height: 0; flex: 1; }
 .reader-layout .paper { flex: 0 0 auto; }
 .reader-layout .pdf-stage { flex: 1 1 auto; }
+
+
+/* Hermes-like project list */
+.project-list { display: grid; gap: 4px; padding: 0 8px 10px; max-height: 180px; overflow: auto; }
+.project-list .project-row { width: 100%; text-align: left; border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 8px 10px; display: flex; gap: 8px; align-items: flex-start; cursor: pointer; color: inherit; }
+.project-list .project-row:hover { background: var(--paper-soft); border-color: var(--line); }
+.project-list .project-row.active { background: var(--paper-raised); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.project-list .project-row b { display: block; font-size: 12.5px; font-weight: 620; }
+.project-list .project-row small { display: block; margin-top: 2px; color: var(--ink-faint); font-size: 10px; }
+.sessions { border-bottom: 1px solid var(--line); margin-bottom: 4px; }

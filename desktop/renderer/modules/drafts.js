@@ -115,10 +115,11 @@ function setupDrafts() {
   $('#question-start')?.addEventListener('click', async () => {
     try {
       const plan = await createPlanFromQuestion($('#research-question-input')?.value);
-      if (plan) await setView('research');
+      if (plan) toast('问题与路径已保存 · 可继续用侧栏任意功能');
     } catch (error) { toast(error.message, 'error'); }
   });
   $('#question-to-search')?.addEventListener('click', () => setView('research'));
+  $('#question-to-browser')?.addEventListener('click', () => setView('browser'));
   $('#question-prompts')?.querySelectorAll('[data-prompt]')?.forEach((button) => {
     button.addEventListener('click', () => {
       if ($('#research-question-input')) $('#research-question-input').value = button.dataset.prompt;

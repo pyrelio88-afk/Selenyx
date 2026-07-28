@@ -96,17 +96,17 @@ function updateCounts() {
 }
 
 const viewNames = {
-  question: ['立题闸门', '研究问题'],
+  question: ['项目简报', '研究问题'],
   research: ['发现文献', '文献检索'],
-  library: ['筛选与入库', '本地文献库'],
-  reader: ['精读闸门', '阅读 · PDF'],
+  library: ['本地库', '本地文献库'],
+  reader: ['精读', '阅读 · PDF'],
   browser: ['获取全文', '科研浏览器'],
-  chat: ['长链路协作', '科研对话'],
-  evidence: ['主张与依据', '证据链'],
-  skills: ['综合路径', '证据门编排'],
-  write: ['产物 · 写作', '写作工作台'],
-  figure: ['产物 · 图表', '图表规划'],
-  experiment: ['产物 · 实验', '实验日志'],
+  chat: ['对话', '科研对话'],
+  evidence: ['证据', '证据链'],
+  skills: ['综合', '综合路径'],
+  write: ['写作', '写作工作台'],
+  figure: ['图表', '图表规划'],
+  experiment: ['实验', '实验日志'],
 };
 let viewHook = () => {};
 

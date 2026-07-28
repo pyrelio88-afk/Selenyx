@@ -13,7 +13,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 
-const APP_VERSION = '0.9.0-rc.1';
+const APP_VERSION = '0.9.1-rc.1';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;
@@ -45,7 +45,87 @@ function dataPaths() {
     root,
     profile: path.join(root, 'profile.json'),
     providers: path.join(root, 'providers.json'),
+    projectsIndex: path.join(root, 'projects.json'),
+    projectsDir: path.join(root, 'projects'),
+    // legacy single-file workspace (migrated on first boot)
     workspace: path.join(root, 'workspace.json'),
+  };
+}
+
+function emptyProjectsIndex() {
+  return { schemaVersion: 1, activeId: null, projects: [] };
+}
+
+function normalizeProjectsIndex(raw) {
+  const base = emptyProjectsIndex();
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const projects = Array.isArray(src.projects)
+    ? src.projects.map((item) => ({
+      id: String(item?.id || '').trim(),
+      name: String(item?.name || '未命名项目').trim().slice(0, 120) || '未命名项目',
+      createdAt: String(item?.createdAt || new Date().toISOString()),
+      updatedAt: String(item?.updatedAt || item?.createdAt || new Date().toISOString()),
+    })).filter((item) => item.id)
+    : [];
+  let activeId = typeof src.activeId === 'string' ? src.activeId : null;
+  if (activeId && !projects.some((item) => item.id === activeId)) activeId = projects[0]?.id || null;
+  return { ...base, activeId, projects };
+}
+
+function ensureProjectsIndex() {
+  const paths = dataPaths();
+  fs.mkdirSync(paths.projectsDir, { recursive: true });
+  let index = normalizeProjectsIndex(readJson(paths.projectsIndex, null));
+
+  // Migrate legacy workspace.json into first project once.
+  if (!index.projects.length) {
+    const legacy = paths.workspace;
+    const id = crypto.randomUUID();
+    const projectDir = path.join(paths.projectsDir, id);
+    fs.mkdirSync(projectDir, { recursive: true });
+    const target = path.join(projectDir, 'workspace.json');
+    if (fs.existsSync(legacy)) {
+      try {
+        fs.copyFileSync(legacy, target);
+      } catch {
+        // fall through to empty
+      }
+    }
+    if (!fs.existsSync(target)) {
+      // written later when workspace module available; placeholder empty object
+      writeJsonAtomic(target, { schemaVersion: 1, meta: { name: '默认项目', createdAt: new Date().toISOString() }, library: [], annotations: [], evidence: [], assistant: { plan: null, history: [] }, drafts: { writing: '', figureBrief: '', experimentLog: '' }, sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'international' }, ui: { leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false, lastView: 'research', selectedSourceId: null, browserSites: [], browserFavorites: [], browserRecent: [] }, updatedAt: new Date().toISOString() });
+    }
+    index = {
+      schemaVersion: 1,
+      activeId: id,
+      projects: [{ id, name: '默认项目', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }],
+    };
+    writeJsonAtomic(paths.projectsIndex, index);
+  }
+
+  if (!index.activeId && index.projects[0]) {
+    index.activeId = index.projects[0].id;
+    writeJsonAtomic(paths.projectsIndex, index);
+  }
+  return index;
+}
+
+function activeWorkspacePath() {
+  const paths = dataPaths();
+  const index = ensureProjectsIndex();
+  const id = index.activeId || index.projects[0]?.id;
+  if (!id) throw new Error('没有可用项目');
+  const dir = path.join(paths.projectsDir, id);
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, 'workspace.json');
+}
+
+function listProjectsPublic() {
+  const index = ensureProjectsIndex();
+  return {
+    ok: true,
+    activeId: index.activeId,
+    projects: index.projects.map((item) => ({ ...item, active: item.id === index.activeId })),
   };
 }
 
@@ -429,15 +509,115 @@ function registerIpc() {
 
   registerHandle('workspace:read', async () => {
     const { workspace } = await modules();
-    return { ok: true, workspace: workspace.normalizeWorkspace(readJson(dataPaths().workspace, workspace.emptyWorkspace())) };
+    ensureProjectsIndex();
+    return { ok: true, workspace: workspace.normalizeWorkspace(readJson(activeWorkspacePath(), workspace.emptyWorkspace())) };
   });
 
   registerHandle('workspace:event', async (_event, event = {}) => {
     const { workspace } = await modules();
-    const current = workspace.normalizeWorkspace(readJson(dataPaths().workspace, workspace.emptyWorkspace()));
+    ensureProjectsIndex();
+    const file = activeWorkspacePath();
+    const current = workspace.normalizeWorkspace(readJson(file, workspace.emptyWorkspace()));
     const applied = workspace.applyWorkspaceEvent(current, event);
-    writeJsonAtomic(dataPaths().workspace, applied.state);
+    writeJsonAtomic(file, applied.state);
+    // keep project name in index in sync
+    try {
+      const index = ensureProjectsIndex();
+      const name = applied.state?.meta?.name;
+      if (index.activeId && name) {
+        index.projects = index.projects.map((item) => item.id === index.activeId
+          ? { ...item, name: String(name).slice(0, 120), updatedAt: new Date().toISOString() }
+          : item);
+        writeJsonAtomic(dataPaths().projectsIndex, index);
+      }
+    } catch { /* ignore index sync errors */ }
     return { ok: true, workspace: applied.state, result: applied.result };
+  });
+
+  registerHandle('projects:list', async () => listProjectsPublic());
+
+  registerHandle('projects:create', async (_event, payload = {}) => {
+    const { workspace } = await modules();
+    const paths = dataPaths();
+    const index = ensureProjectsIndex();
+    const name = String(payload.name || '').trim().slice(0, 120) || `项目 ${new Date().toLocaleString()}`;
+    const id = crypto.randomUUID();
+    const dir = path.join(paths.projectsDir, id);
+    fs.mkdirSync(dir, { recursive: true });
+    const fresh = workspace.emptyWorkspace();
+    fresh.meta = { name, createdAt: new Date().toISOString() };
+    fresh.ui = { ...fresh.ui, lastView: 'research' };
+    fresh.sourcePreferences = { ...fresh.sourcePreferences, searchTab: 'international' };
+    writeJsonAtomic(path.join(dir, 'workspace.json'), fresh);
+    const now = new Date().toISOString();
+    index.projects = [{ id, name, createdAt: now, updatedAt: now }, ...index.projects];
+    index.activeId = id;
+    writeJsonAtomic(paths.projectsIndex, index);
+    return {
+      ok: true,
+      ...listProjectsPublic(),
+      workspace: workspace.normalizeWorkspace(fresh),
+    };
+  });
+
+  registerHandle('projects:switch', async (_event, payload = {}) => {
+    const { workspace } = await modules();
+    const paths = dataPaths();
+    const index = ensureProjectsIndex();
+    const id = String(payload.id || '').trim();
+    if (!index.projects.some((item) => item.id === id)) throw new TypeError('项目不存在');
+    index.activeId = id;
+    writeJsonAtomic(paths.projectsIndex, index);
+    const file = activeWorkspacePath();
+    return {
+      ok: true,
+      ...listProjectsPublic(),
+      workspace: workspace.normalizeWorkspace(readJson(file, workspace.emptyWorkspace())),
+    };
+  });
+
+  registerHandle('projects:rename', async (_event, payload = {}) => {
+    const paths = dataPaths();
+    const index = ensureProjectsIndex();
+    const id = String(payload.id || index.activeId || '').trim();
+    const name = String(payload.name || '').trim().slice(0, 120);
+    if (!name) throw new TypeError('项目名称不能为空');
+    if (!index.projects.some((item) => item.id === id)) throw new TypeError('项目不存在');
+    index.projects = index.projects.map((item) => item.id === id
+      ? { ...item, name, updatedAt: new Date().toISOString() }
+      : item);
+    writeJsonAtomic(paths.projectsIndex, index);
+    // also patch workspace meta if active
+    if (id === index.activeId) {
+      const { workspace } = await modules();
+      const file = activeWorkspacePath();
+      const current = workspace.normalizeWorkspace(readJson(file, workspace.emptyWorkspace()));
+      current.meta = { ...(current.meta || {}), name, updatedAt: new Date().toISOString() };
+      writeJsonAtomic(file, current);
+      return { ok: true, ...listProjectsPublic(), workspace: current };
+    }
+    return { ok: true, ...listProjectsPublic() };
+  });
+
+  registerHandle('projects:remove', async (_event, payload = {}) => {
+    const { workspace } = await modules();
+    const paths = dataPaths();
+    const index = ensureProjectsIndex();
+    if (index.projects.length <= 1) throw new Error('至少保留一个项目');
+    const id = String(payload.id || '').trim();
+    if (!index.projects.some((item) => item.id === id)) throw new TypeError('项目不存在');
+    index.projects = index.projects.filter((item) => item.id !== id);
+    if (index.activeId === id) index.activeId = index.projects[0].id;
+    writeJsonAtomic(paths.projectsIndex, index);
+    try {
+      fs.rmSync(path.join(paths.projectsDir, id), { recursive: true, force: true });
+    } catch { /* ignore */ }
+    const file = activeWorkspacePath();
+    return {
+      ok: true,
+      ...listProjectsPublic(),
+      workspace: workspace.normalizeWorkspace(readJson(file, workspace.emptyWorkspace())),
+    };
   });
 
   registerHandle('provider:list', async () => ({ ok: true, ...publicProviderState() }));

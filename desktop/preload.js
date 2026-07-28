@@ -49,5 +49,12 @@ contextBridge.exposeInMainWorld('selenyx', Object.freeze({
     read: (id) => invoke('papers:read', { id }),
     exists: (id) => invoke('papers:exists', { id }),
   }),
+  projects: Object.freeze({
+    list: () => invoke('projects:list'),
+    create: (payload) => invoke('projects:create', payload || {}),
+    switch: (id) => invoke('projects:switch', { id }),
+    rename: (payload) => invoke('projects:rename', payload || {}),
+    remove: (id) => invoke('projects:remove', { id }),
+  }),
   platform: process.platform,
 }));

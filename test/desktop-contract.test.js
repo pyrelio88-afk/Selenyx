@@ -189,7 +189,7 @@ test('desktop: packaged app copies the shared engine', () => {
 });
 
 test('desktop: version matches R0.8 release candidate', () => {
-  assert.equal(desktopPackage.version, '0.9.0-rc.1');
+  assert.equal(desktopPackage.version, '0.9.1-rc.1');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {
@@ -249,4 +249,13 @@ test('desktop: sidebar exposes evidence-gated research stages', () => {
   assert.match(html, /data-view=\"figure\"/);
   assert.match(html, /data-view=\"experiment\"/);
   assert.match(html, /阅读 · PDF|导入 PDF/);
+});
+
+test('desktop: multi-project IPC is Hermes-style free create/switch', () => {
+  assert.match(main, /projects:create/);
+  assert.match(main, /projects:switch/);
+  assert.match(preload, /projects: Object\.freeze/);
+  assert.match(html, /新建项目/);
+  assert.match(html, /id=\"project-list\"/);
+  assert.match(html, /随时切换/);
 });

@@ -16,43 +16,38 @@
         <span class="brand-copy"><strong>Selenyx</strong><small>EVIDENCE-GATED LAB</small></span>
         <button id="collapse-left" class="icon-button" data-icon="panel-left" aria-label="折叠左栏"></button>
       </header>
-      <button id="new-session" class="new-session"><span data-icon="plus"></span><b>新建研究问题</b></button>
+      <button id="new-session" class="new-session"><span data-icon="plus"></span><b>新建项目</b></button>
 
-      <nav class="nav-list" aria-label="证据门流水线">
-        <p class="nav-label">1 · 立题</p>
-        <button data-view="question" class="nav-item active"><span data-icon="spark"></span><b>研究问题</b></button>
+      <section class="sessions" aria-label="项目列表">
+        <p class="nav-label">项目</p>
+        <div id="project-list" class="project-list"></div>
+      </section>
 
-        <p class="nav-label">2 · 文献</p>
-        <button data-view="research" class="nav-item"><span data-icon="search"></span><b>文献检索</b></button>
+      <nav class="nav-list" aria-label="科研工作台">
+        <p class="nav-label">工作台 · 随时切换</p>
+        <button data-view="research" class="nav-item active"><span data-icon="search"></span><b>文献检索</b></button>
         <button data-view="browser" class="nav-item"><span data-icon="globe"></span><b>获取全文</b></button>
         <button data-view="library" class="nav-item"><span data-icon="library"></span><b>本地文献库</b><em id="library-count">0</em></button>
         <button data-view="reader" class="nav-item"><span data-icon="reader"></span><b>阅读 · PDF</b></button>
-
-        <p class="nav-label">3 · 证据与综合</p>
         <button data-view="evidence" class="nav-item"><span data-icon="link"></span><b>证据链</b><em id="evidence-count">0</em></button>
+        <button data-view="question" class="nav-item"><span data-icon="spark"></span><b>研究问题</b></button>
         <button data-view="skills" class="nav-item"><span data-icon="spark"></span><b>综合路径</b></button>
-
-        <p class="nav-label">4 · 产物</p>
         <button data-view="write" class="nav-item"><span data-icon="note"></span><b>写作</b></button>
         <button data-view="figure" class="nav-item"><span data-icon="highlight"></span><b>图表规划</b></button>
         <button data-view="experiment" class="nav-item"><span data-icon="settings"></span><b>实验日志</b></button>
         <button data-view="chat" class="nav-item"><span data-icon="message"></span><b>科研对话</b></button>
       </nav>
 
-      <section class="sessions">
-        <p class="nav-label">当前项目</p>
-        <button class="project-row active"><span class="project-dot"></span><span><b>未命名研究</b><small>本地工作区 · 自动保存</small></span></button>
-      </section>
       <footer class="left-footer">
         <button id="open-settings" class="nav-item"><span data-icon="settings"></span><b>设置</b></button>
-        <div class="local-state"><span></span><b>本地优先</b><small>PDF / Key 仅本机</small></div>
+        <div class="local-state"><span></span><b>本地优先</b><small>项目 / PDF / Key 仅本机</small></div>
       </footer>
     </aside>
     <div id="left-resizer" class="resizer" role="separator" aria-orientation="vertical" aria-label="调整左栏"></div>
 
     <main class="main-panel">
       <header class="topbar">
-        <div><p id="view-eyebrow">证据门流水线</p><h1 id="view-title">研究问题</h1></div>
+        <div><p id="view-eyebrow">研究工作台</p><h1 id="view-title">文献检索</h1></div>
         <div class="top-actions">
           <span id="runtime-badge" class="runtime-badge pending">正在自检</span>
           <button id="toggle-right" class="icon-button" data-icon="panel-right" aria-label="切换右栏"></button>
@@ -60,16 +55,16 @@
       </header>
 
       <!-- 1. Question -->
-      <section id="question-view" class="view active">
+      <section id="question-view" class="view">
         <div class="content-column">
           <header class="page-intro">
-            <p class="kicker">QUESTION · GATE 0</p>
-            <h2>先立题，再检索。未确认边界不进入联网。</h2>
-            <p>对齐 Claude Scholar 证据门：question → discover → read → evidence → claim → writing。Nature Skills 作为阶段能力，不再堆成技能墙。</p>
+            <p class="kicker">OPTIONAL · PROJECT BRIEF</p>
+            <h2>研究问题（可选，不挡其他功能）</h2>
+            <p>像 Hermes 一样：先建项目，侧栏任意切换检索 / 浏览器 / PDF / 写作。这里只是帮你整理问题与路径，不是必过关卡。</p>
           </header>
           <div class="question-card">
-            <label for="research-question-input">你的研究问题</label>
-            <textarea id="research-question-input" rows="5" placeholder="例如：生成式 AI 是否会系统性削弱科研写作的可核验性？现有证据中支持与反驳各是什么？"></textarea>
+            <label for="research-question-input">当前项目的研究问题</label>
+            <textarea id="research-question-input" rows="5" placeholder="例如：生成式 AI 对科研写作可核验性的影响有哪些支持与反驳证据？"></textarea>
             <div class="assistant-prompts" id="question-prompts">
               <button type="button" class="assistant-prompt" data-prompt="围绕我的研究主题做可追溯文献综述，并建立支持/反驳证据链">文献综述</button>
               <button type="button" class="assistant-prompt" data-prompt="把研究想法拆成可证伪假设、变量、对照与停止条件">实验立题</button>
@@ -77,17 +72,18 @@
               <button type="button" class="assistant-prompt" data-prompt="根据审稿意见形成逐条回应、行动与证据清单">审稿回复</button>
             </div>
             <div class="assistant-actions">
-              <button id="question-start" class="primary-button">确认问题并生成路径</button>
-              <button id="question-to-search" class="secondary-button">已有问题，去检索</button>
+              <button id="question-start" class="primary-button">保存问题并生成路径</button>
+              <button id="question-to-search" class="secondary-button">去文献检索</button>
+              <button id="question-to-browser" class="secondary-button">去获取全文</button>
             </div>
-            <p class="paper-hint">路径会本地保存。检索必须真 API；PDF 需你手动下载后导入阅读器。</p>
+            <p class="paper-hint">可随时离开本页。侧栏任何入口都可直接使用。</p>
           </div>
           <div id="question-plan-preview" class="assistant-tasks" hidden></div>
         </div>
       </section>
 
       <!-- 2. Search -->
-      <section id="research-view" class="view">
+      <section id="research-view" class="view active">
         <div class="content-column">
           <header class="page-intro">
             <p class="kicker">DISCOVER · GATE 1</p>
