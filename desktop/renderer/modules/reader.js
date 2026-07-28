@@ -8,7 +8,9 @@ let pdfLoading = false;
 
 async function ensurePdfjs() {
   if (pdfjsLib) return pdfjsLib;
-  pdfjsLib = await import('../vendor/pdf.mjs');
+  const mod = await import('../vendor/pdf.mjs');
+  pdfjsLib = mod.default ?? mod;
+  if (!pdfjsLib?.getDocument) throw new Error('pdf.js 未能正确加载');
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.mjs', import.meta.url).href;
   return pdfjsLib;
 }
@@ -38,15 +40,19 @@ async function loadPdfForRecord(record) {
     const data = base64ToUint8Array(response.base64);
     pdfDoc = await pdfjs.getDocument({ data }).promise;
     pdfPage = 1;
-    if (paper) paper.hidden = true;
+    if (paper) paper.hidden = false;
     if (stage) stage.hidden = false;
+    paper?.classList.add('paper-compact');
     await renderPdfPage();
     return true;
   } catch (error) {
     toast(error.message || 'PDF 打开失败', 'error');
     pdfDoc = null;
     if (stage) stage.hidden = true;
-    if (paper) paper.hidden = false;
+    if (paper) {
+      paper.hidden = false;
+      paper.classList.remove('paper-compact');
+    }
     return false;
   } finally {
     pdfLoading = false;
@@ -84,14 +90,24 @@ async function renderPdfPage() {
   try {
     const textContent = await page.getTextContent();
     textLayerDiv.className = 'pdf-text-layer';
+    const transform = pdfjsLib.Util?.transform
+      || ((m1, m2) => [
+        m1[0] * m2[0] + m1[2] * m2[1],
+        m1[1] * m2[0] + m1[3] * m2[1],
+        m1[0] * m2[2] + m1[2] * m2[3],
+        m1[1] * m2[2] + m1[3] * m2[3],
+        m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+        m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
+      ]);
     for (const item of textContent.items) {
       if (!item.str) continue;
-      const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+      const tx = transform(viewport.transform, item.transform);
       const span = document.createElement('span');
       span.textContent = item.str;
+      const fontHeight = Math.hypot(item.transform[2], item.transform[3]) * pdfScale || item.height * pdfScale || 12;
       span.style.left = `${tx[4]}px`;
-      span.style.top = `${tx[5] - item.height * pdfScale}px`;
-      span.style.fontSize = `${Math.max(6, item.height * pdfScale)}px`;
+      span.style.top = `${tx[5] - fontHeight}px`;
+      span.style.fontSize = `${Math.max(6, fontHeight)}px`;
       span.style.fontFamily = 'sans-serif';
       textLayerDiv.append(span);
     }
@@ -154,11 +170,17 @@ function renderReader() {
 
   if (record.localPdf) {
     host.append(el('p', { className: 'paper-hint', text: `已绑定 PDF：${record.localPdf.name}（${Math.round((record.localPdf.bytes || 0) / 1024)} KB）。下方画布可翻页；拖选文字后点高亮/批注/证据。` }));
-    loadPdfForRecord(record);
+    // Keep a compact meta strip visible above the PDF canvas.
+    host.hidden = false;
+    host.classList.add('paper-compact');
+    loadPdfForRecord(record).then((ok) => {
+      if (ok && host) host.classList.add('paper-compact');
+    });
   } else {
+    host.classList.remove('paper-compact');
     $('#pdf-stage') && ($('#pdf-stage').hidden = true);
     host.hidden = false;
-    host.append(el('p', { className: 'paper-hint', text: '尚无本地 PDF。可先对摘要批注，或浏览器下载后导入。' }));
+    host.append(el('p', { className: 'paper-hint', text: '尚无本地 PDF。推荐：获取全文 → 系统下载 → 导入 PDF。也可先对摘要批注。' }));
     host.append(el('div', {
       className: 'paper-abstract',
       text: record.abstract || '该来源没有返回摘要。请获取全文 PDF 后导入阅读。',

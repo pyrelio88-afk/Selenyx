@@ -331,3 +331,10 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .nav-label { margin: 14px 12px 6px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
 .left-panel .nav-item b { font-size: 13px; }
 .toast.info { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+
+
+.paper.paper-compact { padding-bottom: 8px; border-bottom: 1px solid var(--line); max-height: none; }
+.paper.paper-compact .paper-abstract { display: none; }
+.reader-layout { display: flex; flex-direction: column; gap: 0; min-height: 0; flex: 1; }
+.reader-layout .paper { flex: 0 0 auto; }
+.reader-layout .pdf-stage { flex: 1 1 auto; }
