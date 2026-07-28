@@ -1,5 +1,4 @@
-// 来源管理器：统一登记所有检索来源（国际原生 API + 国内合规入口）。
-// UI 与检索服务都从这里取 metadata，单一事实源。
+// Single source of truth for native APIs and compliant Chinese search links.
 import { searchArxiv } from './sources/arxiv.js';
 import { searchCrossref } from './sources/crossref.js';
 import { searchEuropePmc } from './sources/europepmc.js';
@@ -7,52 +6,69 @@ import { searchSemanticScholar } from './sources/semantic.js';
 import { searchUnpaywall, searchDoaj, searchCore } from './sources/openaccess.js';
 import { CHINA_SOURCES, getChinaSource, planChinaSearch } from './sources/china.js';
 
-// 国际原生 API 来源登记。每个 = { id, name, search(query, opts), free, region }
+// searchCompat imports this registry. Lazy imports avoid an initialisation cycle.
+const searchOpenAlex = async (...args) => (await import('./searchCompat.js')).searchOpenAlex(...args);
+const searchPubMed = async (...args) => (await import('./searchCompat.js')).searchPubMed(...args);
+
+function apiSource({ id, name, search, note, homeUrl, access = 'free', capabilities = ['search', 'metadata'] }) {
+  return Object.freeze({
+    id, name, region: 'intl', kind: 'native-api', access, free: access === 'free',
+    capabilities: Object.freeze(capabilities), homeUrl, searchUrlTemplate: null, search, note,
+  });
+}
+
 const API_SOURCES = Object.freeze({
-  arxiv: { id: 'arxiv', name: 'arXiv', region: 'intl', free: true, search: searchArxiv, note: '预印本，物理/数学/CS/生医' },
-  crossref: { id: 'crossref', name: 'Crossref', region: 'intl', free: true, search: searchCrossref, note: 'DOI 元数据，覆盖极广' },
-  europepmc: { id: 'europepmc', name: 'Europe PMC', region: 'intl', free: true, search: searchEuropePmc, note: '生医全文+预印本' },
-  semantic: { id: 'semantic', name: 'Semantic Scholar', region: 'intl', free: true, search: searchSemanticScholar, note: 'AI 驱动，含摘要与引用' },
-  unpaywall: { id: 'unpaywall', name: 'Unpaywall', region: 'intl', free: true, search: searchUnpaywall, note: '开放获取全文定位' },
-  doaj: { id: 'doaj', name: 'DOAJ', region: 'intl', free: true, search: searchDoaj, note: '开放获取期刊目录' },
-  core: { id: 'core', name: 'CORE', region: 'intl', free: true, search: searchCore, note: '全球开放获取聚合' },
+  openalex: apiSource({ id: 'openalex', name: 'OpenAlex', search: searchOpenAlex, homeUrl: 'https://openalex.org', note: '开放学术图谱，跨学科聚合' }),
+  pubmed: apiSource({ id: 'pubmed', name: 'PubMed', search: searchPubMed, homeUrl: 'https://pubmed.ncbi.nlm.nih.gov', note: '生物医学与生命科学' }),
+  crossref: apiSource({ id: 'crossref', name: 'Crossref', search: searchCrossref, homeUrl: 'https://search.crossref.org', note: 'DOI 元数据，覆盖广泛' }),
+  arxiv: apiSource({ id: 'arxiv', name: 'arXiv', search: searchArxiv, homeUrl: 'https://arxiv.org', note: '预印本，物理、数学、计算机与生医' }),
+  europepmc: apiSource({ id: 'europepmc', name: 'Europe PMC', search: searchEuropePmc, homeUrl: 'https://europepmc.org', note: '生医全文与预印本' }),
+  semantic: apiSource({ id: 'semantic', name: 'Semantic Scholar', search: searchSemanticScholar, homeUrl: 'https://www.semanticscholar.org', note: '论文元数据、摘要与引用' }),
+  unpaywall: apiSource({ id: 'unpaywall', name: 'Unpaywall', search: searchUnpaywall, homeUrl: 'https://unpaywall.org', note: '开放获取全文定位' }),
+  doaj: apiSource({ id: 'doaj', name: 'DOAJ', search: searchDoaj, homeUrl: 'https://doaj.org', note: '开放获取期刊目录' }),
+  core: apiSource({ id: 'core', name: 'CORE', search: searchCore, homeUrl: 'https://core.ac.uk', note: '全球开放获取聚合', access: 'key', capabilities: ['search', 'metadata', 'requires-key'] }),
 });
 
-const ALL_SOURCE_IDS = Object.freeze([...Object.keys(API_SOURCES), ...CHINA_SOURCES.map((s) => s.id)]);
+const ALL_SOURCE_IDS = Object.freeze([...Object.keys(API_SOURCES), ...CHINA_SOURCES.map((source) => source.id)]);
 
 function listApiSources() {
-  return Object.values(API_SOURCES).map(({ id, name, region, free, note }) => ({ id, name, region, free, note, kind: 'native-api' }));
+  return Object.values(API_SOURCES).map(({ search: _search, ...source }) => source);
 }
 
 function listChinaSources() {
-  return CHINA_SOURCES.map((s) => ({
-    id: s.id, name: s.name, nameEn: s.nameEn, region: 'china', free: s.access === 'free',
-    access: s.access, kind: 'link', note: s.note,
+  return CHINA_SOURCES.map((source) => ({
+    id: source.id,
+    name: source.name,
+    nameEn: source.nameEn,
+    region: 'china',
+    free: source.access === 'free',
+    access: source.access,
+    kind: 'link',
+    capabilities: ['search-link', 'external-browser'],
+    homeUrl: source.homeUrl,
+    searchUrlTemplate: source.integration['search-link']?.template ?? null,
+    note: source.note,
   }));
 }
 
 function listAllSources() {
-  return [...listApiSources(), ...listChinaSources()];
+  return [...listChinaSources(), ...listApiSources()];
 }
 
 function getSourceMeta(id) {
-  if (API_SOURCES[id]) return { ...API_SOURCES[id], kind: 'native-api' };
-  const china = getChinaSource(id);
-  if (china) return { id: china.id, name: china.name, region: 'china', kind: 'link', access: china.access, note: china.note };
-  return null;
+  if (API_SOURCES[id]) {
+    const { search: _search, ...source } = API_SOURCES[id];
+    return source;
+  }
+  return listChinaSources().find((source) => source.id === id) ?? null;
 }
 
-// 对原生 API 来源执行检索；对国内来源返回「跳转动作」而非抓取。
-// 返回统一信封，UI 按 kind 分支渲染。
-async function searchSource(id, query, opts = {}) {
+async function searchSource(id, query, options = {}) {
   if (API_SOURCES[id]) {
-    const result = await API_SOURCES[id].search(query, opts);
+    const result = await API_SOURCES[id].search(query, options);
     return { kind: 'native-api', sourceId: id, ...result };
   }
-  const china = getChinaSource(id);
-  if (china) {
-    return { kind: 'link', ...planChinaSearch(id, query, opts) };
-  }
+  if (getChinaSource(id)) return { kind: 'link', ...planChinaSearch(id, query, options) };
   throw new Error(`unknown source: ${id}`);
 }
 

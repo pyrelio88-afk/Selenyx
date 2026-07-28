@@ -11,11 +11,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.8.0-rc.1';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;
 let moduleCache = null;
+const captureArgument = process.argv.find((item) => item.startsWith('--capture-ui='));
+const captureDirectory = captureArgument ? path.resolve(captureArgument.slice('--capture-ui='.length)) : null;
 
 function engineRoot() {
   return app.isPackaged
@@ -29,6 +31,7 @@ function dataPaths() {
     root,
     profile: path.join(root, 'profile.json'),
     providers: path.join(root, 'providers.json'),
+    workspace: path.join(root, 'workspace.json'),
   };
 }
 
@@ -51,14 +54,16 @@ function writeJsonAtomic(file, value) {
 async function modules() {
   if (moduleCache) return moduleCache;
   const root = engineRoot();
-  const [skills, profile, search, providers, urlPolicy] = await Promise.all([
+  const [skills, profile, search, registry, workspace, providers, urlPolicy] = await Promise.all([
     import(pathToFileURL(path.join(root, 'skills', 'index.js')).href),
     import(pathToFileURL(path.join(root, 'scholar', 'profile.js')).href),
     import(pathToFileURL(path.join(root, 'research', 'search.js')).href),
+    import(pathToFileURL(path.join(root, 'research', 'sourceRegistry.js')).href),
+    import(pathToFileURL(path.join(root, 'research', 'workspace.js')).href),
     import(pathToFileURL(path.join(root, 'providers', 'profiles.js')).href),
     import(pathToFileURL(path.join(root, 'security', 'urlPolicy.js')).href),
   ]);
-  moduleCache = { skills, profile, search, providers, urlPolicy };
+  moduleCache = { skills, profile, search, registry, workspace, providers, urlPolicy };
   return moduleCache;
 }
 
@@ -241,28 +246,63 @@ function registerIpc() {
     const query = String(payload.query ?? '').trim();
     if (!query) throw new TypeError('search query is required');
     const { search, registry } = await modules();
-    const requested = Array.isArray(payload.sources) && payload.sources.length
-      ? payload.sources : ['openalex', 'pubmed'];
-    // 分流：api 来源走真检索；link 来源（国内）走 planChinaSearch 返回跳转信封。
-    const apiSources = requested.filter((id) => registry.getSourceMeta(id)?.kind === 'native-api');
-    const linkSources = requested.filter((id) => registry.getSourceMeta(id)?.kind === 'link');
-    const result = { query, sources: requested, records: [], sourceResults: [], errors: [], links: [] };
-    if (apiSources.length) {
-      const service = new search.LiteratureSearchService();
-      const apiResult = await service.search(query, { sources: apiSources, limit: payload.limit, page: payload.page });
-      Object.assign(result, apiResult);
-    }
-    for (const id of linkSources) {
-      const link = registry.searchSource(id, query);
-      result.links.push(link);
-      result.sourceResults.push({ source: id, total: 0, returned: 0, page: 1, audit: { provider: id, mode: link.mode, url: link.url, honesty: link.honesty } });
-    }
-    return { ok: true, result };
+    const requested = [...new Set(Array.isArray(payload.sources) && payload.sources.length
+      ? payload.sources.map(String) : ['openalex', 'pubmed', 'crossref'])];
+    const known = requested.filter((id) => registry.getSourceMeta(id));
+    const settled = await Promise.allSettled(known.map((id) => registry.searchSource(id, query, {
+      limit: payload.limit, page: payload.page,
+    })));
+    const records = [];
+    const sourceResults = [];
+    const errors = [];
+    const links = [];
+    settled.forEach((entry, index) => {
+      const source = known[index];
+      if (entry.status === 'rejected') {
+        const error = entry.reason;
+        errors.push({
+          source, name: error?.name ?? 'Error', message: String(error?.message ?? error),
+          code: error?.code ?? 'SEARCH_FAILED', status: Number.isInteger(error?.status) ? error.status : null,
+        });
+        sourceResults.push({ source, status: error?.status === 429 ? 'rate-limited' : 'failed', httpStatus: error?.status ?? null, count: 0, error: String(error?.message ?? error) });
+        return;
+      }
+      const value = entry.value;
+      if (value.kind === 'link') {
+        const link = { ...value };
+        links.push(link);
+        sourceResults.push({ source, status: 'site-link', httpStatus: null, count: 0, error: null, audit: { provider: source, mode: link.mode, url: link.url, honesty: link.honesty } });
+        return;
+      }
+      records.push(...(value.records ?? []));
+      sourceResults.push({
+        source, status: value.records?.length ? 'complete' : 'zero', httpStatus: value.audit?.httpStatus ?? null,
+        count: value.records?.length ?? 0, total: value.total ?? 0, error: null, audit: value.audit ?? null,
+      });
+    });
+    return { ok: true, result: {
+      query, sources: known, records: search.deduplicateRecords(records), sourceResults, errors, links,
+      isPartial: errors.length > 0 && sourceResults.some((item) => ['complete', 'zero'].includes(item.status)),
+      isFailure: errors.length > 0 && !sourceResults.some((item) => ['complete', 'zero'].includes(item.status)),
+    } };
   });
 
   registerHandle('literature:sources', async () => {
     const { registry } = await modules();
     return { ok: true, sources: registry.listAllSources() };
+  });
+
+  registerHandle('workspace:read', async () => {
+    const { workspace } = await modules();
+    return { ok: true, workspace: workspace.normalizeWorkspace(readJson(dataPaths().workspace, workspace.emptyWorkspace())) };
+  });
+
+  registerHandle('workspace:event', async (_event, event = {}) => {
+    const { workspace } = await modules();
+    const current = workspace.normalizeWorkspace(readJson(dataPaths().workspace, workspace.emptyWorkspace()));
+    const applied = workspace.applyWorkspaceEvent(current, event);
+    writeJsonAtomic(dataPaths().workspace, applied.state);
+    return { ok: true, workspace: applied.state, result: applied.result };
   });
 
   registerHandle('provider:list', async () => ({ ok: true, ...publicProviderState() }));
@@ -382,7 +422,7 @@ function createWindow() {
     height: 900,
     minWidth: 980,
     minHeight: 680,
-    show: true,
+    show: !captureDirectory,
     title: 'Selenyx — 科研助手',
     backgroundColor: '#fbfaf7',
     icon: path.join(__dirname, 'assets', 'icon.png'),
@@ -413,6 +453,18 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html')).catch(() => {
     mainWindow?.loadFile(path.join(__dirname, 'renderer', 'fatal.html'));
   });
+  if (captureDirectory) {
+    mainWindow.webContents.once('did-finish-load', async () => {
+      fs.mkdirSync(captureDirectory, { recursive: true });
+      for (const [width, height] of [[1440, 900], [1280, 800], [1024, 768]]) {
+        mainWindow.setSize(width, height);
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        const image = await mainWindow.webContents.capturePage();
+        fs.writeFileSync(path.join(captureDirectory, 'selenyx-r08-' + width + 'x' + height + '.png'), image.toPNG());
+      }
+      app.quit();
+    });
+  }
 }
 
 app.whenReady().then(() => {

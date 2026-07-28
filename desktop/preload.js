@@ -1,8 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
-
-function invoke(channel, payload) {
-  return ipcRenderer.invoke(channel, payload);
-}
+const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
 
 contextBridge.exposeInMainWorld('selenyx', Object.freeze({
   health: () => invoke('app:health'),
@@ -12,6 +9,8 @@ contextBridge.exposeInMainWorld('selenyx', Object.freeze({
   pushProfileEvent: (event) => invoke('profile:event', event),
   searchLiterature: (payload) => invoke('literature:search', payload),
   listSources: () => invoke('literature:sources', {}),
+  readWorkspace: () => invoke('workspace:read'),
+  pushWorkspaceEvent: (event) => invoke('workspace:event', event),
   openExternal: (url) => invoke('external:open', { url }),
   providers: Object.freeze({
     list: () => invoke('provider:list'),

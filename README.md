@@ -11,14 +11,14 @@ The product language is intentionally quiet and restrained: paper white, cinnaba
 
 ## Status
 
-R0.7 is published as a **private GitHub Pre-release**.
+R0.8 is an **unpublished release candidate** on `refactor/r0.8-hermes-workbench`. R0.7 remains unchanged.
 
 - Git history: a single root commit (see the v0.7.0 Release metadata).
-- **352 automated tests pass locally** (R0.6: 333 + 19 new tests for 7 international APIs and 8 China-source links).
-- 7 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
+- **368 automated tests pass locally** (352 inherited + 16 R0.8 workspace, renderer, source-order and regression tests).
+- 9 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
 - 8 China sources: PubScholar, ChinaXiv, NSTL, NCPSSD, SinoMed, CNKI, Wanfang, CQVIP (R0.6: 0).
 - China sources are presented as honesty-guarded browser handoffs (search-link mode), never page scraping.
-- Windows x64 setup and portable builds are attached to the Release.
+- R0.7 Release ID is `360001980`; it has no attached installer assets. R0.8 RC installers are local validation artifacts only.
 - Windows binaries are unsigned.
 - macOS/Linux packages, code signing, and production distribution are not yet verified.
 
@@ -221,11 +221,11 @@ The suite covers the legacy evidence engine plus:
 - no-key and no-synthetic-fallback guarantees
 - desktop CSP, preload surface, security flags, layout contract, and settings contract
 
-The current local result is 333 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
+The current local result is 368 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
 
 ## Current limitations
 
-- R0.6 is published as a private GitHub Pre-release; access requires repository permission.
+- R0.7 is published as a private GitHub Pre-release (Release ID `360001980`) without installer attachments; access requires repository permission.
 - Windows development packaging is unsigned.
 - macOS and Linux artifacts have not been produced or verified in this workspace.
 - L1 translation is terminology-level and extractive, not a full offline neural translator.

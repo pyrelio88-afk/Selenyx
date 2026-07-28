@@ -1,0 +1,205 @@
+import { api, state, $, $$, el, clear, toast, workspaceEvent, setView } from './core.js';
+
+const defaultIntl = ['openalex', 'pubmed', 'crossref'];
+const primaryChina = ['pubscholar'];
+const publicChina = ['chinaxiv', 'nstl', 'ncpssd', 'sinomed'];
+const paidChina = ['cnki', 'wanfang', 'cqvip'];
+let internationalExpanded = false;
+
+function sourceById(id) { return state.sources.find((source) => source.id === id); }
+function accessText(source) {
+  if (source.access === 'paid') return '登录 / 付费';
+  if (source.access === 'institutional') return '机构权限';
+  if (source.access === 'key') return '需要 Key';
+  return source.kind === 'link' ? '站点跳转' : '原生 API';
+}
+
+function sourceRow(source, checked = false) {
+  const input = el('input', { type: 'checkbox', value: source.id, checked, 'aria-label': source.name });
+  return el('label', { className: 'source-row' }, [
+    input,
+    el('span', {}, [el('b', { text: source.name }), el('small', { text: source.note ?? accessText(source) })]),
+    el('i', { className: 'access-tag', text: accessText(source) }),
+  ]);
+}
+
+function renderControls() {
+  const host = $('#source-controls');
+  clear(host);
+  if (state.searchTab === 'local') {
+    host.append(el('div', { className: 'source-lead' }, [
+      el('div', { className: 'source-logo', text: '本地' }),
+      el('div', {}, [el('h3', { text: '仅检索本地收藏' }), el('p', { text: '断网可用，不会发起任何网络请求。' })]),
+      el('span', { className: 'access-tag', text: `${state.workspace?.library?.length ?? 0} 篇` }),
+    ]));
+    return;
+  }
+  if (state.searchTab === 'china') {
+    const pubScholar = sourceById(primaryChina[0]);
+    if (pubScholar) host.append(el('div', { className: 'source-lead' }, [
+      el('div', { className: 'source-logo', text: 'PS' }),
+      el('div', {}, [el('h3', { text: pubScholar.name }), el('p', { text: '中科院公益入口 · 默认主搜索，不抓取网页内容' })]),
+      el('span', { className: 'access-tag', text: '优先入口' }),
+    ]));
+    const list = el('div', { className: 'source-list' });
+    [...publicChina, ...paidChina].map(sourceById).filter(Boolean).forEach((source) => list.append(sourceRow(source, publicChina.includes(source.id))));
+    host.append(list);
+    return;
+  }
+  const selected = state.workspace?.sourcePreferences?.international ?? defaultIntl;
+  const visible = state.sources.filter((source) => source.region === 'intl' && (internationalExpanded || defaultIntl.includes(source.id)));
+  const list = el('div', { className: 'source-list' });
+  visible.forEach((source) => list.append(sourceRow(source, selected.includes(source.id))));
+  host.append(list);
+  const toggle = el('button', {
+    type: 'button', className: 'source-picker-button',
+    text: internationalExpanded ? '收起其他来源' : `选择更多来源（共 ${state.sources.filter((source) => source.region === 'intl').length} 个）`,
+    onClick: () => { internationalExpanded = !internationalExpanded; renderControls(); },
+  });
+  host.append(toggle);
+}
+
+function selectedSources() {
+  if (state.searchTab === 'china') return ['pubscholar', ...$$('#source-controls input:checked').map((node) => node.value)];
+  if (state.searchTab === 'international') return $$('#source-controls input:checked').map((node) => node.value);
+  return [];
+}
+
+function renderStatuses() {
+  const host = $('#source-statuses');
+  clear(host);
+  for (const result of state.searchResult?.sourceResults ?? []) {
+    const label = {
+      complete: `完成 · ${result.count} 条`, zero: '完成 · 0 结果', failed: '失败',
+      'rate-limited': '限流', 'requires-key': '需要 Key', 'site-link': '站点跳转',
+    }[result.status] ?? result.status;
+    host.append(el('span', { className: `source-status ${result.status}`, text: `${sourceById(result.source)?.name ?? result.source}：${label}` }));
+  }
+}
+
+function card(record, local = false) {
+  const saved = state.workspace?.library?.some((item) => item.id === record.id);
+  const actions = el('div', { className: 'result-actions' });
+  actions.append(el('button', { className: 'text-button', text: '进入阅读', onClick: async () => {
+    state.selectedSource = record;
+    await workspaceEvent({ type: 'ui:patch', patch: { selectedSourceId: record.id } });
+    setView('reader');
+  } }));
+  if (!saved) actions.append(el('button', { className: 'text-button', text: '收藏到本地', onClick: async (event) => {
+    const result = await workspaceEvent({ type: 'library:save', record });
+    event.currentTarget.textContent = result?.merged ? '已合并' : '已收藏';
+    event.currentTarget.disabled = true;
+    renderLibrary();
+    toast(result?.merged ? '已与本地重复文献合并' : '已保存到 workspace.json');
+  } }));
+  if (record.url) actions.append(el('button', { className: 'text-button', text: '外部全文', onClick: () => api.openExternal(record.url) }));
+  return el('article', { className: `result-card ${record.reality === 'example' ? 'example' : ''}` }, [
+    el('h3', { text: record.title }),
+    el('div', { className: 'meta', text: `${record.authors?.join('、') || '作者未知'} · ${record.venue || '来源未知'} · ${record.year || '年份未知'}${local ? ' · 本地收藏' : ''}` }),
+    el('p', { className: 'abstract', text: record.abstract || '暂无摘要；可进入阅读页查看元数据和外部全文入口。' }),
+    actions,
+  ]);
+}
+
+function renderResults() {
+  renderStatuses();
+  const host = $('#search-results');
+  clear(host);
+  const result = state.searchResult;
+  const records = result?.records ?? [];
+  $('#search-state').hidden = Boolean(records.length || result?.links?.length || result?.errors?.length);
+  records.forEach((record) => host.append(card(record)));
+  for (const link of result?.links ?? []) {
+    const source = sourceById(link.sourceId);
+    host.append(el('article', { className: 'result-card' }, [
+      el('h3', { text: source?.name ?? link.sourceName }),
+      el('div', { className: 'meta', text: link.requiresAccount ? '站点跳转 · 可能需要登录或付费' : '站点跳转 · 公益/开放入口' }),
+      el('p', { className: 'abstract', text: link.honesty }),
+      el('div', { className: 'result-actions' }, [
+        el('button', { className: 'text-button', text: '在系统浏览器检索', onClick: () => api.openExternal(link.url) }),
+        el('button', { className: 'text-button', text: '复制链接', onClick: async () => { await navigator.clipboard.writeText(link.url); toast('链接已复制'); } }),
+      ]),
+    ]));
+  }
+  for (const error of result?.errors ?? []) {
+    host.append(el('div', { className: 'result-card' }, [
+      el('h3', { text: `${sourceById(error.source)?.name ?? error.source} 检索失败` }),
+      el('p', { className: 'abstract', text: `${error.message}${error.status ? `（HTTP ${error.status}）` : ''}` }),
+    ]));
+  }
+  if (result && !records.length && !result.links?.length && !result.errors?.length) {
+    host.append(el('div', { className: 'empty-state' }, [el('h3', { text: '真实检索返回 0 条' }), el('p', { text: '没有生成或补写任何论文。请调整关键词后重试。' })]));
+  }
+}
+
+function renderLibrary(query = '') {
+  const host = $('#library-results');
+  clear(host);
+  const term = query.trim().toLocaleLowerCase();
+  const records = (state.workspace?.library ?? []).filter((record) => !term || `${record.title} ${record.authors?.join(' ')}`.toLocaleLowerCase().includes(term));
+  if (!records.length) host.append(el('div', { className: 'empty-state' }, [el('h3', { text: term ? '本地收藏中没有匹配项' : '本地文献库为空' }), el('p', { text: '从真实检索结果收藏，或使用“手动添加文献”。' })]));
+  records.forEach((record) => host.append(card(record, true)));
+}
+
+async function runSearch(event) {
+  event.preventDefault();
+  const query = $('#literature-query').value.trim();
+  if (!query) return;
+  if (state.searchTab === 'local') {
+    state.searchResult = { query, records: state.workspace.library.filter((record) => `${record.title} ${record.authors?.join(' ')}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())), sourceResults: [], links: [], errors: [] };
+    $('#search-audit').textContent = '仅检索本地 workspace.json · 未联网';
+    renderResults();
+    return;
+  }
+  const sources = selectedSources();
+  if (!sources.length) return toast('请至少选择一个来源', 'error');
+  const button = $('#literature-search-form button');
+  button.disabled = true;
+  button.textContent = '检索中…';
+  $('#search-audit').textContent = `正在请求 ${sources.length} 个来源；各来源独立结算。`;
+  try {
+    const response = await api.searchLiterature({ query, sources, limit: 10 });
+    if (!response.ok) throw new Error(response.error?.message ?? '检索失败');
+    state.searchResult = response.result;
+    $('#search-audit').textContent = `${new Date().toLocaleTimeString()} · ${response.result.records.length} 条可收藏记录 · ${response.result.links.length} 个站点入口`;
+    renderResults();
+  } catch (error) {
+    toast(error.message, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = '检索';
+  }
+}
+
+function setupSearch() {
+  $$('.segment-tabs button').forEach((button) => button.addEventListener('click', async () => {
+    state.searchTab = button.dataset.searchTab;
+    $$('.segment-tabs button').forEach((node) => node.classList.toggle('active', node === button));
+    await workspaceEvent({ type: 'preferences:patch', patch: { searchTab: state.searchTab } });
+    renderControls();
+    $('#search-results').replaceChildren();
+    $('#source-statuses').replaceChildren();
+    $('#search-state').hidden = false;
+  }));
+  $('#literature-search-form').addEventListener('submit', runSearch);
+  $('#manual-add').addEventListener('click', () => { $('#manual-modal').hidden = false; });
+  $('#manual-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const year = Number(data.get('year'));
+    await workspaceEvent({ type: 'library:save', record: {
+      id: `manual:${crypto.randomUUID()}`, title: data.get('title'),
+      authors: String(data.get('authors') ?? '').split(/[,，]/).map((item) => item.trim()).filter(Boolean),
+      year: Number.isInteger(year) && year > 0 ? year : null,
+      venue: data.get('venue'), abstract: data.get('abstract'), externalIds: data.get('doi') ? { doi: data.get('doi') } : {},
+      sourceType: 'article', reality: 'real',
+    } });
+    event.currentTarget.reset();
+    $('#manual-modal').hidden = true;
+    renderLibrary();
+    toast('文献已保存到本地');
+  });
+  $$('[data-close-modal]').forEach((button) => button.addEventListener('click', () => { $(`#${button.dataset.closeModal}`).hidden = true; }));
+}
+
+export { setupSearch, renderControls, renderResults, renderLibrary };

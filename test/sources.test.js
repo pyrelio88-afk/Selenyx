@@ -133,9 +133,9 @@ test('resolveMode never returns native-api for china sources', () => {
 
 // ---------- Registry ----------
 test('registry lists intl + china', () => {
-  assert.equal(listApiSources().length, 7);
+  assert.equal(listApiSources().length, 9);
   assert.equal(listChinaSources().length, 8);
-  assert.equal(listAllSources().length, 15);
+  assert.equal(listAllSources().length, 17);
   assert.equal(getSourceMeta('arxiv').kind, 'native-api');
   assert.equal(getSourceMeta('cnki').kind, 'link');
   assert.equal(getSourceMeta('nope'), null);

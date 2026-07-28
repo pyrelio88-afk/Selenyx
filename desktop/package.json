@@ -1,6 +1,6 @@
 {
   "name": "selenyx-desktop",
-  "version": "0.6.0",
+  "version": "0.8.0-rc.1",
   "private": true,
   "description": "Selenyx Desktop — local-first research assistant",
   "main": "main.js",
@@ -42,7 +42,8 @@
         "nsis",
         "portable"
       ],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "artifactName": "Selenyx-${version}-windows-${arch}-setup.${ext}",
