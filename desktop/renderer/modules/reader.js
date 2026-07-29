@@ -1,4 +1,4 @@
-import { api, state, $, el, clear, icon, toast, workspaceEvent, selectedText, setView } from './core.js';
+import { api, state, $, $$, el, clear, icon, toast, workspaceEvent, selectedText, setView } from './core.js';
 
 let pdfjsLib = null;
 let pdfDoc = null;
@@ -462,4 +462,4 @@ function setupReader() {
   $('#browser-import-pdf')?.addEventListener('click', () => importPdfFlow(state.selectedSource));
 }
 
-export { setupReader, renderReader, renderEvidence, renderRight, importPdfFlow };
+export { setupReader, renderReader, renderEvidence, renderRight };

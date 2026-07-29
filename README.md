@@ -13,9 +13,9 @@ The product language is intentionally quiet and restrained: paper white, cinnaba
 
 ## Status
 
-R0.8 is an **unpublished release candidate** on `refactor/r0.8-hermes-workbench`. R0.7 remains unchanged.
+The current worktree is an **unpublished `0.9.1-rc.1` validation candidate** on `refactor/r0.8-hermes-workbench`. R0.7 remains unchanged.
 
-- **402 automated tests pass locally**, including workspace reset, evidence relation review, resize synchronization, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
+- **418 automated tests pass locally**, including workspace reset, evidence relation review, resize synchronization, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
 - Critical usability fixes in this handoff:
   - empty-state no longer covers real search results
   - search results get a sticky toolbar + bulk save
@@ -26,7 +26,7 @@ R0.8 is an **unpublished release candidate** on `refactor/r0.8-hermes-workbench`
 - 9 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
 - 8 China sources: PubScholar, ChinaXiv, NSTL, NCPSSD, SinoMed, CNKI, Wanfang, CQVIP (R0.6: 0).
 - China sources are presented as honesty-guarded browser handoffs (search-link mode), never page scraping.
-- R0.7 Release ID is `360001980`; it has no attached installer assets. R0.8 RC installers are local validation artifacts only.
+- R0.7 Release ID is `360001980`; it has no attached installer assets. `0.9.1-rc.1` installers are local validation artifacts only.
 - Windows binaries are unsigned.
 - macOS/Linux packages, code signing, and production distribution are not yet verified.
 

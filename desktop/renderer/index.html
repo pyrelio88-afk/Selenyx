@@ -87,8 +87,8 @@
         <div class="content-column">
           <header class="page-intro">
             <p class="kicker">DISCOVER · GATE 1</p>
-            <h2>真检索。编造标题应返回 0 条。</h2>
-            <p>API 结果、站点跳转、本地收藏严格分开。命中后：浏览器获取全文 → 本地下载 PDF → 导入阅读。现场编造的标题在真实数据源应返回 0 条。</p>
+            <h2>在真实来源中发现可信文献</h2>
+            <p>同时检索开放学术 API，并把站点入口与可收藏记录明确分开。命中后可继续获取全文、导入 PDF、批注并建立证据链；若标题不存在，真实数据源应返回 0 条，绝不生成虚构记录。</p>
           </header>
           <div class="segment-tabs" role="tablist" aria-label="检索范围">
             <button class="active" data-search-tab="china">中国文献</button>
@@ -108,13 +108,13 @@
               <option value="broad">主题检索：允许相关结果</option>
               <option value="exact">精确标题：只保留高度匹配</option>
             </select>
-            <span>防止把关键词相关论文冒充成现场标题命中。</span>
+            <span>粘贴完整标题时会自动提高匹配精度，主题检索仍保留相关结果。</span>
           </div>
           <div id="source-controls" class="source-controls"></div>
           <p id="search-audit" class="audit-line">尚未发起请求。网页入口不会被计作 API 成功。</p>
           <div id="source-statuses" class="source-statuses"></div>
           <div id="search-state" class="empty-state">
-            <span data-icon="search"></span><h3>从一个已确认的问题开始</h3>
+            <span data-icon="search"></span><h3>检索一个研究主题或论文标题</h3>
             <p>国际聚合默认 OpenAlex / PubMed / Crossref。中国页多为合法站点跳转。</p>
           </div>
           <div id="search-results" class="result-list" aria-live="polite"></div>
@@ -178,6 +178,7 @@
             <button id="browser-import-pdf" class="secondary-button" type="button">导入已下载 PDF</button>
             <button id="browser-open-external" class="secondary-button" type="button">系统浏览器</button>
           </header>
+          <div id="browser-status" class="browser-fallback" hidden></div>
           <div id="browser-homepage">
             <div class="browser-heading">
               <div>
@@ -189,9 +190,7 @@
             </div>
             <div id="browser-sites" class="site-groups"></div>
           </div>
-          <div id="browser-host" class="browser-host" hidden>
-            <div id="browser-status" class="browser-fallback"></div>
-          </div>
+          <div id="browser-host" class="browser-host" hidden></div>
         </div>
       </section>
 

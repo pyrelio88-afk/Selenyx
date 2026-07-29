@@ -155,11 +155,61 @@ function buildResearchPlan(input, context = {}) {
   };
 }
 
-function updateResearchPlan(plan, taskId, status) {
+function evaluateResearchTask(task, context = {}) {
+  const libraryCount = Math.max(0, Number(context.libraryCount) || 0);
+  const annotationCount = Math.max(0, Number(context.annotationCount) || 0);
+  const acceptedEvidenceCount = Math.max(0, Number(context.acceptedEvidenceCount) || 0);
+  const unreviewedEvidenceCount = Math.max(0, Number(context.unreviewedEvidenceCount) || 0);
+  const writingLength = Math.max(0, Number(context.writingLength) || 0);
+  const experimentLogLength = Math.max(0, Number(context.experimentLogLength) || 0);
+  if (task?.capability === 'nature-experiment-log') {
+    return experimentLogLength >= 20
+      ? { ok: true, message: '实验日志已记录' }
+      : { ok: false, code: 'EXPERIMENT_LOG_REQUIRED', message: '先在实验日志中记录至少 20 个字符的真实观察或方案' };
+  }
+  if (task?.stage === 'question') return { ok: true, message: '研究问题已由用户确认' };
+  if (['discover', 'screen'].includes(task?.stage)) {
+    return libraryCount > 0
+      ? { ok: true, message: `本地文献库已有 ${libraryCount} 条真实或手工录入记录` }
+      : { ok: false, code: 'LITERATURE_REQUIRED', message: '先从真实检索结果收藏或手工录入至少 1 篇文献' };
+  }
+  if (task?.stage === 'read') {
+    return annotationCount > 0
+      ? { ok: true, message: `已有 ${annotationCount} 条可追溯批注` }
+      : { ok: false, code: 'ANNOTATION_REQUIRED', message: '先在阅读页创建至少 1 条带来源定位的批注' };
+  }
+  if (['evidence', 'synthesize'].includes(task?.stage)) {
+    return acceptedEvidenceCount > 0
+      ? { ok: true, message: `已有 ${acceptedEvidenceCount} 条审阅通过的证据` }
+      : { ok: false, code: 'ACCEPTED_EVIDENCE_REQUIRED', message: '先将至少 1 条证据审阅为“接受”' };
+  }
+  if (task?.stage === 'write') {
+    if (acceptedEvidenceCount < 1) return { ok: false, code: 'ACCEPTED_EVIDENCE_REQUIRED', message: '写作前至少需要 1 条审阅通过的证据' };
+    return writingLength >= 40
+      ? { ok: true, message: '写作草稿与已审阅证据均已存在' }
+      : { ok: false, code: 'DRAFT_REQUIRED', message: '先保存至少 40 个字符的写作草稿' };
+  }
+  if (task?.stage === 'review') {
+    if (acceptedEvidenceCount < 1) return { ok: false, code: 'ACCEPTED_EVIDENCE_REQUIRED', message: '审阅前至少需要 1 条接受证据' };
+    return unreviewedEvidenceCount === 0
+      ? { ok: true, message: '证据均已处理审阅状态' }
+      : { ok: false, code: 'EVIDENCE_REVIEW_REQUIRED', message: `仍有 ${unreviewedEvidenceCount} 条证据未审阅或待核验` };
+  }
+  return { ok: true, message: '此步骤没有额外本地门槛' };
+}
+function updateResearchPlan(plan, taskId, status, context = {}) {
   if (!plan || !Array.isArray(plan.tasks)) throw new TypeError('研究计划无效');
   if (!['pending', 'active', 'done', 'blocked'].includes(status)) throw new TypeError('任务状态无效');
   const index = plan.tasks.findIndex((item) => item.id === taskId);
   if (index < 0) throw new TypeError('研究任务不存在');
+  if (status === 'done') {
+    const gate = evaluateResearchTask(plan.tasks[index], context);
+    if (!gate.ok) {
+      const error = new Error(gate.message);
+      error.code = gate.code || 'EVIDENCE_GATE';
+      throw error;
+    }
+  }
   const tasks = plan.tasks.map((item, taskIndex) => ({
     ...item,
     status: taskIndex === index ? status : status === 'active' && item.status === 'active' ? 'pending' : item.status,
@@ -181,6 +231,7 @@ export {
   CAPABILITIES,
   classifyResearchIntent,
   buildResearchPlan,
+  evaluateResearchTask,
   updateResearchPlan,
   listAssistantCapabilities,
 };

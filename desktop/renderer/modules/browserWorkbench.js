@@ -214,35 +214,46 @@ function renderStatus(status) {
   clear(host);
   if (status.state === 'ready') {
     host.hidden = true;
-    host.classList.remove('overlay');
+    host.className = 'browser-fallback';
+    host.dataset.state = 'ready';
     return;
   }
   const blocked = status.state === 'blocked';
   const slow = status.state === 'slow';
+  if (blocked) {
+    $('#browser-host').hidden = true;
+    $('#browser-homepage').hidden = false;
+    api.browser.hide().catch(() => {});
+  }
   host.hidden = false;
-  host.classList.add('overlay');
+  host.className = `browser-fallback browser-${status.state}`;
+  host.dataset.state = status.state;
   if (!blocked && !slow) {
     host.append(
       icon('search'),
-      el('h3', { text: '正在载入站点…' }),
-      el('p', { text: status.url || state.browserUrl || '' }),
+      el('div', { className: 'browser-status-copy' }, [
+        el('h3', { text: '正在载入站点…' }),
+        el('p', { text: status.url || state.browserUrl || '' }),
+      ]),
     );
     return;
   }
   host.append(
     icon('globe'),
-    el('h3', { text: blocked ? '该站点暂时无法在应用内稳定显示' : '站点加载较慢' }),
-    el('p', { text: status.message || '可能受登录、验证码、证书或网络策略限制。内嵌页面仍保留。' }),
+    el('div', { className: 'browser-status-copy' }, [
+      el('h3', { text: blocked ? '该站点暂时无法在应用内稳定显示' : '站点加载较慢' }),
+      el('p', { text: status.message || '可能受登录、验证码、证书或网络策略限制。内嵌页面仍保留。' }),
+    ]),
+    el('div', { className: 'fallback-actions' }, [
+      el('button', { className: 'primary-button', text: '系统浏览器打开', onClick: () => api.browser.openExternal(status.url || state.browserUrl) }),
+      el('button', { className: 'secondary-button', text: '强制内嵌', onClick: () => openSite({ id: `force:${Date.now()}`, name: '强制内嵌', url: status.url || state.browserUrl, embed: 'force' }, { forceEmbed: true }) }),
+      el('button', { className: 'secondary-button', text: '刷新重试', onClick: () => api.browser.reload().catch(() => openSite({ id: `retry:${Date.now()}`, name: '重试', url: status.url || state.browserUrl }, { forceEmbed: true })) }),
+      el('button', { className: 'secondary-button', text: '收藏当前页', onClick: () => saveCurrentPage() }),
+      el('button', { className: 'secondary-button', text: '复制链接', onClick: async () => { await navigator.clipboard.writeText(status.url || state.browserUrl); toast('链接已复制'); } }),
+      el('button', { className: 'secondary-button', text: '返回首页', onClick: showHome }),
+      el('button', { className: 'secondary-button', text: '关闭提示继续浏览', onClick: () => { host.hidden = true; } }),
+    ]),
   );
-  host.append(el('div', { className: 'fallback-actions' }, [
-    el('button', { className: 'primary-button', text: '系统浏览器打开', onClick: () => api.browser.openExternal(status.url || state.browserUrl) }),
-    el('button', { className: 'secondary-button', text: '强制内嵌', onClick: () => openSite({ id: `force:${Date.now()}`, name: '强制内嵌', url: status.url || state.browserUrl, embed: 'force' }, { forceEmbed: true }) }),
-    el('button', { className: 'secondary-button', text: '刷新重试', onClick: () => api.browser.reload().catch(() => openSite({ id: `retry:${Date.now()}`, name: '重试', url: status.url || state.browserUrl }, { forceEmbed: true })) }),
-    el('button', { className: 'secondary-button', text: '收藏当前页', onClick: () => saveCurrentPage() }),
-    el('button', { className: 'secondary-button', text: '复制链接', onClick: async () => { await navigator.clipboard.writeText(status.url || state.browserUrl); toast('链接已复制'); } }),
-    el('button', { className: 'secondary-button', text: '返回首页', onClick: showHome }),
-    el('button', { className: 'secondary-button', text: '关闭提示继续浏览', onClick: () => { host.hidden = true; } }),
-  ]));
 }
 
 async function saveCurrentPage() {

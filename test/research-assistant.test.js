@@ -4,6 +4,7 @@ import {
   RESEARCH_STAGES,
   classifyResearchIntent,
   buildResearchPlan,
+  evaluateResearchTask,
   updateResearchPlan,
   listAssistantCapabilities,
 } from '../src/research/assistant.js';
@@ -57,9 +58,26 @@ test('writing intent remains L2-gated and evidence-gated', () => {
 test('completing an active task advances the workflow', () => {
   const plan = buildResearchPlan('检索量子传感相关论文');
   const active = plan.tasks.find((item) => item.status === 'active');
-  const next = updateResearchPlan(plan, active.id, 'done');
+  const next = updateResearchPlan(plan, active.id, 'done', { libraryCount: 1 });
   assert.equal(next.tasks.find((item) => item.id === active.id).status, 'done');
   assert.equal(next.tasks.filter((item) => item.status === 'active').length, 1);
+});
+
+test('research assistant blocks cosmetic completion until local evidence gates are met', () => {
+  const plan = buildResearchPlan('search for evidence about reproducible catalysts');
+  const discover = plan.tasks.find((item) => item.stage === 'discover');
+  assert.throws(
+    () => updateResearchPlan(plan, discover.id, 'done', { libraryCount: 0 }),
+    (error) => error.code === 'LITERATURE_REQUIRED',
+  );
+  assert.doesNotThrow(() => updateResearchPlan(plan, discover.id, 'done', { libraryCount: 1 }));
+});
+
+test('research assistant requires accepted evidence before synthesis', () => {
+  const plan = buildResearchPlan('synthesize conflicting evidence');
+  const synthesis = plan.tasks.find((item) => item.stage === 'synthesize');
+  assert.equal(evaluateResearchTask(synthesis, { acceptedEvidenceCount: 0 }).ok, false);
+  assert.equal(evaluateResearchTask(synthesis, { acceptedEvidenceCount: 1 }).ok, true);
 });
 
 test('assistant capabilities are internal stage mappings, not a flat card registry', () => {

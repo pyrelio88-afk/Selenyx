@@ -18,6 +18,42 @@ function currentTask(plan) {
     ?? null;
 }
 
+function localGate(task) {
+  const workspace = state.workspace || {};
+  const libraryCount = workspace.library?.length || 0;
+  const annotationCount = workspace.annotations?.length || 0;
+  const acceptedEvidenceCount = workspace.evidence?.filter((item) => item.review === 'accepted').length || 0;
+  const unreviewedEvidenceCount = workspace.evidence?.filter((item) => ['unreviewed', 'needs-check'].includes(item.review)).length || 0;
+  if (task.capability === 'nature-experiment-log') {
+    return String(workspace.drafts?.experimentLog || '').trim().length >= 20
+      ? { ok: true, message: '实验日志已记录' }
+      : { ok: false, message: '需先记录真实实验日志' };
+  }
+  if (task.stage === 'question') return { ok: true, message: '可由你确认边界' };
+  if (['discover', 'screen'].includes(task.stage)) return libraryCount > 0
+    ? { ok: true, message: `已收藏 ${libraryCount} 篇文献` }
+    : { ok: false, message: '需先收藏或录入至少 1 篇文献' };
+  if (task.stage === 'read') return annotationCount > 0
+    ? { ok: true, message: `已有 ${annotationCount} 条批注` }
+    : { ok: false, message: '需先创建带定位的阅读批注' };
+  if (['evidence', 'synthesize'].includes(task.stage)) return acceptedEvidenceCount > 0
+    ? { ok: true, message: `已有 ${acceptedEvidenceCount} 条接受证据` }
+    : { ok: false, message: '需先审阅并接受至少 1 条证据' };
+  if (task.stage === 'write') {
+    if (acceptedEvidenceCount < 1) return { ok: false, message: '写作前需要接受证据' };
+    return String(workspace.drafts?.writing || '').trim().length >= 40
+      ? { ok: true, message: '草稿与证据均已存在' }
+      : { ok: false, message: '需先保存至少 40 个字符的草稿' };
+  }
+  if (task.stage === 'review') {
+    if (acceptedEvidenceCount < 1) return { ok: false, message: '审阅前需要接受证据' };
+    return unreviewedEvidenceCount === 0
+      ? { ok: true, message: '证据审阅状态完整' }
+      : { ok: false, message: `仍有 ${unreviewedEvidenceCount} 条证据待审阅` };
+  }
+  return { ok: true, message: '本地门槛已满足' };
+}
+
 async function persistPlan(plan) {
   await workspaceEvent({ type: 'assistant:set', plan });
   renderAssistant();
@@ -43,11 +79,13 @@ function taskCard(task, question) {
   const statusLabel = {
     pending: '待进行', active: '当前步骤', done: '已完成', blocked: '受阻',
   }[task.status] ?? task.status;
+  const gate = localGate(task);
   const card = el('article', { className: `assistant-task ${task.status}` }, [
     el('button', {
       type: 'button',
       className: 'task-state',
-      title: task.status === 'done' ? '恢复为待进行' : '标记完成',
+      title: task.status === 'done' ? '恢复为待进行' : gate.ok ? '标记完成' : gate.message,
+      disabled: task.status !== 'done' && !gate.ok,
       text: task.status === 'done' ? '✓' : task.status === 'blocked' ? '!' : '',
       onClick: () => changeTask(task, task.status === 'done' ? 'pending' : 'done'),
     }),
@@ -60,6 +98,7 @@ function taskCard(task, question) {
       el('h3', { text: task.title }),
       el('p', { text: task.description }),
       task.evidenceGate ? el('small', { text: `证据门：${task.evidenceGate}` }) : null,
+      el('small', { className: `assistant-gate ${gate.ok ? 'met' : 'blocked'}`, text: `${gate.ok ? '✓' : '○'} ${gate.message}` }),
     ]),
     task.route ? el('button', {
       type: 'button',

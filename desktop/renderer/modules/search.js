@@ -184,7 +184,7 @@ function renderResults() {
   const links = result?.links ?? [];
   const errors = result?.errors ?? [];
   const hasPayload = Boolean(records.length || links.length || errors.length);
-  $('#search-state').hidden = hasPayload;
+  $('#search-state').hidden = Boolean(result);
   if (hasPayload) {
     host.append(el('div', { className: 'result-toolbar', id: 'search-results-toolbar' }, [
       el('b', { text: `${records.length} 条可收藏 · ${links.length} 个站点入口 · ${errors.length} 个失败` }),

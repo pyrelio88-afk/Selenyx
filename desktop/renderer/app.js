@@ -229,7 +229,7 @@ async function boot() {
   state.skills = skills.ok ? skills.skills : [];
   state.projects = projects?.ok ? (projects.projects || []) : [];
   state.activeProjectId = projects?.ok ? projects.activeId : null;
-  state.searchTab = state.workspace.sourcePreferences.searchTab || 'international';
+  state.searchTab = state.workspace.sourcePreferences.searchTab || 'china';
   state.selectedSource = state.workspace.library.find((item) => item.id === state.workspace.ui.selectedSourceId) ?? null;
   applyLayout();
   updateCounts();

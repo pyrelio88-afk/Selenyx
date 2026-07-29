@@ -25,6 +25,7 @@
     "asar": true,
     "files": [
       "main.js",
+      "projectPaths.cjs",
       "preload.js",
       "renderer/**/*",
       "assets/**/*",

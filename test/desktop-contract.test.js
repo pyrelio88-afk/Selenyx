@@ -174,7 +174,7 @@ test('desktop: browser has explicit blocked fallback status', () => {
 });
 
 test('desktop: browser has a finite loading timeout', () => {
-  assert.match(main, /60_000/);
+  assert.match(main, /15_000/);
 });
 
 test('desktop: browser timeout does not detach the embedded view', () => {
@@ -183,18 +183,29 @@ test('desktop: browser timeout does not detach the embedded view', () => {
   assert.match(main, /browser:reload/);
 });
 
+test('desktop: packaged app includes project path validation', () => {
+  assert.ok(desktopPackage.build.files.includes('projectPaths.cjs'));
+  assert.match(main, /projectDirFor/);
+  assert.doesNotMatch(main, /fs\.rmSync\(path\.join\(paths\.projectsDir/);
+});
+
 test('desktop: packaged app copies the shared engine', () => {
   const entry = desktopPackage.build.files.find((item) => typeof item === 'object' && item.to === 'engine');
   assert.deepEqual(entry, { from: '../src', to: 'engine' });
 });
 
-test('desktop: version matches R0.8 release candidate', () => {
+test('desktop: version matches current validation candidate', () => {
   assert.equal(desktopPackage.version, '0.9.1-rc.1');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {
   assert.match(html, /真实数据源应返回 0 条/);
   assert.match(renderer, /真实检索返回 0 条/);
+});
+
+test('desktop: completed zero-result search replaces the initial empty state', () => {
+  assert.match(renderer, /\$\('#search-state'\)\.hidden = Boolean\(result\)/);
+  assert.equal((html.match(/id="browser-status"/g) || []).length, 1);
 });
 
 test('desktop: example styling is visibly distinct', () => {
@@ -243,6 +254,17 @@ test('desktop: papers IPC supports local PDF import', () => {
   assert.match(main, /papers:read/);
   assert.match(preload, /papers: Object\.freeze/);
 });
+test('desktop: renderer modules do not export the same binding twice', () => {
+  const reader = fs.readFileSync(new URL('../desktop/renderer/modules/reader.js', import.meta.url), 'utf8');
+  const declaredExports = [...reader.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g)]
+    .map((match) => match[1]);
+  const exportLists = [...reader.matchAll(/export\s*\{([^}]+)\}/g)]
+    .flatMap((match) => match[1].split(',').map((name) => name.trim().split(/\s+as\s+/)[1] ?? name.trim()));
+  for (const name of declaredExports) {
+    assert.equal(exportLists.includes(name), false, `${name} is exported both at declaration and in an export list`);
+  }
+});
+
 test('desktop: sidebar exposes evidence-gated research stages', () => {
   assert.match(html, /data-view=\"question\"/);
   assert.match(html, /data-view=\"write\"/);

@@ -12,6 +12,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
+const { normalizeProjectId, projectDirFor } = require('./projectPaths.cjs');
 
 const APP_VERSION = '0.9.1-rc.1';
 let mainWindow = null;
@@ -32,6 +33,12 @@ const verifyLayoutArgument = process.argv.find((item) => item.startsWith('--veri
 const verifyLayoutFile = verifyLayoutArgument ? path.resolve(verifyLayoutArgument.slice('--verify-browser-layout='.length)) : null;
 const verifyBrowserArgument = process.argv.find((item) => item.startsWith('--verify-browser-url='));
 const verifyBrowserUrl = verifyBrowserArgument ? decodeURIComponent(verifyBrowserArgument.slice('--verify-browser-url='.length)) : null;
+const verifyCustomSite = process.argv.includes('--verify-custom-site');
+
+if (captureDirectory) {
+  fs.mkdirSync(captureDirectory, { recursive: true });
+  app.setPath('userData', path.join(captureDirectory, '.user-data'));
+}
 
 function engineRoot() {
   return app.isPackaged
@@ -47,6 +54,7 @@ function dataPaths() {
     providers: path.join(root, 'providers.json'),
     projectsIndex: path.join(root, 'projects.json'),
     projectsDir: path.join(root, 'projects'),
+    projectsTrashDir: path.join(root, 'project-trash'),
     // legacy single-file workspace (migrated on first boot)
     workspace: path.join(root, 'workspace.json'),
   };
@@ -61,7 +69,7 @@ function normalizeProjectsIndex(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const projects = Array.isArray(src.projects)
     ? src.projects.map((item) => ({
-      id: String(item?.id || '').trim(),
+      id: normalizeProjectId(item?.id),
       name: String(item?.name || '未命名项目').trim().slice(0, 120) || '未命名项目',
       createdAt: String(item?.createdAt || new Date().toISOString()),
       updatedAt: String(item?.updatedAt || item?.createdAt || new Date().toISOString()),
@@ -81,7 +89,7 @@ function ensureProjectsIndex() {
   if (!index.projects.length) {
     const legacy = paths.workspace;
     const id = crypto.randomUUID();
-    const projectDir = path.join(paths.projectsDir, id);
+    const projectDir = projectDirFor(paths.projectsDir, id);
     fs.mkdirSync(projectDir, { recursive: true });
     const target = path.join(projectDir, 'workspace.json');
     if (fs.existsSync(legacy)) {
@@ -93,7 +101,7 @@ function ensureProjectsIndex() {
     }
     if (!fs.existsSync(target)) {
       // written later when workspace module available; placeholder empty object
-      writeJsonAtomic(target, { schemaVersion: 1, meta: { name: '默认项目', createdAt: new Date().toISOString() }, library: [], annotations: [], evidence: [], assistant: { plan: null, history: [] }, drafts: { writing: '', figureBrief: '', experimentLog: '' }, sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'international' }, ui: { leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false, lastView: 'research', selectedSourceId: null, browserSites: [], browserFavorites: [], browserRecent: [] }, updatedAt: new Date().toISOString() });
+      writeJsonAtomic(target, { schemaVersion: 1, meta: { name: '默认项目', createdAt: new Date().toISOString() }, library: [], annotations: [], evidence: [], assistant: { plan: null, history: [] }, drafts: { writing: '', figureBrief: '', experimentLog: '' }, sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'china' }, ui: { leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false, lastView: 'research', selectedSourceId: null, browserSites: [], browserFavorites: [], browserRecent: [] }, updatedAt: new Date().toISOString() });
     }
     index = {
       schemaVersion: 1,
@@ -115,7 +123,7 @@ function activeWorkspacePath() {
   const index = ensureProjectsIndex();
   const id = index.activeId || index.projects[0]?.id;
   if (!id) throw new Error('没有可用项目');
-  const dir = path.join(paths.projectsDir, id);
+  const dir = projectDirFor(paths.projectsDir, id);
   fs.mkdirSync(dir, { recursive: true });
   return path.join(dir, 'workspace.json');
 }
@@ -316,7 +324,7 @@ function ensureBrowserView() {
     if (errorCode === -3) return;
     if (browserLoadTimer) clearTimeout(browserLoadTimer);
     browserLoadTimer = null;
-    // Keep the view attached so users can still interact or open externally.
+    // Renderer decides whether to detach after presenting a visible, actionable failure state.
     notifyBrowser({
       state: 'blocked',
       url: validatedURL || browserCurrentUrl,
@@ -417,8 +425,19 @@ function registerIpc() {
   });
 
   registerHandle('assistant:update', async (_event, payload = {}) => {
-    const { assistant } = await modules();
-    return { ok: true, plan: assistant.updateResearchPlan(payload.plan, payload.taskId, payload.status) };
+    const { assistant, workspace } = await modules();
+    const current = workspace.normalizeWorkspace(readJson(activeWorkspacePath(), workspace.emptyWorkspace()));
+    const acceptedEvidenceCount = current.evidence.filter((item) => item.review === 'accepted').length;
+    const unreviewedEvidenceCount = current.evidence.filter((item) => ['unreviewed', 'needs-check'].includes(item.review)).length;
+    const context = {
+      libraryCount: current.library.length,
+      annotationCount: current.annotations.length,
+      acceptedEvidenceCount,
+      unreviewedEvidenceCount,
+      writingLength: String(current.drafts?.writing || '').trim().length,
+      experimentLogLength: String(current.drafts?.experimentLog || '').trim().length,
+    };
+    return { ok: true, plan: assistant.updateResearchPlan(payload.plan, payload.taskId, payload.status, context) };
   });
   registerHandle('literature:search', async (event, payload = {}) => {
     const query = String(payload.query ?? '').trim();
@@ -542,12 +561,12 @@ function registerIpc() {
     const index = ensureProjectsIndex();
     const name = String(payload.name || '').trim().slice(0, 120) || `项目 ${new Date().toLocaleString()}`;
     const id = crypto.randomUUID();
-    const dir = path.join(paths.projectsDir, id);
+    const dir = projectDirFor(paths.projectsDir, id);
     fs.mkdirSync(dir, { recursive: true });
     const fresh = workspace.emptyWorkspace();
     fresh.meta = { name, createdAt: new Date().toISOString() };
     fresh.ui = { ...fresh.ui, lastView: 'research' };
-    fresh.sourcePreferences = { ...fresh.sourcePreferences, searchTab: 'international' };
+    fresh.sourcePreferences = { ...fresh.sourcePreferences, searchTab: 'china' };
     writeJsonAtomic(path.join(dir, 'workspace.json'), fresh);
     const now = new Date().toISOString();
     index.projects = [{ id, name, createdAt: now, updatedAt: now }, ...index.projects];
@@ -564,7 +583,7 @@ function registerIpc() {
     const { workspace } = await modules();
     const paths = dataPaths();
     const index = ensureProjectsIndex();
-    const id = String(payload.id || '').trim();
+    const id = normalizeProjectId(payload.id);
     if (!index.projects.some((item) => item.id === id)) throw new TypeError('项目不存在');
     index.activeId = id;
     writeJsonAtomic(paths.projectsIndex, index);
@@ -579,7 +598,7 @@ function registerIpc() {
   registerHandle('projects:rename', async (_event, payload = {}) => {
     const paths = dataPaths();
     const index = ensureProjectsIndex();
-    const id = String(payload.id || index.activeId || '').trim();
+    const id = normalizeProjectId(payload.id || index.activeId);
     const name = String(payload.name || '').trim().slice(0, 120);
     if (!name) throw new TypeError('项目名称不能为空');
     if (!index.projects.some((item) => item.id === id)) throw new TypeError('项目不存在');
@@ -604,14 +623,20 @@ function registerIpc() {
     const paths = dataPaths();
     const index = ensureProjectsIndex();
     if (index.projects.length <= 1) throw new Error('至少保留一个项目');
-    const id = String(payload.id || '').trim();
+    const id = normalizeProjectId(payload.id);
     if (!index.projects.some((item) => item.id === id)) throw new TypeError('项目不存在');
+    const projectDir = projectDirFor(paths.projectsDir, id);
+    if (fs.existsSync(projectDir)) {
+      try {
+        await shell.trashItem(projectDir);
+      } catch {
+        fs.mkdirSync(paths.projectsTrashDir, { recursive: true });
+        fs.renameSync(projectDir, path.join(paths.projectsTrashDir, `${id}-${Date.now()}`));
+      }
+    }
     index.projects = index.projects.filter((item) => item.id !== id);
     if (index.activeId === id) index.activeId = index.projects[0].id;
     writeJsonAtomic(paths.projectsIndex, index);
-    try {
-      fs.rmSync(path.join(paths.projectsDir, id), { recursive: true, force: true });
-    } catch { /* ignore */ }
     const file = activeWorkspacePath();
     return {
       ok: true,
@@ -705,7 +730,7 @@ function registerIpc() {
     if (browserLoadTimer) clearTimeout(browserLoadTimer);
     view.setBounds(validateBounds(payload.bounds));
     notifyBrowser({ state: 'loading', url, navigationId });
-    // Slow academic sites often need >30s; never detach on timeout — that causes blank panels.
+    // Keep loading in place, but surface an actionable slow-site status promptly.
     browserLoadTimer = setTimeout(() => {
       if (navigationId !== browserNavigationId || !browserViewAttached) return;
       notifyBrowser({
@@ -716,7 +741,7 @@ function registerIpc() {
         message: '站点加载较慢，可能受登录、验证码、证书或网络策略限制。内嵌页面仍保留，也可改用系统浏览器。',
         workaround: 'open-external',
       });
-    }, 60_000);
+    }, 15_000);
     if (view.webContents.getURL() === url && !view.webContents.isLoading()) {
       clearTimeout(browserLoadTimer);
       browserLoadTimer = null;
@@ -946,6 +971,33 @@ function createWindow() {
         await mainWindow.webContents.executeJavaScript(`document.querySelector('[data-view="${captureView}"]')?.click()`);
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
+      if (verifyCustomSite) {
+        const customSiteVerification = await mainWindow.webContents.executeJavaScript(`(async () => {
+          document.querySelector('[data-view="browser"]').click();
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          const before = await window.selenyx.readWorkspace();
+          const url = 'https://example.org/';
+          const existedBefore = before.workspace.ui.browserSites.some((site) => site.url === url);
+          if (!existedBefore) {
+            document.querySelector('#browser-add-site').click();
+            document.querySelector('#site-name-input').value = '验收自定义站点';
+            document.querySelector('#site-url-input').value = url;
+            document.querySelector('#site-form').requestSubmit();
+            await new Promise((resolve) => setTimeout(resolve, 700));
+          }
+          const after = await window.selenyx.readWorkspace();
+          const cardTexts = [...document.querySelectorAll('#browser-sites .site-card')].map((node) => node.textContent);
+          return {
+            existedBefore,
+            persisted: after.workspace.ui.browserSites.some((site) => site.name === '验收自定义站点' && site.url === url),
+            domCardVisible: cardTexts.some((text) => text.includes('验收自定义站点')),
+            modalHidden: document.querySelector('#site-modal').hidden,
+            customSiteCount: after.workspace.ui.browserSites.length,
+          };
+        })()`);
+        fs.writeFileSync(path.join(captureDirectory, 'custom-site-verification.json'), JSON.stringify(customSiteVerification, null, 2), 'utf8');
+      }
+
       if (captureView === 'skills') {
         await mainWindow.webContents.executeJavaScript(`(() => {
           const input = document.querySelector('#assistant-brief');
@@ -973,8 +1025,8 @@ function createWindow() {
         })()`);
         let browserState = 'loading';
         for (let attempt = 0; attempt < 350; attempt += 1) {
-          browserState = await mainWindow.webContents.executeJavaScript("document.querySelector('#browser-status').hidden ? 'ready' : document.querySelector('#browser-status h3')?.textContent || 'loading'");
-          if (browserState === 'ready' || /无法|限制|失败/.test(browserState)) break;
+          browserState = await mainWindow.webContents.executeJavaScript("document.querySelector('#browser-status').dataset.state || 'loading'");
+          if (['ready', 'blocked', 'slow'].includes(browserState)) break;
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
         const browserVerification = {
@@ -1033,10 +1085,12 @@ function createWindow() {
       }
 
       if (captureSearch) {
-        await mainWindow.webContents.executeJavaScript(`(() => {
+        await mainWindow.webContents.executeJavaScript(`(async () => {
           document.querySelector('[data-view="research"]').click();
+          document.querySelector('[data-search-tab="international"]').click();
+          await new Promise((resolve) => setTimeout(resolve, 180));
           document.querySelector('#literature-query').value = ${JSON.stringify(captureSearch)};
-          document.querySelector('#search-mode').value = 'broad';
+          document.querySelector('#search-mode').value = 'auto';
           document.querySelector('#literature-search-form button').click();
         })()`);
         for (let attempt = 0; attempt < 400; attempt += 1) {
