@@ -281,3 +281,22 @@ test('desktop: multi-project IPC is Hermes-style free create/switch', () => {
   assert.match(html, /id=\"project-list\"/);
   assert.match(html, /随时切换/);
 });
+
+test('desktop: new projects start from a required research question', () => {
+  assert.match(html, /id="project-modal"/);
+  assert.match(html, /name="question"[^>]*required/);
+  assert.match(main, /创建研究项目必须填写核心研究问题/);
+  assert.match(main, /assistant\.buildResearchPlan\(question/);
+});
+
+test('desktop: PDF reader exposes persistent verification controls and a Windows icon', () => {
+  const reader = fs.readFileSync(new URL('../desktop/renderer/modules/reader.js', import.meta.url), 'utf8');
+  const desktopPackage = JSON.parse(fs.readFileSync(new URL('../desktop/package.json', import.meta.url), 'utf8'));
+  for (const id of ['reader-page-input', 'reader-fit-width', 'reader-rotate', 'reader-find-input']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.match(reader, /textItemStart/);
+  assert.match(reader, /persistReaderState/);
+  assert.equal(desktopPackage.build.win.icon, 'assets/icon.ico');
+  assert.equal(desktopPackage.build.win.signAndEditExecutable, true);
+});

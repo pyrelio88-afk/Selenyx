@@ -146,15 +146,26 @@ async function searchPubMed(query, opts = {}) {
 }
 
 function deduplicateRecords(records) {
-  const seen = new Set();
   const output = [];
+  const normalizedTitle = (value) => String(value ?? '').toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const authorKeys = (record) => new Set((record.authors ?? []).map((author) => {
+    const parts = normalizedTitle(author).split(' ').filter(Boolean);
+    return parts.at(-1) ?? '';
+  }).filter(Boolean));
   for (const record of records) {
-    const doi = record.externalIds?.doi;
-    const titleKey = record.title.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-    const key = doi ? `doi:${doi}` : `title:${titleKey}:${record.year ?? ''}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    output.push(record);
+    const doi = String(record.externalIds?.doi ?? '').toLocaleLowerCase();
+    const titleKey = normalizedTitle(record.title);
+    const incomingAuthors = authorKeys(record);
+    const duplicate = output.some((existing) => {
+      const existingDoi = String(existing.externalIds?.doi ?? '').toLocaleLowerCase();
+      if (doi && existingDoi && doi === existingDoi) return true;
+      if (!titleKey || normalizedTitle(existing.title) !== titleKey) return false;
+      if (record.year && existing.year && record.year === existing.year) return true;
+      const existingAuthors = authorKeys(existing);
+      return [...incomingAuthors].some((author) => existingAuthors.has(author));
+    });
+    if (!duplicate) output.push(record);
   }
   return output;
 }

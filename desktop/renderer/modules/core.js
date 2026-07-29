@@ -3,7 +3,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const state = {
-  view: 'research',
+  view: 'question',
   searchTab: 'china',
   sources: [],
   searchResult: null,
@@ -19,7 +19,7 @@ const state = {
 };
 
 const paths = {
-  moon: ['M12 3a9 9 0 1 0 9 9c-3.8 2.2-8.8-.1-8.8-4.5 0-2 1.1-3.7 2.8-4.6A9 9 0 0 0 12 3Z'],
+  moon: ['M12 3a9 9 0 1 0 9 9c-3.8 2.2-8.8-.1-8.8-4.5 0-2 1.1-3.7 2.8-4.6A9 9 0 0 0 12 3Z', 'm18 3 .5 1.5L20 5l-1.5.5L18 7l-.5-1.5L16 5l1.5-.5Z'],
   search: ['m21 21-4.3-4.3', 'M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z'],
   library: ['M4 5h16v15H4z', 'M8 3v4', 'M16 3v4', 'M8 11h8', 'M8 15h5'],
   reader: ['M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3Z', 'M5 4v16a3 3 0 0 1 3-3h11'],
@@ -36,6 +36,16 @@ const paths = {
   'panel-right': ['M4 4h16v16H4z', 'M15 4v16'],
   highlight: ['m5 16 7-12 7 12', 'M8 12h8', 'M4 20h16'],
   note: ['M5 4h14v16H5z', 'M8 8h8', 'M8 12h6'],
+  question: ['M9.1 9a3 3 0 1 1 4.7 2.5c-1.2.8-1.8 1.4-1.8 2.5', 'M12 18h.01', 'M4 4h16v16H4z'],
+  synthesis: ['M4 6h6v5H4z', 'M14 13h6v5h-6z', 'M10 8h4', 'M12 8v7'],
+  chart: ['M5 20V10', 'M12 20V4', 'M19 20v-7', 'M3 20h18'],
+  experiment: ['M9 3h6', 'M10 3v5l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V3', 'M8 15h8'],
+  upload: ['M12 16V4', 'm7 9 5-5 5 5', 'M5 20h14'],
+  'chevron-left': ['m15 5-7 7 7 7'],
+  'chevron-right': ['m9 5 7 7-7 7'],
+  minus: ['M5 12h14'],
+  'fit-width': ['M4 7V4h3', 'M17 4h3v3', 'M4 17v3h3', 'M17 20h3v-3', 'M7 12h10', 'm9 9-3 3 3 3', 'm15 9 3 3-3 3'],
+  rotate: ['M20 7v5h-5', 'M19 12a7 7 0 1 1-2-5'],
 };
 
 function icon(name) {

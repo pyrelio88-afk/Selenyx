@@ -34,6 +34,10 @@ const verifyLayoutFile = verifyLayoutArgument ? path.resolve(verifyLayoutArgumen
 const verifyBrowserArgument = process.argv.find((item) => item.startsWith('--verify-browser-url='));
 const verifyBrowserUrl = verifyBrowserArgument ? decodeURIComponent(verifyBrowserArgument.slice('--verify-browser-url='.length)) : null;
 const verifyCustomSite = process.argv.includes('--verify-custom-site');
+const verifyResearchProject = process.argv.includes('--verify-research-project');
+const captureProjectModal = process.argv.includes('--capture-project-modal');
+const verifyPdfArgument = process.argv.find((item) => item.startsWith('--verify-reader-pdf='));
+const verifyPdfFile = verifyPdfArgument ? path.resolve(verifyPdfArgument.slice('--verify-reader-pdf='.length)) : null;
 
 if (captureDirectory) {
   fs.mkdirSync(captureDirectory, { recursive: true });
@@ -101,7 +105,7 @@ function ensureProjectsIndex() {
     }
     if (!fs.existsSync(target)) {
       // written later when workspace module available; placeholder empty object
-      writeJsonAtomic(target, { schemaVersion: 1, meta: { name: '默认项目', createdAt: new Date().toISOString() }, library: [], annotations: [], evidence: [], assistant: { plan: null, history: [] }, drafts: { writing: '', figureBrief: '', experimentLog: '' }, sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'china' }, ui: { leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false, lastView: 'research', selectedSourceId: null, browserSites: [], browserFavorites: [], browserRecent: [] }, updatedAt: new Date().toISOString() });
+      writeJsonAtomic(target, { schemaVersion: 1, meta: { name: '默认项目', createdAt: new Date().toISOString() }, library: [], annotations: [], evidence: [], assistant: { plan: null, history: [] }, drafts: { writing: '', figureBrief: '', experimentLog: '' }, sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'china' }, ui: { leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false, lastView: 'question', selectedSourceId: null, readerState: {}, browserSites: [], browserFavorites: [], browserRecent: [] }, updatedAt: new Date().toISOString() });
     }
     index = {
       schemaVersion: 1,
@@ -556,17 +560,23 @@ function registerIpc() {
   registerHandle('projects:list', async () => listProjectsPublic());
 
   registerHandle('projects:create', async (_event, payload = {}) => {
-    const { workspace } = await modules();
+    const { workspace, assistant } = await modules();
     const paths = dataPaths();
     const index = ensureProjectsIndex();
     const name = String(payload.name || '').trim().slice(0, 120) || `项目 ${new Date().toLocaleString()}`;
+    const question = String(payload.question || '').trim().slice(0, 20_000);
+    if (!question) throw new TypeError('创建研究项目必须填写核心研究问题');
     const id = crypto.randomUUID();
     const dir = projectDirFor(paths.projectsDir, id);
     fs.mkdirSync(dir, { recursive: true });
     const fresh = workspace.emptyWorkspace();
     fresh.meta = { name, createdAt: new Date().toISOString() };
-    fresh.ui = { ...fresh.ui, lastView: 'research' };
+    fresh.ui = { ...fresh.ui, lastView: 'question' };
     fresh.sourcePreferences = { ...fresh.sourcePreferences, searchTab: 'china' };
+    fresh.assistant = {
+      plan: assistant.buildResearchPlan(question, { libraryCount: 0, evidenceCount: 0, selectedSourceId: null }),
+      history: [{ at: new Date().toISOString(), action: 'plan:set', detail: question.slice(0, 2_000) }],
+    };
     writeJsonAtomic(path.join(dir, 'workspace.json'), fresh);
     const now = new Date().toISOString();
     index.projects = [{ id, name, createdAt: now, updatedAt: now }, ...index.projects];
@@ -905,7 +915,7 @@ function createWindow() {
     show: !captureDirectory,
     title: 'Selenyx — 科研助手',
     backgroundColor: '#fbfaf7',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -970,6 +980,139 @@ function createWindow() {
       if (captureView !== 'research') {
         await mainWindow.webContents.executeJavaScript(`document.querySelector('[data-view="${captureView}"]')?.click()`);
         await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      if (verifyResearchProject) {
+        const projectVerification = await mainWindow.webContents.executeJavaScript(`(async () => {
+          document.querySelector('#new-session').click();
+          const form = document.querySelector('#project-form');
+          form.elements.name.value = '可核验研究项目';
+          form.elements.question.value = '开放获取政策如何影响跨学科研究成果的可复核性？';
+          form.requestSubmit();
+          for (let attempt = 0; attempt < 80; attempt += 1) {
+            const response = await window.selenyx.readWorkspace();
+            if (response.workspace?.assistant?.plan?.question) break;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          const response = await window.selenyx.readWorkspace();
+          return {
+            modalHidden: document.querySelector('#project-modal').hidden,
+            projectName: response.workspace.meta.name,
+            question: response.workspace.assistant?.plan?.question || null,
+            taskCount: response.workspace.assistant?.plan?.tasks?.length || 0,
+            lastView: response.workspace.ui.lastView,
+            questionVisible: document.querySelector('#question-view').classList.contains('active'),
+          };
+        })()`);
+        fs.writeFileSync(path.join(captureDirectory, 'project-verification.json'), JSON.stringify(projectVerification, null, 2), 'utf8');
+      }
+      if (captureProjectModal) {
+        await mainWindow.webContents.executeJavaScript("document.querySelector('#new-session').click()");
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+      if (verifyPdfFile) {
+        if (!fs.existsSync(verifyPdfFile)) throw new Error(`PDF 验收文件不存在：${verifyPdfFile}`);
+        const readerDemo = path.basename(verifyPdfFile).toLowerCase().includes('attention-is-all-you-need');
+        const paperId = readerDemo ? 'attention-is-all-you-need.pdf' : 'verification-paper.pdf';
+        const paperDirectory = path.join(app.getPath('userData'), 'papers');
+        fs.mkdirSync(paperDirectory, { recursive: true });
+        fs.copyFileSync(verifyPdfFile, path.join(paperDirectory, paperId));
+        const stat = fs.statSync(verifyPdfFile);
+        const record = {
+          id: 'local:pdf-verification',
+          title: readerDemo ? 'Attention Is All You Need' : 'Selenyx PDF verification paper',
+          authors: readerDemo ? ['Ashish Vaswani', 'Noam Shazeer', 'Niki Parmar et al.'] : ['Selenyx QA'],
+          year: readerDemo ? 2017 : 2026,
+          venue: readerDemo ? 'arXiv:1706.03762' : 'Local verification fixture',
+          abstract: readerDemo ? 'The Transformer architecture based solely on attention mechanisms.' : 'A local two-page PDF used only for deterministic reader verification.',
+          url: null,
+          sourceType: 'pdf',
+          reality: 'real',
+          externalIds: {},
+          localPdf: { id: paperId, name: path.basename(verifyPdfFile), bytes: stat.size, importedAt: new Date().toISOString() },
+        };
+        const pdfVerification = await mainWindow.webContents.executeJavaScript(`(async () => {
+          const core = await import('./modules/core.js');
+          const reader = await import('./modules/reader.js');
+          await core.workspaceEvent({ type: 'library:save', record: ${JSON.stringify(record)} });
+          core.state.selectedSource = core.state.workspace.library.find((item) => item.id === 'local:pdf-verification');
+          await core.workspaceEvent({ type: 'ui:patch', patch: { selectedSourceId: core.state.selectedSource.id, lastView: 'reader' } });
+          await core.setView('reader');
+          reader.renderReader();
+          for (let attempt = 0; attempt < 120; attempt += 1) {
+            if (!document.querySelector('#pdf-stage').hidden && document.querySelector('#pdf-canvas').width > 0 && document.querySelectorAll('#pdf-text-layer span').length) break;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          const beforeActionsSnapshot = await window.selenyx.readWorkspace();
+          const restoredBeforeActions = {
+            readerState: beforeActionsSnapshot.workspace.ui.readerState['local:pdf-verification'] || null,
+            annotationCount: beforeActionsSnapshot.workspace.annotations.filter((item) => item.sourceId === 'local:pdf-verification').length,
+            evidenceCount: beforeActionsSnapshot.workspace.evidence.filter((item) => item.sourceId === 'local:pdf-verification').length,
+          };
+          const pageInput = document.querySelector('#reader-page-input');
+          pageInput.value = '${readerDemo ? '1' : '2'}';
+          pageInput.dispatchEvent(new Event('change', { bubbles: true }));
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          if (${JSON.stringify(!readerDemo)}) {
+            document.querySelector('#reader-rotate').click();
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+          document.querySelector('#reader-fit-width').click();
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          document.querySelector('#reader-find-input').value = ${JSON.stringify(readerDemo ? 'attention' : 'evidence audit')};
+          document.querySelector('#reader-find-next').click();
+          for (let attempt = 0; attempt < 80; attempt += 1) {
+            if (document.querySelectorAll('#pdf-text-layer .pdf-find-match').length > 0) break;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          const selectText = () => {
+            const span = [...document.querySelectorAll('#pdf-text-layer span')].find((node) => node.firstChild && node.textContent.trim().length >= 8);
+            if (!span) return null;
+            const range = document.createRange();
+            range.setStart(span.firstChild, 0);
+            range.setEnd(span.firstChild, Math.min(12, span.textContent.length));
+            const selection = getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            return span.textContent.slice(0, 12);
+          };
+          const selectedQuote = selectText();
+          document.querySelector('[data-reader-action="highlight"]').click();
+          for (let attempt = 0; attempt < 80; attempt += 1) {
+            const snapshot = await window.selenyx.readWorkspace();
+            if (snapshot.workspace.annotations.length) break;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          selectText();
+          document.querySelector('[data-reader-action="evidence"]').click();
+          for (let attempt = 0; attempt < 80; attempt += 1) {
+            const snapshot = await window.selenyx.readWorkspace();
+            if (snapshot.workspace.evidence.length) break;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          const snapshot = await window.selenyx.readWorkspace();
+          const left = document.querySelector('.reader-toolbar-left').getBoundingClientRect();
+          const tools = document.querySelector('.reader-tools').getBoundingClientRect();
+          const overlaps = !(left.right <= tools.left || tools.right <= left.left || left.bottom <= tools.top || tools.bottom <= left.top);
+          return {
+            restoredBeforeActions,
+            stageVisible: !document.querySelector('#pdf-stage').hidden,
+            page: Number(document.querySelector('#reader-page-input').value),
+            total: document.querySelector('#reader-page-total').textContent,
+            canvas: { width: document.querySelector('#pdf-canvas').width, height: document.querySelector('#pdf-canvas').height },
+            textSpanCount: document.querySelectorAll('#pdf-text-layer span').length,
+            textSpanDiagnostics: [...document.querySelectorAll('#pdf-text-layer span')].map((node) => ({ text: node.textContent, childNodes: node.childNodes.length, firstNodeType: node.firstChild?.nodeType || null })),
+            markedSpanCount: document.querySelectorAll('#pdf-text-layer .pdf-annotated').length,
+            findMatchCount: document.querySelectorAll('#pdf-text-layer .pdf-find-match').length,
+            selectedQuote,
+            annotation: snapshot.workspace.annotations[0] || null,
+            evidence: snapshot.workspace.evidence[0] || null,
+            readerState: snapshot.workspace.ui.readerState['local:pdf-verification'] || null,
+            toolbarOverlaps: overlaps,
+          };
+        })()`);
+        fs.writeFileSync(path.join(captureDirectory, 'pdf-reader-verification.json'), JSON.stringify(pdfVerification, null, 2), 'utf8');
       }
       if (verifyCustomSite) {
         const customSiteVerification = await mainWindow.webContents.executeJavaScript(`(async () => {
@@ -1122,6 +1265,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32') app.setAppUserModelId('com.selenyx.desktop');
   Menu.setApplicationMenu(null);
   registerIpc();
   createWindow();

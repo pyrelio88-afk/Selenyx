@@ -142,6 +142,14 @@ test('deduplication falls back to normalized title and year', () => {
   assert.equal(deduplicateRecords([a, b]).length, 1);
 });
 
+test('deduplication keeps first authoritative metadata when title and authors match across sources', () => {
+  const openAlex = createSourceRecord({ title: 'Attention Is All You Need', authors: ['Ashish Vaswani'], year: 2017, externalIds: { openalex: 'W1' } });
+  const crossref = createSourceRecord({ title: 'Attention Is All You Need', authors: ['A. Vaswani'], year: 2025, externalIds: { doi: '10.0000/updated' } });
+  const result = deduplicateRecords([openAlex, crossref]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].year, 2017);
+});
+
 test('combined service exposes a partial upstream failure', async () => {
   const service = new LiteratureSearchService({
     fetchImpl: async (url) => {

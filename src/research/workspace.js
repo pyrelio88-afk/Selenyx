@@ -17,7 +17,7 @@ function emptyWorkspace() {
     sourcePreferences: { international: ['openalex', 'pubmed', 'crossref'], searchTab: 'china' },
     ui: {
       leftWidth: 232, rightWidth: 304, leftCollapsed: false, rightCollapsed: false,
-      lastView: 'research', selectedSourceId: null,
+      lastView: 'question', selectedSourceId: null, readerState: {},
       browserSites: [], browserFavorites: [], browserRecent: [],
     },
     updatedAt: nowIso(),
@@ -139,7 +139,16 @@ function normalizeWorkspace(input) {
 function anchor(input) {
   const value = object(input);
   const start = Math.max(0, Math.trunc(Number(value.start) || 0));
-  return { start, end: Math.max(start, Math.trunc(Number(value.end) || start)) };
+  const normalized = { start, end: Math.max(start, Math.trunc(Number(value.end) || start)) };
+  const itemStart = Math.trunc(Number(value.textItemStart));
+  const itemEnd = Math.trunc(Number(value.textItemEnd));
+  if (Number.isInteger(itemStart) && itemStart >= 0) normalized.textItemStart = itemStart;
+  if (Number.isInteger(itemEnd) && itemEnd >= 0) normalized.textItemEnd = Math.max(itemStart || 0, itemEnd);
+  const startOffset = Math.trunc(Number(value.startOffset));
+  const endOffset = Math.trunc(Number(value.endOffset));
+  if (Number.isInteger(startOffset) && startOffset >= 0) normalized.startOffset = startOffset;
+  if (Number.isInteger(endOffset) && endOffset >= 0) normalized.endOffset = endOffset;
+  return normalized;
 }
 
 function applyWorkspaceEvent(current, event) {
@@ -172,6 +181,7 @@ function applyWorkspaceEvent(current, event) {
       method: ['selection', 'abstract', 'manual'].includes(item.method) ? item.method : 'manual',
       review: ['unreviewed', 'accepted', 'rejected', 'needs-check'].includes(item.review) ? item.review : 'unreviewed',
       relation: ['supports', 'contradicts', 'qualifies'].includes(item.relation) ? item.relation : 'supports',
+      page: Number.isInteger(item.page) && item.page > 0 ? item.page : null,
       createdAt: text(item.createdAt, 80) || nowIso(),
     };
     state.evidence.push(result);

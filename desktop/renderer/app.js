@@ -68,7 +68,7 @@ function applyWorkspaceSnapshot(workspace) {
   state.readerOutput = '';
   state.messages = [];
   state.activeSearchId = null;
-  state.searchTab = workspace.sourcePreferences?.searchTab || 'international';
+  state.searchTab = workspace.sourcePreferences?.searchTab || 'china';
   updateCounts();
   renderControls();
   renderResults();
@@ -153,23 +153,41 @@ async function projectContextMenu(project) {
     state.activeProjectId = response.activeId;
     if (response.workspace) applyWorkspaceSnapshot(response.workspace);
     else renderProjectList();
-    await setView(state.workspace?.ui?.lastView || 'research', false);
+    await setView(state.workspace?.ui?.lastView || 'question', false);
     toast('项目已删除');
   }
 }
 
-/** Hermes-style: create project instantly, never lock the user on a gate page. */
 async function startNewResearch() {
-  const name = (window.prompt('新项目名称', `研究 ${new Date().toLocaleDateString()}`) || '').trim();
-  if (!name) return;
-  const response = await api.projects.create({ name });
+  const modal = $('#project-modal');
+  const form = $('#project-form');
+  form.reset();
+  form.elements.name.value = `研究 ${new Date().toLocaleDateString()}`;
+  modal.hidden = false;
+  requestAnimationFrame(() => form.elements.question.focus());
+}
+
+async function submitNewResearch(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = form.elements.name.value.trim();
+  const question = form.elements.question.value.trim();
+  if (!name || !question) return toast('请填写项目名称和核心研究问题', 'error');
+  const button = form.querySelector('button.primary-button');
+  button.disabled = true;
+  button.textContent = '正在创建…';
+  const response = await api.projects.create({ name, question });
+  button.disabled = false;
+  button.textContent = '创建项目并生成路径';
   if (!response?.ok) return toast(response?.error?.message || '创建项目失败', 'error');
+  $('#project-modal').hidden = true;
   state.projects = response.projects || [];
   state.activeProjectId = response.activeId;
   applyWorkspaceSnapshot(response.workspace);
-  if ($('#research-question-input')) $('#research-question-input').value = '';
-  await setView('research', true);
-  toast(`已创建项目「${name}」· 可自由使用侧栏全部功能`);
+  if ($('#research-question-input')) $('#research-question-input').value = question;
+  if ($('#assistant-brief')) $('#assistant-brief').value = question;
+  await setView('question', true);
+  toast(`已创建「${name}」并生成离线研究路径`);
 }
 
 async function renameProject() {
@@ -258,6 +276,10 @@ async function boot() {
   // Free navigation: every sidebar item just switches view. No gates.
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
   $('#new-session').addEventListener('click', startNewResearch);
+  $('#project-form').addEventListener('submit', submitNewResearch);
+  $$('[data-close-modal="project-modal"]').forEach((button) => button.addEventListener('click', () => {
+    $('#project-modal').hidden = true;
+  }));
   $('#collapse-left').addEventListener('click', async () => {
     const collapsed = !$('#app').classList.contains('left-collapsed');
     $('#app').classList.toggle('left-collapsed', collapsed);
@@ -279,10 +301,8 @@ async function boot() {
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
 
   const known = ['question', 'research', 'library', 'reader', 'browser', 'chat', 'evidence', 'skills', 'write', 'figure', 'experiment'];
-  let startView = state.workspace.ui.lastView || 'research';
-  if (!known.includes(startView)) startView = 'research';
-  // Never force-lock users on the question page.
-  if (startView === 'question' && !state.workspace.assistant?.plan) startView = 'research';
+  let startView = state.workspace.ui.lastView || 'question';
+  if (!known.includes(startView)) startView = 'question';
   await setView(startView, false);
 }
 

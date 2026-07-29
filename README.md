@@ -11,18 +11,34 @@ Selenyx is a cross-disciplinary research assistant with two surfaces:
 
 The product language is intentionally quiet and restrained: paper white, cinnabar accents, explicit provenance, and no invented results.
 
+## Desktop preview
+
+A research starts with a required question and an offline-generated evidence plan:
+
+![Selenyx research question workbench](docs/media/selenyx-research-question.png)
+
+Real title search keeps each upstream status visible and does not turn website handoffs into API records:
+
+![Selenyx real literature search](docs/media/selenyx-real-search.png)
+
+The local PDF reader supports page navigation, fit/zoom/rotation, in-document search, anchored highlights, annotations, and evidence capture:
+
+![Selenyx local PDF reader](docs/media/selenyx-pdf-reader.png)
+
 ## Status
 
 The current worktree is an **unpublished `0.9.1-rc.1` validation candidate** on `refactor/r0.8-hermes-workbench`. R0.7 remains unchanged.
 
-- **418 automated tests pass locally**, including workspace reset, evidence relation review, resize synchronization, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
+- **424 automated tests pass locally**, including research-question gating, PDF locator persistence, evidence relation review, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
 - Critical usability fixes in this handoff:
-  - empty-state no longer covers real search results
-  - search results get a sticky toolbar + bulk save
-  - reader annotations work without perfect text selection
-  - embedded browser waits for layout before painting bounds
+  - every new project requires a research question and starts at Gate 0
+  - exact-title auto detection rejects loose Crossref keyword matches for fabricated titles
+  - the PDF canvas now appears in the first screen instead of below a 600px metadata card
+  - PDF loading/rendering is single-flight; page, zoom, rotation, annotations, and evidence survive restart
+  - cross-source duplicates keep the first authoritative record instead of showing repeated cards
 - Architecture diagram: [`docs/architecture.svg`](docs/architecture.svg)
 - Open-source lessons: [`docs/OPEN-SOURCE-LESSONS.zh-CN.md`](docs/OPEN-SOURCE-LESSONS.zh-CN.md)
+- R0.9.1 research-workbench audit (14 projects): [docs/research/R091-HERMES-RESEARCH-WORKBENCH-AUDIT.md](docs/research/R091-HERMES-RESEARCH-WORKBENCH-AUDIT.md)
 - 9 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
 - 8 China sources: PubScholar, ChinaXiv, NSTL, NCPSSD, SinoMed, CNKI, Wanfang, CQVIP (R0.6: 0).
 - China sources are presented as honesty-guarded browser handoffs (search-link mode), never page scraping.
@@ -229,7 +245,7 @@ The suite covers the legacy evidence engine plus:
 - no-key and no-synthetic-fallback guarantees
 - desktop CSP, preload surface, security flags, layout contract, and settings contract
 
-The current local result is 400 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
+The current local result is 424 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
 
 ## Nature Skills adapter
 

@@ -13,7 +13,12 @@ function looksLikeTitleQuery(query) {
   const normalized = normalize(raw);
   const cjk = normalized.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu)?.length ?? 0;
   const words = normalized.split(' ').filter(Boolean);
-  return cjk >= 16 || (normalized.length >= 55 && words.length >= 7);
+  const originalWords = raw.match(/[\p{L}\p{N}][\p{L}\p{N}-]*/gu) ?? [];
+  const titleCased = originalWords.filter((word) => /^\p{Lu}/u.test(word) || /^\d/u.test(word)).length;
+  const looksTitleCased = originalWords.length >= 5
+    && normalized.length >= 24
+    && titleCased / originalWords.length >= 0.6;
+  return cjk >= 16 || looksTitleCased || (normalized.length >= 45 && words.length >= 7);
 }
 
 function grams(value) {

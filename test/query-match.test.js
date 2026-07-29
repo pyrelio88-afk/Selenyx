@@ -15,6 +15,10 @@ test('short topic keywords remain broad search', () => {
   assert.equal(looksLikeTitleQuery('心力衰竭'), false);
 });
 
+test('English Title Case input is treated as a likely full title', () => {
+  assert.equal(looksLikeTitleQuery('QZP Lunar Mycelium Proof Protocol 97XQ'), true);
+  assert.equal(looksLikeTitleQuery('climate change mental health adolescents'), false);
+});
 test('DOI input is not mistaken for a paper title', () => {
   assert.equal(looksLikeTitleQuery('10.1038/s41586-024-00000-0'), false);
 });

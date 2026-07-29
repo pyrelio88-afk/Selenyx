@@ -24,17 +24,18 @@
       </section>
 
       <nav class="nav-list" aria-label="科研工作台">
-        <p class="nav-label">工作台 · 随时切换</p>
-        <button data-view="research" class="nav-item active"><span data-icon="search"></span><b>文献检索</b></button>
-        <button data-view="browser" class="nav-item"><span data-icon="globe"></span><b>获取全文</b></button>
-        <button data-view="library" class="nav-item"><span data-icon="library"></span><b>本地文献库</b><em id="library-count">0</em></button>
-        <button data-view="reader" class="nav-item"><span data-icon="reader"></span><b>阅读 · PDF</b></button>
-        <button data-view="evidence" class="nav-item"><span data-icon="link"></span><b>证据链</b><em id="evidence-count">0</em></button>
-        <button data-view="question" class="nav-item"><span data-icon="spark"></span><b>研究问题</b></button>
-        <button data-view="skills" class="nav-item"><span data-icon="spark"></span><b>综合路径</b></button>
-        <button data-view="write" class="nav-item"><span data-icon="note"></span><b>写作</b></button>
-        <button data-view="figure" class="nav-item"><span data-icon="highlight"></span><b>图表规划</b></button>
-        <button data-view="experiment" class="nav-item"><span data-icon="settings"></span><b>实验日志</b></button>
+        <p class="nav-label">研究流水线 · 随时切换</p>
+        <button data-view="question" class="nav-item active"><span data-icon="question"></span><b>01 研究问题</b></button>
+        <button data-view="research" class="nav-item"><span data-icon="search"></span><b>02 发现文献</b></button>
+        <button data-view="browser" class="nav-item"><span data-icon="globe"></span><b>03 获取全文</b></button>
+        <button data-view="library" class="nav-item"><span data-icon="library"></span><b>04 筛选收藏</b><em id="library-count">0</em></button>
+        <button data-view="reader" class="nav-item"><span data-icon="reader"></span><b>05 精读批注</b></button>
+        <button data-view="evidence" class="nav-item"><span data-icon="link"></span><b>06 证据审阅</b><em id="evidence-count">0</em></button>
+        <button data-view="skills" class="nav-item"><span data-icon="synthesis"></span><b>07 综合路径</b></button>
+        <button data-view="write" class="nav-item"><span data-icon="note"></span><b>08 证据写作</b></button>
+        <p class="nav-label">研究工具</p>
+        <button data-view="figure" class="nav-item"><span data-icon="chart"></span><b>图表规划</b></button>
+        <button data-view="experiment" class="nav-item"><span data-icon="experiment"></span><b>实验日志</b></button>
         <button data-view="chat" class="nav-item"><span data-icon="message"></span><b>科研对话</b></button>
       </nav>
 
@@ -55,12 +56,12 @@
       </header>
 
       <!-- 1. Question -->
-      <section id="question-view" class="view">
+      <section id="question-view" class="view active">
         <div class="content-column">
           <header class="page-intro">
-            <p class="kicker">OPTIONAL · PROJECT BRIEF</p>
-            <h2>研究问题（可选，不挡其他功能）</h2>
-            <p>像 Hermes 一样：先建项目，侧栏任意切换检索 / 浏览器 / PDF / 写作。这里只是帮你整理问题与路径，不是必过关卡。</p>
+            <p class="kicker">QUESTION · GATE 0</p>
+            <h2>先写下这个项目要回答的问题</h2>
+            <p>研究问题是项目的主线：它会生成本地研究路径，并贯穿检索、阅读、证据与写作。导航始终开放，但系统不会用空问题替你假装开始研究。</p>
           </header>
           <div class="question-card">
             <label for="research-question-input">当前项目的研究问题</label>
@@ -76,14 +77,14 @@
               <button id="question-to-search" class="secondary-button">去文献检索</button>
               <button id="question-to-browser" class="secondary-button">去获取全文</button>
             </div>
-            <p class="paper-hint">可随时离开本页。侧栏任何入口都可直接使用。</p>
+            <p class="paper-hint">路径由离线规则生成，不调用模型。保存后仍可随时修改问题或切换任意工作台。</p>
           </div>
           <div id="question-plan-preview" class="assistant-tasks" hidden></div>
         </div>
       </section>
 
       <!-- 2. Search -->
-      <section id="research-view" class="view active">
+      <section id="research-view" class="view">
         <div class="content-column">
           <header class="page-intro">
             <p class="kicker">DISCOVER · GATE 1</p>
@@ -139,12 +140,16 @@
         <div class="reader-shell">
           <div class="reader-toolbar">
             <div class="reader-toolbar-left">
-              <button id="reader-import-pdf" class="secondary-button" type="button">导入 PDF</button>
-              <button id="reader-prev-page" class="icon-button" type="button" aria-label="上一页">‹</button>
-              <span id="reader-page-label" class="reader-page-label">—</span>
-              <button id="reader-next-page" class="icon-button" type="button" aria-label="下一页">›</button>
-              <button id="reader-zoom-out" class="icon-button" type="button" aria-label="缩小">−</button>
-              <button id="reader-zoom-in" class="icon-button" type="button" aria-label="放大">+</button>
+              <button id="reader-import-pdf" class="secondary-button" type="button"><span data-icon="upload"></span>导入 PDF</button>
+              <button id="reader-prev-page" class="icon-button" data-icon="chevron-left" type="button" aria-label="上一页"></button>
+              <label class="reader-page-control"><span class="sr-only">页码</span><input id="reader-page-input" type="number" min="1" step="1" inputmode="numeric" aria-label="跳转页码"><span id="reader-page-total">/ —</span></label>
+              <button id="reader-next-page" class="icon-button" data-icon="chevron-right" type="button" aria-label="下一页"></button>
+              <button id="reader-zoom-out" class="icon-button" data-icon="minus" type="button" aria-label="缩小"></button>
+              <span id="reader-zoom-label" class="reader-zoom-label">—</span>
+              <button id="reader-zoom-in" class="icon-button" data-icon="plus" type="button" aria-label="放大"></button>
+              <button id="reader-fit-width" class="icon-button" data-icon="fit-width" type="button" aria-label="适合宽度"></button>
+              <button id="reader-rotate" class="icon-button" data-icon="rotate" type="button" aria-label="顺时针旋转"></button>
+              <label class="reader-find"><span data-icon="search"></span><input id="reader-find-input" type="search" placeholder="在 PDF 中查找" aria-label="在 PDF 中查找"><button id="reader-find-next" type="button">下一个</button></label>
             </div>
             <div class="reader-tools" aria-label="阅读工具">
               <button data-reader-action="highlight"><span data-icon="highlight"></span>高亮</button>
@@ -326,6 +331,22 @@
       <header><p class="kicker">CONTEXT</p><h2 id="context-title">研究上下文</h2></header>
       <div id="right-content" class="right-content"></div>
     </aside>
+  </div>
+
+  <div id="project-modal" class="modal-backdrop" hidden>
+    <form id="project-form" class="modal-card project-modal-card">
+      <header>
+        <div><p class="kicker">NEW RESEARCH PROJECT</p><h2>从一个研究问题开始</h2></div>
+        <button type="button" data-close-modal="project-modal" class="icon-button" data-icon="close" aria-label="关闭"></button>
+      </header>
+      <p class="modal-lead">项目、PDF、批注与证据只保存在本机。研究路径由确定性离线规则生成，不需要 Key。</p>
+      <label>项目名称<input name="name" maxlength="120" required placeholder="例如：生成式 AI 与科研可信度"></label>
+      <label>核心研究问题<textarea name="question" maxlength="20000" rows="5" required placeholder="例如：生成式 AI 对科研写作可核验性的影响有哪些支持、反驳与限定性证据？"></textarea></label>
+      <footer>
+        <button type="button" data-close-modal="project-modal" class="secondary-button">取消</button>
+        <button class="primary-button">创建项目并生成路径</button>
+      </footer>
+    </form>
   </div>
 
   <div id="manual-modal" class="modal-backdrop" hidden>

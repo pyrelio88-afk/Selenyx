@@ -43,8 +43,8 @@
         "nsis",
         "portable"
       ],
-      "icon": "assets/icon.png",
-      "signAndEditExecutable": false
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": true
     },
     "nsis": {
       "artifactName": "Selenyx-${version}-windows-${arch}-setup.${ext}",

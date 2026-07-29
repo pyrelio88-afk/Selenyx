@@ -5,6 +5,14 @@ let pdfDoc = null;
 let pdfPage = 1;
 let pdfScale = 1.15;
 let pdfLoading = false;
+let pdfRecordId = null;
+let pdfLoadingRecordId = null;
+let pdfLoadPromise = null;
+let pdfLoadGeneration = 0;
+let pdfRenderTask = null;
+let pdfRenderGeneration = 0;
+let pdfRotation = 0;
+let pdfSearchTerm = '';
 
 async function ensurePdfjs() {
   if (pdfjsLib) return pdfjsLib;
@@ -22,61 +30,163 @@ function base64ToUint8Array(base64) {
   return bytes;
 }
 
+function savedReaderState(recordId) {
+  return state.workspace?.ui?.readerState?.[recordId] || {};
+}
+
+async function persistReaderState() {
+  if (!state.selectedSource?.id || !pdfDoc) return;
+  const readerState = { ...(state.workspace?.ui?.readerState || {}) };
+  readerState[state.selectedSource.id] = { page: pdfPage, scale: pdfScale, rotation: pdfRotation };
+  await workspaceEvent({ type: 'ui:patch', patch: { readerState } });
+}
+
 async function loadPdfForRecord(record) {
   const stage = $('#pdf-stage');
   const paper = $('#reader-document');
   if (!record?.localPdf?.id) {
+    pdfLoadGeneration += 1;
+    pdfRenderGeneration += 1;
+    if (pdfRenderTask) {
+      try { pdfRenderTask.cancel(); } catch { /* The task may already be complete. */ }
+    }
+    pdfRenderTask = null;
     pdfDoc = null;
+    pdfRecordId = null;
+    pdfLoadingRecordId = null;
+    pdfLoadPromise = null;
+    pdfLoading = false;
+    $('#pdf-text-layer')?.replaceChildren();
+    const canvas = $('#pdf-canvas');
+    if (canvas) { canvas.width = 0; canvas.height = 0; }
     if (stage) stage.hidden = true;
     if (paper) paper.hidden = false;
     updatePageLabel();
     return false;
   }
-  try {
-    pdfLoading = true;
-    const pdfjs = await ensurePdfjs();
-    const response = await api.papers.read(record.localPdf.id);
-    if (!response?.ok) throw new Error(response?.error?.message || '无法读取 PDF');
-    const data = base64ToUint8Array(response.base64);
-    pdfDoc = await pdfjs.getDocument({ data }).promise;
-    pdfPage = 1;
+
+  if (pdfLoadPromise && pdfLoadingRecordId === record.id) return pdfLoadPromise;
+  if (pdfDoc && pdfRecordId === record.id) {
     if (paper) paper.hidden = false;
     if (stage) stage.hidden = false;
     paper?.classList.add('paper-compact');
+    const canvasReady = ($('#pdf-canvas')?.width || 0) > 0;
+    const textLayerReady = ($('#pdf-text-layer')?.childElementCount || 0) > 0;
+    if (canvasReady && textLayerReady) {
+      applyPdfMarks();
+      updatePageLabel();
+      return true;
+    }
     await renderPdfPage();
     return true;
-  } catch (error) {
-    toast(error.message || 'PDF 打开失败', 'error');
-    pdfDoc = null;
-    if (stage) stage.hidden = true;
-    if (paper) {
-      paper.hidden = false;
-      paper.classList.remove('paper-compact');
-    }
-    return false;
-  } finally {
-    pdfLoading = false;
-    updatePageLabel();
   }
-}
 
+  const generation = ++pdfLoadGeneration;
+  pdfLoading = true;
+  pdfLoadingRecordId = record.id;
+  const activePromise = (async () => {
+    try {
+      const pdfjs = await ensurePdfjs();
+      const response = await api.papers.read(record.localPdf.id);
+      if (!response?.ok) throw new Error(response?.error?.message || '无法读取 PDF');
+      const data = base64ToUint8Array(response.base64);
+      const nextDoc = await pdfjs.getDocument({ data }).promise;
+      if (generation !== pdfLoadGeneration || state.selectedSource?.id !== record.id) return false;
+      pdfDoc = nextDoc;
+      pdfRecordId = record.id;
+      const saved = savedReaderState(record.id);
+      pdfPage = Math.min(pdfDoc.numPages, Math.max(1, Number(saved.page) || 1));
+      pdfScale = Math.min(2.5, Math.max(0.55, Number(saved.scale) || 1.15));
+      pdfRotation = [0, 90, 180, 270].includes(Number(saved.rotation)) ? Number(saved.rotation) : 0;
+      pdfSearchTerm = '';
+      if (paper) paper.hidden = false;
+      if (stage) stage.hidden = false;
+      paper?.classList.add('paper-compact');
+      await renderPdfPage();
+      return true;
+    } catch (error) {
+      if (generation === pdfLoadGeneration) {
+        toast(error.message || 'PDF 打开失败', 'error');
+        pdfDoc = null;
+        pdfRecordId = null;
+        if (stage) stage.hidden = true;
+        if (paper) {
+          paper.hidden = false;
+          paper.classList.remove('paper-compact');
+        }
+      }
+      return false;
+    } finally {
+      if (generation === pdfLoadGeneration) {
+        pdfLoading = false;
+        pdfLoadingRecordId = null;
+        pdfLoadPromise = null;
+        updatePageLabel();
+      }
+    }
+  })();
+  pdfLoadPromise = activePromise;
+  return activePromise;
+}
 function updatePageLabel() {
-  const label = $('#reader-page-label');
-  if (!label) return;
+  const input = $('#reader-page-input');
+  const total = $('#reader-page-total');
+  const zoom = $('#reader-zoom-label');
+  const controls = ['#reader-prev-page', '#reader-next-page', '#reader-zoom-out', '#reader-zoom-in', '#reader-fit-width', '#reader-rotate', '#reader-find-input', '#reader-find-next'];
+  controls.forEach((selector) => { const node = $(selector); if (node) node.disabled = !pdfDoc; });
   if (!pdfDoc) {
-    label.textContent = state.selectedSource?.localPdf ? 'PDF' : '摘要模式';
+    if (input) { input.value = ''; input.max = '1'; input.disabled = true; }
+    if (total) total.textContent = state.selectedSource?.localPdf ? '/ PDF' : '/ 摘要';
+    if (zoom) zoom.textContent = '—';
     return;
   }
-  label.textContent = `${pdfPage} / ${pdfDoc.numPages} · ${Math.round(pdfScale * 100)}%`;
+  if (input) { input.disabled = false; input.max = String(pdfDoc.numPages); input.value = String(pdfPage); }
+  if (total) total.textContent = `/ ${pdfDoc.numPages}`;
+  if (zoom) zoom.textContent = `${Math.round(pdfScale * 100)}%`;
+}
+
+function applyPdfMarks() {
+  const spans = [...($('#pdf-text-layer')?.querySelectorAll('span') || [])];
+  spans.forEach((span) => span.classList.remove('pdf-annotated', 'pdf-note-anchor', 'pdf-find-match'));
+  const annotations = (state.workspace?.annotations || []).filter((item) => item.sourceId === state.selectedSource?.id && item.page === pdfPage);
+  for (const item of annotations) {
+    const start = Number(item.anchor?.textItemStart);
+    const end = Number(item.anchor?.textItemEnd);
+    if (Number.isInteger(start) && Number.isInteger(end)) {
+      for (let index = start; index <= end; index += 1) {
+        spans[index]?.classList.add('pdf-annotated');
+        if (item.style === 'note') spans[index]?.classList.add('pdf-note-anchor');
+      }
+      continue;
+    }
+    const needle = String(item.quote || '').trim().toLocaleLowerCase();
+    if (needle.length >= 3) {
+      spans.forEach((span) => {
+        const piece = span.textContent.trim().toLocaleLowerCase();
+        if (piece.length >= 3 && needle.includes(piece)) span.classList.add('pdf-annotated');
+      });
+    }
+  }
+  const term = pdfSearchTerm.trim().toLocaleLowerCase();
+  if (term) spans.forEach((span) => {
+    if (span.textContent.toLocaleLowerCase().includes(term)) span.classList.add('pdf-find-match');
+  });
 }
 
 async function renderPdfPage() {
-  if (!pdfDoc) return;
+  if (!pdfDoc) return false;
+  const generation = ++pdfRenderGeneration;
   const page = await pdfDoc.getPage(pdfPage);
-  const viewport = page.getViewport({ scale: pdfScale });
+  if (generation !== pdfRenderGeneration) return false;
+  const viewport = page.getViewport({ scale: pdfScale, rotation: pdfRotation });
   const canvas = $('#pdf-canvas');
   const textLayerDiv = $('#pdf-text-layer');
-  if (!canvas || !textLayerDiv) return;
+  if (!canvas || !textLayerDiv) return false;
+
+  if (pdfRenderTask) {
+    try { pdfRenderTask.cancel(); } catch { /* The previous task may already be complete. */ }
+    pdfRenderTask = null;
+  }
   const context = canvas.getContext('2d');
   canvas.height = viewport.height;
   canvas.width = viewport.width;
@@ -85,10 +195,22 @@ async function renderPdfPage() {
   textLayerDiv.style.width = `${viewport.width}px`;
   textLayerDiv.style.height = `${viewport.height}px`;
   textLayerDiv.replaceChildren();
-  await page.render({ canvasContext: context, viewport }).promise;
-  // Lightweight text layer for selection (pdf.js text content)
+
+  const renderTask = page.render({ canvasContext: context, viewport });
+  pdfRenderTask = renderTask;
+  try {
+    await renderTask.promise;
+  } catch (error) {
+    if (error?.name === 'RenderingCancelledException') return false;
+    throw error;
+  } finally {
+    if (pdfRenderTask === renderTask) pdfRenderTask = null;
+  }
+  if (generation !== pdfRenderGeneration) return false;
+
   try {
     const textContent = await page.getTextContent();
+    if (generation !== pdfRenderGeneration) return false;
     textLayerDiv.className = 'pdf-text-layer';
     const transform = pdfjsLib.Util?.transform
       || ((m1, m2) => [
@@ -99,11 +221,14 @@ async function renderPdfPage() {
         m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
         m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
       ]);
+    let textIndex = 0;
     for (const item of textContent.items) {
       if (!item.str) continue;
       const tx = transform(viewport.transform, item.transform);
       const span = document.createElement('span');
       span.textContent = item.str;
+      span.dataset.textIndex = String(textIndex);
+      textIndex += 1;
       const fontHeight = Math.hypot(item.transform[2], item.transform[3]) * pdfScale || item.height * pdfScale || 12;
       span.style.left = `${tx[4]}px`;
       span.style.top = `${tx[5] - fontHeight}px`;
@@ -111,24 +236,74 @@ async function renderPdfPage() {
       span.style.fontFamily = 'sans-serif';
       textLayerDiv.append(span);
     }
+    applyPdfMarks();
   } catch {
-    // selection layer optional
+    // The canvas remains readable when a scanned PDF has no selectable text layer.
   }
   updatePageLabel();
+  return true;
+}
+async function jumpToPage(value, { persist = true, term = pdfSearchTerm } = {}) {
+  if (!pdfDoc || pdfLoading) return;
+  const next = Math.min(pdfDoc.numPages, Math.max(1, Math.trunc(Number(value) || 1)));
+  pdfPage = next;
+  pdfSearchTerm = term;
+  await renderPdfPage();
+  $('#pdf-stage')?.scrollTo({ top: 0, behavior: 'smooth' });
+  if (persist) await persistReaderState();
 }
 
 async function changePage(delta) {
-  if (!pdfDoc || pdfLoading) return;
-  const next = pdfPage + delta;
-  if (next < 1 || next > pdfDoc.numPages) return;
-  pdfPage = next;
-  await renderPdfPage();
+  await jumpToPage(pdfPage + delta);
 }
 
 async function changeZoom(factor) {
   if (!pdfDoc || pdfLoading) return;
-  pdfScale = Math.min(2.5, Math.max(0.7, pdfScale * factor));
+  pdfScale = Math.min(2.5, Math.max(0.55, pdfScale * factor));
   await renderPdfPage();
+  await persistReaderState();
+}
+
+async function fitPdfWidth() {
+  if (!pdfDoc || pdfLoading) return;
+  const page = await pdfDoc.getPage(pdfPage);
+  const base = page.getViewport({ scale: 1, rotation: pdfRotation });
+  const available = Math.max(320, ($('#pdf-stage')?.clientWidth || base.width) - 40);
+  pdfScale = Math.min(2.5, Math.max(0.55, available / base.width));
+  await renderPdfPage();
+  await persistReaderState();
+}
+
+async function rotatePdf() {
+  if (!pdfDoc || pdfLoading) return;
+  pdfRotation = (pdfRotation + 90) % 360;
+  await renderPdfPage();
+  await persistReaderState();
+}
+
+async function findNextInPdf() {
+  if (!pdfDoc || pdfLoading) return;
+  const term = String($('#reader-find-input')?.value || '').trim();
+  if (!term) return toast('请输入要查找的文字', 'error');
+  const order = [...Array(pdfDoc.numPages).keys()].map((offset) => ((pdfPage - 1 + offset) % pdfDoc.numPages) + 1);
+  for (const pageNumber of order) {
+    const page = await pdfDoc.getPage(pageNumber);
+    const textContent = await page.getTextContent();
+    const body = textContent.items.map((item) => item.str || '').join(' ').toLocaleLowerCase();
+    if (body.includes(term.toLocaleLowerCase())) {
+      await jumpToPage(pageNumber, { term });
+      toast(`已定位到第 ${pageNumber} 页`);
+      return;
+    }
+  }
+  pdfSearchTerm = '';
+  applyPdfMarks();
+  toast(`PDF 中没有找到“${term}”`, 'error');
+}
+
+async function jumpToAnnotation(item) {
+  if (!item?.page || !pdfDoc) return;
+  await jumpToPage(item.page, { term: String(item.quote || '').split(/\s+/)[0] || '' });
 }
 
 function renderReader() {
@@ -240,15 +415,36 @@ async function runSkill(id, input) {
   return typeof response.result === 'string' ? response.result : JSON.stringify(response.result, null, 2);
 }
 
+function textSpanForNode(node) {
+  const element = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  const span = element?.closest?.('span[data-text-index]');
+  return $('#pdf-text-layer')?.contains(span) ? span : null;
+}
+
 function selectionQuote() {
-  const selected = selectedText();
-  if (selected?.quote) return { quote: selected.quote, anchor: selected.anchor, method: 'selection' };
-  // PDF text layer selection
   const sel = window.getSelection();
-  if (sel && !sel.isCollapsed && $('#pdf-stage') && !$('#pdf-stage').hidden) {
+  if (sel && !sel.isCollapsed && $('#pdf-stage') && !$('#pdf-stage').hidden && sel.rangeCount) {
     const quote = String(sel.toString() || '').trim();
-    if (quote) return { quote: quote.slice(0, 4000), anchor: { start: 0, end: quote.length }, method: 'selection', page: pdfPage };
+    const range = sel.getRangeAt(0);
+    const startSpan = textSpanForNode(range.startContainer);
+    const endSpan = textSpanForNode(range.endContainer);
+    if (quote && startSpan && endSpan) {
+      return {
+        quote: quote.slice(0, 4000),
+        anchor: {
+          start: 0, end: quote.length,
+          textItemStart: Number(startSpan.dataset.textIndex),
+          textItemEnd: Number(endSpan.dataset.textIndex),
+          startOffset: range.startOffset,
+          endOffset: range.endOffset,
+        },
+        method: 'selection',
+        page: pdfPage,
+      };
+    }
   }
+  const selected = selectedText();
+  if (selected?.quote) return { quote: selected.quote, anchor: selected.anchor, method: 'selection', page: null };
   return null;
 }
 
@@ -297,6 +493,7 @@ async function readerAction(action) {
         },
       });
       toast(action === 'note' ? '批注已保存' : '高亮已保存');
+      if (pdfDoc && page === pdfPage) applyPdfMarks();
       renderRight();
       return;
     }
@@ -312,6 +509,7 @@ async function readerAction(action) {
           anchor: selected?.anchor ?? { start: 0, end: quote.length },
           method: selected ? 'selection' : 'abstract',
           review: 'unreviewed',
+          page: selected?.page ?? (pdfDoc ? pdfPage : null),
         },
       });
       toast(selected ? '证据已加入，等待审阅' : '已用摘要加入证据，等待审阅');
@@ -402,7 +600,7 @@ function renderRight() {
     host.append(el('section', { className: 'side-section' }, [
       el('h3', { text: `批注 · ${notes.length}` }),
       ...(notes.length
-        ? notes.map((item) => el('div', { className: 'side-card' }, [
+        ? notes.map((item) => el('button', { type: 'button', className: 'side-card annotation-card', onClick: () => jumpToAnnotation(item) }, [
           el('b', { text: `${item.style === 'highlight' ? '高亮' : '批注'}${item.page ? ` · p.${item.page}` : ''}` }),
           el('p', { text: item.content }),
         ]))
@@ -438,7 +636,25 @@ function renderRight() {
     return;
   }
 
-  if (state.view === 'question' || state.view === 'skills') {
+  if (state.view === 'question') {
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: '研究起点' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: plan ? '问题已进入本地研究路径' : '等待确认核心问题' }),
+        el('p', { text: plan ? '下一步：打开当前任务，或直接去真实文献检索。' : '填写问题后离线拆解；不需要 Key。' }),
+      ]),
+    ]));
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: '数据边界' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: '本地项目 · 原子写入' }),
+        el('p', { text: '问题、PDF、批注、证据与草稿留在本机；联网仅用于真实检索。' }),
+      ]),
+    ]));
+    return;
+  }
+
+  if (state.view === 'skills') {
     host.append(el('section', { className: 'side-section' }, [
       el('h3', { text: '流水线' }),
       el('div', { className: 'side-card' }, [
@@ -458,6 +674,13 @@ function setupReader() {
   $('#reader-next-page')?.addEventListener('click', () => changePage(1));
   $('#reader-zoom-in')?.addEventListener('click', () => changeZoom(1.15));
   $('#reader-zoom-out')?.addEventListener('click', () => changeZoom(1 / 1.15));
+  $('#reader-fit-width')?.addEventListener('click', fitPdfWidth);
+  $('#reader-rotate')?.addEventListener('click', rotatePdf);
+  $('#reader-find-next')?.addEventListener('click', findNextInPdf);
+  $('#reader-find-input')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); findNextInPdf(); }
+  });
+  $('#reader-page-input')?.addEventListener('change', (event) => jumpToPage(event.currentTarget.value));
   $('#import-pdf')?.addEventListener('click', () => importPdfFlow());
   $('#browser-import-pdf')?.addEventListener('click', () => importPdfFlow(state.selectedSource));
 }

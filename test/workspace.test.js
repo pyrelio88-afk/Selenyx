@@ -99,3 +99,33 @@ test('workspace evidence relation can be updated after review', () => {
   assert.equal(state.evidence[0].review, 'accepted');
   assert.equal(state.evidence[0].relation, 'contradicts');
 });
+
+test('workspace starts new research at the question view with per-document reader state', () => {
+  const state = emptyWorkspace();
+  assert.equal(state.ui.lastView, 'question');
+  assert.deepEqual(state.ui.readerState, {});
+});
+
+test('workspace preserves PDF text-layer locators and evidence page across restart', () => {
+  let state = applyWorkspaceEvent(emptyWorkspace(), { type: 'library:save', record: paper() }).state;
+  state = applyWorkspaceEvent(state, {
+    type: 'annotation:add',
+    annotation: {
+      sourceId: 'openalex:W1', content: '定位批注', quote: 'careful study', page: 3,
+      anchor: { start: 0, end: 13, textItemStart: 4, textItemEnd: 6, startOffset: 2, endOffset: 5 },
+      style: 'note',
+    },
+  }).state;
+  state = applyWorkspaceEvent(state, {
+    type: 'evidence:add',
+    evidence: {
+      sourceId: 'openalex:W1', quote: 'careful study', page: 3,
+      anchor: { start: 0, end: 13, textItemStart: 4, textItemEnd: 6 }, method: 'selection',
+    },
+  }).state;
+  const restored = normalizeWorkspace(JSON.parse(JSON.stringify(state)));
+  assert.equal(restored.annotations[0].anchor.textItemStart, 4);
+  assert.equal(restored.annotations[0].anchor.textItemEnd, 6);
+  assert.equal(restored.evidence[0].anchor.textItemStart, 4);
+  assert.equal(restored.evidence[0].page, 3);
+});
