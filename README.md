@@ -27,7 +27,7 @@ The local PDF reader supports page navigation, fit/zoom/rotation, in-document se
 
 ## Status
 
-The current worktree is an **unpublished `0.9.1-rc.1` validation candidate** on `refactor/r0.8-hermes-workbench`. R0.7 remains unchanged.
+The current stable release track is **`0.9.1`**. It promotes the validated research-question, real-search, local-PDF, annotation, and evidence workflow.
 
 - **424 automated tests pass locally**, including research-question gating, PDF locator persistence, evidence relation review, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
 - Critical usability fixes in this handoff:
@@ -42,7 +42,7 @@ The current worktree is an **unpublished `0.9.1-rc.1` validation candidate** on 
 - 9 international native APIs: OpenAlex, PubMed, arXiv, Crossref, Europe PMC, Semantic Scholar, Unpaywall, DOAJ, CORE (R0.6: 2).
 - 8 China sources: PubScholar, ChinaXiv, NSTL, NCPSSD, SinoMed, CNKI, Wanfang, CQVIP (R0.6: 0).
 - China sources are presented as honesty-guarded browser handoffs (search-link mode), never page scraping.
-- R0.7 Release ID is `360001980`; it has no attached installer assets. `0.9.1-rc.1` installers are local validation artifacts only.
+- `v0.9.1` ships Windows setup and portable assets plus a SHA-256 manifest.
 - Windows binaries are unsigned.
 - macOS/Linux packages, code signing, and production distribution are not yet verified.
 

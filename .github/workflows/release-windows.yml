@@ -1,0 +1,91 @@
+name: Publish Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable semantic-version tag
+        required: true
+        default: v0.9.1
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Verify tag matches package versions
+        shell: pwsh
+        run: |
+          $tag = '${{ inputs.tag }}'
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Invalid stable tag: $tag" }
+          $rootVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $desktopVersion = (Get-Content desktop/package.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne "v$rootVersion" -or $rootVersion -ne $desktopVersion) {
+            throw "Tag/package mismatch: tag=$tag root=$rootVersion desktop=$desktopVersion"
+          }
+
+      - name: Run all automated tests
+        run: npm test
+
+      - name: Install locked desktop dependencies
+        run: npm ci --prefix desktop --no-audit --no-fund
+
+      - name: Build Windows setup and portable executables
+        run: npm run dist:win --prefix desktop
+
+      - name: Create SHA-256 manifest
+        shell: pwsh
+        run: |
+          $assets = @(
+            'desktop/release/Selenyx-0.9.1-windows-x64-setup.exe',
+            'desktop/release/Selenyx-0.9.1-windows-x64-portable.exe'
+          )
+          foreach ($asset in $assets) {
+            if (-not (Test-Path -LiteralPath $asset)) { throw "Missing release asset: $asset" }
+          }
+          $lines = $assets | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $([IO.Path]::GetFileName($_))"
+          }
+          [IO.File]::WriteAllLines('desktop/release/SHA256SUMS.txt', $lines, [Text.Encoding]::ASCII)
+          Get-Content desktop/release/SHA256SUMS.txt
+
+      - name: Publish stable GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ inputs.tag }}'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Release already exists: $tag" }
+          gh release create $tag `
+            --repo $env:GITHUB_REPOSITORY `
+            --target '${{ github.sha }}' `
+            --title 'Selenyx v0.9.1 — Research Workbench' `
+            --notes-file 'docs/releases/v0.9.1.md' `
+            --latest `
+            'desktop/release/Selenyx-0.9.1-windows-x64-setup.exe' `
+            'desktop/release/Selenyx-0.9.1-windows-x64-portable.exe' `
+            'desktop/release/SHA256SUMS.txt'
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release creation failed' }

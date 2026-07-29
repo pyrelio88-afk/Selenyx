@@ -14,7 +14,7 @@ const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const { normalizeProjectId, projectDirFor } = require('./projectPaths.cjs');
 
-const APP_VERSION = '0.9.1-rc.1';
+const APP_VERSION = '0.9.1';
 let mainWindow = null;
 let browserView = null;
 let browserLoadTimer = null;

@@ -194,8 +194,8 @@ test('desktop: packaged app copies the shared engine', () => {
   assert.deepEqual(entry, { from: '../src', to: 'engine' });
 });
 
-test('desktop: version matches current validation candidate', () => {
-  assert.equal(desktopPackage.version, '0.9.1-rc.1');
+test('desktop: version matches current stable release', () => {
+  assert.equal(desktopPackage.version, '0.9.1');
 });
 
 test('desktop: app exposes explicit true-zero copy', () => {
