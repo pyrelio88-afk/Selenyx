@@ -1,14 +1,46 @@
 /**
- * Selenyx 学科数据 —— 全学科覆盖（R83 重构）
- * 13 个中国学科门类 · 每学科含大量术语表/公式参考值/标准规范
- * 用 SVG 图标替代 emoji（R83 用户要求：少用 emoji，多用真实图标）
+ * Selenyx 学科数据 —— 全学科覆盖（R86 重构）
+ * 四类数据：名词 / 数值参数 / 公式 / 标准规范
+ * 点击条目打开词典级完整详情弹窗；支持自定义添加条目（localStorage 持久化）
  */
 
 import { useState, useMemo } from 'react';
 import { Icon } from '@components/ui/Icon';
-import { DISCIPLINES } from '../../data/disciplines';
+import {
+  DISCIPLINES,
+  type Discipline,
+  type DisciplineGlossary,
+  type DisciplineParameter,
+  type DisciplineFormula,
+  type DisciplineStandard,
+} from '../../data/disciplines';
 
-type Tab = 'glossary' | 'formulas' | 'standards';
+type Tab = 'glossary' | 'parameters' | 'formulas' | 'standards';
+type EntryKind = Tab;
+
+/** 自定义条目存储 */
+interface CustomEntry {
+  kind: EntryKind;
+  disciplineId: string;
+  // 通用字段（按 kind 取用）
+  term?: string; termEn?: string; definition?: string; category?: string; example?: string; aliases?: string;
+  name?: string; symbol?: string; value?: string; unit?: string; description?: string;
+  formula?: string; reference?: string; variables?: string;
+  code?: string; issuer?: string; year?: string;
+  source?: string;
+}
+
+const CUSTOM_KEY = 'selenyx-custom-entries-v1';
+const PAGE_SIZE = 50;
+
+function loadCustomEntries(): CustomEntry[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_KEY);
+    return raw ? (JSON.parse(raw) as CustomEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 /** 学科 SVG 图标映射 —— 替代 emoji */
 const DISCIPLINE_ICONS: Record<string, string> = {
@@ -36,11 +68,26 @@ function DisciplineIcon({ id, size = 32, color }: { id: string; size?: number; c
   );
 }
 
+/** 详情弹窗中选中的条目（统一包装） */
+interface DetailTarget {
+  kind: EntryKind;
+  data: DisciplineGlossary | DisciplineParameter | DisciplineFormula | DisciplineStandard;
+  customIndex?: number; // 自定义条目在列表中的下标（可删除）
+}
+
+function paramCount(d: Discipline): number {
+  return d.parameters?.length ?? 0;
+}
+
 export function ClinicalDataView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<Tab>('glossary');
   const [glossaryCategory, setGlossaryCategory] = useState<string>('');
+  const [detail, setDetail] = useState<DetailTarget | null>(null);
+  const [customEntries, setCustomEntries] = useState<CustomEntry[]>(loadCustomEntries);
+  const [showAdd, setShowAdd] = useState(false);
+  const [page, setPage] = useState(0);
 
   const selected = useMemo(() => DISCIPLINES.find((d) => d.id === selectedId), [selectedId]);
 
@@ -55,14 +102,28 @@ export function ClinicalDataView() {
     );
   }, [search]);
 
+  function saveCustom(next: CustomEntry[]) {
+    setCustomEntries(next);
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+  }
+
+  function deleteCustom(index: number) {
+    // index 是全局 customEntries 下标
+    const next = customEntries.filter((_, i) => i !== index);
+    saveCustom(next);
+    setDetail(null);
+  }
+
   // 学科卡片网格视图
   if (!selected) {
+    const totalParams = DISCIPLINES.reduce((a, d) => a + paramCount(d), 0);
     return (
       <div>
         <div className="view-header" style={{ marginBottom: 16 }}>
           <h1 className="view-title">学科数据</h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-            覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 个术语 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 个公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 个标准
+            覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 名词 / {totalParams} 数值参数 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 标准规范
+            {customEntries.length > 0 && ` · ${customEntries.length} 条自定义`}
           </p>
         </div>
         <div style={{ position: 'relative', marginBottom: 20 }}>
@@ -81,7 +142,7 @@ export function ClinicalDataView() {
           {filteredDisciplines.map((d) => (
             <button
               key={d.id}
-              onClick={() => { setSelectedId(d.id); setTab('glossary'); setGlossaryCategory(''); }}
+              onClick={() => { setSelectedId(d.id); setTab('glossary'); setGlossaryCategory(''); setPage(0); setSearch(''); }}
               className="stat-card"
               style={{
                 cursor: 'pointer', textAlign: 'left', borderLeft: `4px solid ${d.color}`,
@@ -94,8 +155,9 @@ export function ClinicalDataView() {
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{d.name}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{d.nameEn}</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{d.description}</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 10, color: 'var(--text-muted)' }}>
-                <span>{d.glossary.length} 术语</span>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 10, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                <span>{d.glossary.length} 名词</span>
+                <span>{paramCount(d)} 数值</span>
                 <span>{d.formulas.length} 公式</span>
                 <span>{d.standards.length} 标准</span>
               </div>
@@ -111,36 +173,104 @@ export function ClinicalDataView() {
     );
   }
 
-  // 学科详情视图
-  const glossaryCats = [...new Set(selected.glossary.map((g) => g.category))].sort();
-  const filteredGlossary = glossaryCategory
-    ? selected.glossary.filter((g) => g.category === glossaryCategory)
-    : selected.glossary;
+  // ===== 学科详情视图 =====
+  const customForDisc = customEntries
+    .map((e, i) => ({ ...e, __globalIdx: i }))
+    .filter((e) => e.disciplineId === selected.id);
+
+  const mergedGlossary: (DisciplineGlossary & { __customIdx?: number })[] = [
+    ...selected.glossary,
+    ...customForDisc.filter((e) => e.kind === 'glossary').map((e) => ({
+      term: e.term || '', termEn: e.termEn || '', definition: e.definition || '', category: e.category || '自定义',
+      example: e.example, aliases: e.aliases, source: e.source, __customIdx: e.__globalIdx,
+    })),
+  ];
+  const mergedParams: (DisciplineParameter & { __customIdx?: number })[] = [
+    ...(selected.parameters || []),
+    ...customForDisc.filter((e) => e.kind === 'parameters').map((e) => ({
+      name: e.name || '', symbol: e.symbol, value: e.value || '', unit: e.unit,
+      description: e.description || '', category: e.category || '自定义', source: e.source, __customIdx: e.__globalIdx,
+    })),
+  ];
+  const mergedFormulas: (DisciplineFormula & { __customIdx?: number })[] = [
+    ...selected.formulas,
+    ...customForDisc.filter((e) => e.kind === 'formulas').map((e) => ({
+      name: e.name || '', formula: e.formula || '', description: e.description || '',
+      unit: e.unit, reference: e.reference, variables: e.variables, __customIdx: e.__globalIdx,
+    })),
+  ];
+  const mergedStandards: (DisciplineStandard & { __customIdx?: number })[] = [
+    ...selected.standards,
+    ...customForDisc.filter((e) => e.kind === 'standards').map((e) => ({
+      name: e.name || '', code: e.code || '', description: e.description || '',
+      issuer: e.issuer, year: e.year, __customIdx: e.__globalIdx,
+    })),
+  ];
+
+  const detailSearch = search.toLowerCase();
+  const matchG = (g: DisciplineGlossary) =>
+    !detailSearch || g.term.toLowerCase().includes(detailSearch) || g.termEn.toLowerCase().includes(detailSearch) || g.definition.toLowerCase().includes(detailSearch);
+  const matchP = (p: DisciplineParameter) =>
+    !detailSearch || p.name.toLowerCase().includes(detailSearch) || p.description.toLowerCase().includes(detailSearch) || (p.symbol || '').toLowerCase().includes(detailSearch);
+  const matchF = (f: DisciplineFormula) =>
+    !detailSearch || f.name.toLowerCase().includes(detailSearch) || f.formula.toLowerCase().includes(detailSearch) || f.description.toLowerCase().includes(detailSearch);
+  const matchS = (s: DisciplineStandard) =>
+    !detailSearch || s.name.toLowerCase().includes(detailSearch) || s.code.toLowerCase().includes(detailSearch) || s.description.toLowerCase().includes(detailSearch);
+
+  const glossaryCats = [...new Set(mergedGlossary.map((g) => g.category))].sort();
+  const baseGlossary = glossaryCategory ? mergedGlossary.filter((g) => g.category === glossaryCategory) : mergedGlossary;
+  const filteredGlossary = baseGlossary.filter(matchG);
+  const filteredParams = mergedParams.filter(matchP);
+  const filteredFormulas = mergedFormulas.filter(matchF);
+  const filteredStandards = mergedStandards.filter(matchS);
+
+  // 当前 tab 的分页数据
+  const currentList = tab === 'glossary' ? filteredGlossary : tab === 'parameters' ? filteredParams : tab === 'formulas' ? filteredFormulas : filteredStandards;
+  const pageCount = Math.ceil(currentList.length / PAGE_SIZE);
+  const pagedList = currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  const tabMeta: { key: Tab; label: string; count: number }[] = [
+    { key: 'glossary', label: '名词', count: mergedGlossary.length },
+    { key: 'parameters', label: '数值参数', count: mergedParams.length },
+    { key: 'formulas', label: '公式', count: mergedFormulas.length },
+    { key: 'standards', label: '标准规范', count: mergedStandards.length },
+  ];
 
   return (
     <div>
       {/* 顶部导航 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button className="btn" onClick={() => setSelectedId(null)} style={{ padding: '6px 12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <button className="btn" onClick={() => { setSelectedId(null); setSearch(''); }} style={{ padding: '6px 12px' }}>
           <Icon name="close" size={16} /> 返回
         </button>
         <DisciplineIcon id={selected.id} size={28} color={selected.color} />
-        <div>
+        <div style={{ flex: 1, minWidth: 140 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>{selected.name}</h1>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selected.nameEn} · {selected.description}</span>
         </div>
+        <div style={{ position: 'relative' }}>
+          <input
+            className="input"
+            placeholder="本学科内搜索…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            style={{ paddingLeft: 32, width: 200, fontSize: 13 }}
+          />
+          <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
+            <Icon name="search" size={14} />
+          </span>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ fontSize: 13 }}>
+          <Icon name="plus" size={14} /> 自定义添加
+        </button>
       </div>
 
       {/* 标签页 */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid var(--border)' }}>
-        {([
-          { key: 'glossary' as Tab, label: `术语表 (${selected.glossary.length})` },
-          { key: 'formulas' as Tab, label: `公式与参考值 (${selected.formulas.length})` },
-          { key: 'standards' as Tab, label: `标准规范 (${selected.standards.length})` },
-        ]).map((t) => (
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid var(--border)', flexWrap: 'wrap' }}>
+        {tabMeta.map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => { setTab(t.key); setPage(0); }}
             style={{
               padding: '8px 16px', border: 'none', background: 'transparent',
               borderBottom: tab === t.key ? `2px solid ${selected.color}` : '2px solid transparent',
@@ -149,64 +279,112 @@ export function ClinicalDataView() {
               marginBottom: '-2px', transition: 'all var(--transition)',
             }}
           >
-            {t.label}
+            {t.label} ({t.count})
           </button>
         ))}
       </div>
 
-      {/* 术语表 */}
-      {tab === 'glossary' && (
-        <div>
-          {glossaryCats.length > 1 && (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+      {/* 名词分类筛选 */}
+      {tab === 'glossary' && glossaryCats.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => { setGlossaryCategory(''); setPage(0); }}
+            className={`btn ${!glossaryCategory ? 'btn-primary' : ''}`}
+            style={{ padding: '4px 12px', fontSize: 12 }}
+          >全部 ({mergedGlossary.length})</button>
+          {glossaryCats.map((c) => {
+            const count = mergedGlossary.filter((g) => g.category === c).length;
+            return (
               <button
-                onClick={() => setGlossaryCategory('')}
-                className={`btn ${!glossaryCategory ? 'btn-primary' : ''}`}
+                key={c}
+                onClick={() => { setGlossaryCategory(c); setPage(0); }}
+                className={`btn ${glossaryCategory === c ? 'btn-primary' : ''}`}
                 style={{ padding: '4px 12px', fontSize: 12 }}
-              >全部 ({selected.glossary.length})</button>
-              {glossaryCats.map((c) => {
-                const count = selected.glossary.filter((g) => g.category === c).length;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => setGlossaryCategory(c)}
-                    className={`btn ${glossaryCategory === c ? 'btn-primary' : ''}`}
-                    style={{ padding: '4px 12px', fontSize: 12 }}
-                  >{c} ({count})</button>
-                );
-              })}
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {filteredGlossary.map((g, i) => (
-              <div key={`${g.term}-${i}`} className="card" style={{ padding: '12px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>{g.term}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{g.termEn}</span>
-                  <span style={{
-                    fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)',
-                    background: 'var(--bg-canvas)', color: 'var(--text-muted)',
-                  }}>{g.category}</span>
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{g.definition}</div>
-              </div>
-            ))}
-          </div>
-          {filteredGlossary.length > 50 && (
-            <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: 12 }}>
-              显示 {filteredGlossary.length} 条术语
-            </div>
-          )}
+              >{c} ({count})</button>
+            );
+          })}
         </div>
       )}
 
-      {/* 公式与参考值 */}
+      {/* 名词列表 */}
+      {tab === 'glossary' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(pagedList as typeof filteredGlossary).map((g, i) => (
+            <button
+              key={`${g.term}-${i}`}
+              className="card"
+              onClick={() => setDetail({ kind: 'glossary', data: g, customIndex: g.__customIdx })}
+              style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>{g.term}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{g.termEn}</span>
+                <span style={{
+                  fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)',
+                  background: 'var(--bg-canvas)', color: 'var(--text-muted)',
+                }}>{g.category}</span>
+                {g.__customIdx !== undefined && (
+                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                )}
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>点击查看完整解释 →</span>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{g.definition}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 数值参数列表 */}
+      {tab === 'parameters' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {mergedParams.length === 0 && (
+            <div className="empty-state" style={{ padding: 40 }}>
+              <p style={{ fontSize: 13 }}>本学科的数值参数正在扩充中，也可以点右上角「自定义添加」自己录入</p>
+            </div>
+          )}
+          {(pagedList as typeof filteredParams).map((p, i) => (
+            <button
+              key={`${p.name}-${i}`}
+              className="card"
+              onClick={() => setDetail({ kind: 'parameters', data: p, customIndex: p.__customIdx })}
+              style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>{p.name}</span>
+                {p.symbol && <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{p.symbol}</span>}
+                <span style={{
+                  fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 600,
+                  color: 'var(--accent)', background: 'var(--accent-light)',
+                  padding: '1px 8px', borderRadius: 'var(--radius-sm)',
+                }}>{p.value}{p.unit ? ` ${p.unit}` : ''}</span>
+                {p.__customIdx !== undefined && (
+                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                )}
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>详情 →</span>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.description}</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 公式列表 */}
       {tab === 'formulas' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {selected.formulas.map((f) => (
-            <div key={f.name} className="card" style={{ padding: '14px 16px' }}>
+          {(pagedList as typeof filteredFormulas).map((f, i) => (
+            <button
+              key={`${f.name}-${i}`}
+              className="card"
+              onClick={() => setDetail({ kind: 'formulas', data: f, customIndex: f.__customIdx })}
+              style={{ padding: '14px 16px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>{f.name}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>
+                  {f.name}
+                  {f.__customIdx !== undefined && (
+                    <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                  )}
+                </span>
                 {f.unit && (
                   <span style={{
                     fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)',
@@ -219,32 +397,327 @@ export function ClinicalDataView() {
                 background: 'var(--bg-canvas)', padding: '10px 14px', borderRadius: 'var(--radius-sm)',
                 color: 'var(--text-primary)', marginBottom: 6, overflowX: 'auto',
               }}>{f.formula}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{f.description}</div>
-              {f.reference && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>来源：{f.reference}</div>
-              )}
-            </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{f.description}</div>
+            </button>
           ))}
         </div>
       )}
 
-      {/* 标准规范 */}
+      {/* 标准规范列表 */}
       {tab === 'standards' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {selected.standards.map((s) => (
-            <div key={s.code} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          {(pagedList as typeof filteredStandards).map((s, i) => (
+            <button
+              key={`${s.code}-${i}`}
+              className="card"
+              onClick={() => setDetail({ kind: 'standards', data: s, customIndex: s.__customIdx })}
+              style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+            >
               <div style={{
                 fontSize: 10, padding: '2px 8px', borderRadius: 'var(--radius-sm)',
                 background: selected.color, color: '#fff', fontWeight: 700, flexShrink: 0, marginTop: 2,
               }}>{s.code}</div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{s.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{s.description}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  {s.name}
+                  {s.__customIdx !== undefined && (
+                    <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.description}</div>
               </div>
-            </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>详情 →</span>
+            </button>
           ))}
         </div>
       )}
+
+      {/* 分页 */}
+      {pageCount > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+          <button className="btn btn-sm" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page + 1} / {pageCount} 页 · 共 {currentList.length} 条</span>
+          <button className="btn btn-sm" disabled={page >= pageCount - 1} onClick={() => setPage(page + 1)}>下一页</button>
+        </div>
+      )}
+
+      {/* ===== 词典级详情弹窗 ===== */}
+      {detail && (
+        <div className="modal-overlay" onClick={() => setDetail(null)}>
+          <div
+            className="modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 640, width: '92%', maxHeight: '82vh', overflowY: 'auto', padding: 24 }}
+          >
+            {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
+            {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
+            {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
+            {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} />}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+              {detail.customIndex !== undefined && (
+                <button
+                  className="btn btn-danger-ghost"
+                  onClick={() => { if (confirm('删除这条自定义条目？')) deleteCustom(detail.customIndex!); }}
+                >删除此自定义条目</button>
+              )}
+              <button className="btn btn-primary" onClick={() => setDetail(null)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 自定义添加弹窗 ===== */}
+      {showAdd && (
+        <AddEntryModal
+          disciplineId={selected.id}
+          disciplineName={selected.name}
+          defaultKind={tab}
+          onClose={() => setShowAdd(false)}
+          onSave={(entry) => { saveCustom([...customEntries, entry]); setShowAdd(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ===== 词典级详情组件 =====
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7 }}>{children}</div>
+    </div>
+  );
+}
+
+function GlossaryDetail({ g, color, discipline }: { g: DisciplineGlossary; color: string; discipline: string }) {
+  return (
+    <div>
+      <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
+        <div style={{ fontSize: 24, fontWeight: 700, color }}>{g.term}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>{g.termEn}</div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{g.category}</span>
+        </div>
+      </div>
+      {g.aliases && <DetailRow label="同义词 / 别称">{g.aliases}</DetailRow>}
+      <DetailRow label="释义">{g.definition}</DetailRow>
+      {g.example && <DetailRow label="示例 / 应用">{g.example}</DetailRow>}
+      {g.source && <DetailRow label="出处 / 参考"><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{g.source}</span></DetailRow>}
+    </div>
+  );
+}
+
+function ParameterDetail({ p, color, discipline }: { p: DisciplineParameter; color: string; discipline: string }) {
+  return (
+    <div>
+      <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
+        <div style={{ fontSize: 24, fontWeight: 700, color }}>
+          {p.name}
+          {p.symbol && <span style={{ fontSize: 16, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginLeft: 10 }}>{p.symbol}</span>}
+        </div>
+        <div style={{
+          display: 'inline-block', marginTop: 8, fontSize: 18, fontFamily: 'var(--font-mono)', fontWeight: 700,
+          color: 'var(--accent)', background: 'var(--accent-light)', padding: '4px 14px', borderRadius: 'var(--radius-sm)',
+        }}>
+          {p.value}{p.unit ? ` ${p.unit}` : ''}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{p.category}</span>
+        </div>
+      </div>
+      <DetailRow label="说明">{p.description}</DetailRow>
+      {p.source && <DetailRow label="来源"><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.source}</span></DetailRow>}
+    </div>
+  );
+}
+
+function FormulaDetail({ f, color, discipline }: { f: DisciplineFormula; color: string; discipline: string }) {
+  return (
+    <div>
+      <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color }}>{f.name}</div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          {f.unit && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>{f.unit}</span>}
+        </div>
+      </div>
+      <DetailRow label="公式">
+        <div style={{
+          fontFamily: 'var(--font-mono)', fontSize: 17, fontWeight: 600,
+          background: 'var(--bg-canvas)', padding: '14px 18px', borderRadius: 'var(--radius-sm)',
+          overflowX: 'auto',
+        }}>{f.formula}</div>
+      </DetailRow>
+      {f.variables && <DetailRow label="变量说明">{f.variables}</DetailRow>}
+      <DetailRow label="说明">{f.description}</DetailRow>
+      {f.reference && <DetailRow label="来源"><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{f.reference}</span></DetailRow>}
+    </div>
+  );
+}
+
+function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color: string; discipline: string }) {
+  return (
+    <div>
+      <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
+        <div style={{
+          display: 'inline-block', fontSize: 12, padding: '3px 10px', borderRadius: 'var(--radius-sm)',
+          background: color, color: '#fff', fontWeight: 700, marginBottom: 8,
+        }}>{s.code}</div>
+        <div style={{ fontSize: 20, fontWeight: 700 }}>{s.name}</div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          {s.issuer && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.issuer}</span>}
+          {s.year && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.year}</span>}
+        </div>
+      </div>
+      <DetailRow label="内容说明">{s.description}</DetailRow>
+    </div>
+  );
+}
+
+// ===== 自定义添加弹窗 =====
+
+function AddEntryModal({
+  disciplineId, disciplineName, defaultKind, onClose, onSave,
+}: {
+  disciplineId: string;
+  disciplineName: string;
+  defaultKind: EntryKind;
+  onClose: () => void;
+  onSave: (e: CustomEntry) => void;
+}) {
+  const [kind, setKind] = useState<EntryKind>(defaultKind);
+  const [fields, setFields] = useState<Record<string, string>>({});
+
+  function set(k: string, v: string) {
+    setFields({ ...fields, [k]: v });
+  }
+
+  function save() {
+    const base: CustomEntry = { kind, disciplineId };
+    if (kind === 'glossary') {
+      if (!fields.term?.trim() || !fields.definition?.trim()) return;
+      onSave({ ...base, term: fields.term.trim(), termEn: fields.termEn?.trim() || '', definition: fields.definition.trim(), category: fields.category?.trim() || '自定义', example: fields.example?.trim(), aliases: fields.aliases?.trim(), source: fields.source?.trim() });
+    } else if (kind === 'parameters') {
+      if (!fields.name?.trim() || !fields.value?.trim() || !fields.description?.trim()) return;
+      onSave({ ...base, name: fields.name.trim(), symbol: fields.symbol?.trim(), value: fields.value.trim(), unit: fields.unit?.trim(), description: fields.description.trim(), category: fields.category?.trim() || '自定义', source: fields.source?.trim() });
+    } else if (kind === 'formulas') {
+      if (!fields.name?.trim() || !fields.formula?.trim() || !fields.description?.trim()) return;
+      onSave({ ...base, name: fields.name.trim(), formula: fields.formula.trim(), description: fields.description.trim(), unit: fields.unit?.trim(), variables: fields.variables?.trim(), reference: fields.reference?.trim() });
+    } else {
+      if (!fields.name?.trim() || !fields.code?.trim() || !fields.description?.trim()) return;
+      onSave({ ...base, name: fields.name.trim(), code: fields.code.trim(), description: fields.description.trim(), issuer: fields.issuer?.trim(), year: fields.year?.trim() });
+    }
+  }
+
+  const kindLabels: Record<EntryKind, string> = { glossary: '名词', parameters: '数值参数', formulas: '公式', standards: '标准规范' };
+
+  const fieldDefs: { kind: EntryKind; fields: { key: string; label: string; required?: boolean; textarea?: boolean; placeholder?: string }[] }[] = [
+    {
+      kind: 'glossary',
+      fields: [
+        { key: 'term', label: '名词（中文）', required: true, placeholder: '如：循证护理' },
+        { key: 'termEn', label: '英文名', placeholder: '如：Evidence-Based Nursing' },
+        { key: 'category', label: '分类', placeholder: '如：护理理论（留空归入「自定义」）' },
+        { key: 'definition', label: '完整释义', required: true, textarea: true, placeholder: '像词典一样完整：定义、核心内涵、适用范围…' },
+        { key: 'aliases', label: '同义词/别称' },
+        { key: 'example', label: '示例/应用', textarea: true },
+        { key: 'source', label: '出处/参考' },
+      ],
+    },
+    {
+      kind: 'parameters',
+      fields: [
+        { key: 'name', label: '参数名称', required: true, placeholder: '如：正常成人静息心率' },
+        { key: 'symbol', label: '符号', placeholder: '如：HR' },
+        { key: 'value', label: '数值/范围', required: true, placeholder: '如：60–100' },
+        { key: 'unit', label: '单位', placeholder: '如：次/分' },
+        { key: 'category', label: '分类', placeholder: '如：生命体征' },
+        { key: 'description', label: '完整说明', required: true, textarea: true, placeholder: '临床意义、测量方法、异常提示…' },
+        { key: 'source', label: '来源' },
+      ],
+    },
+    {
+      kind: 'formulas',
+      fields: [
+        { key: 'name', label: '公式名称', required: true },
+        { key: 'formula', label: '公式表达式', required: true, placeholder: '如：BMI = 体重(kg) / 身高(m)²' },
+        { key: 'variables', label: '变量说明', textarea: true },
+        { key: 'unit', label: '单位' },
+        { key: 'description', label: '完整说明', required: true, textarea: true },
+        { key: 'reference', label: '来源/参考' },
+      ],
+    },
+    {
+      kind: 'standards',
+      fields: [
+        { key: 'code', label: '标准编号', required: true, placeholder: '如：GB/T 7714—2015' },
+        { key: 'name', label: '标准名称', required: true },
+        { key: 'issuer', label: '发布机构' },
+        { key: 'year', label: '年份' },
+        { key: 'description', label: '内容说明', required: true, textarea: true },
+      ],
+    },
+  ];
+
+  const activeDef = fieldDefs.find((f) => f.kind === kind)!;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 560, width: '92%', maxHeight: '85vh', overflowY: 'auto', padding: 24 }}
+      >
+        <h3 style={{ marginBottom: 4, fontSize: 16 }}>自定义添加到「{disciplineName}」</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>学到什么就记下来，数据保存在本机浏览器中</p>
+
+        {/* 类型选择 */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          {(Object.keys(kindLabels) as EntryKind[]).map((k) => (
+            <button
+              key={k}
+              className={`btn btn-sm ${kind === k ? 'btn-primary' : ''}`}
+              onClick={() => setKind(k)}
+            >{kindLabels[k]}</button>
+          ))}
+        </div>
+
+        {activeDef.fields.map((f) => (
+          <div key={f.key} style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+              {f.label}{f.required && <span style={{ color: 'var(--accent)' }}> *</span>}
+            </label>
+            {f.textarea ? (
+              <textarea
+                className="input"
+                value={fields[f.key] || ''}
+                onChange={(e) => set(f.key, e.target.value)}
+                placeholder={f.placeholder}
+                rows={3}
+                style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+              />
+            ) : (
+              <input
+                className="input"
+                value={fields[f.key] || ''}
+                onChange={(e) => set(f.key, e.target.value)}
+                placeholder={f.placeholder}
+                style={{ width: '100%', fontSize: 13 }}
+              />
+            )}
+          </div>
+        ))}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+          <button className="btn" onClick={onClose}>取消</button>
+          <button className="btn btn-primary" onClick={save}>保存</button>
+        </div>
+      </div>
     </div>
   );
 }

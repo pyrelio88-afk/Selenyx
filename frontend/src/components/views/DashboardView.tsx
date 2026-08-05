@@ -9,86 +9,172 @@ import { PIPELINE_STAGES } from '@apptypes/index';
 import { Icon, NAV_ICONS, STAGE_ICONS, type IconName } from '@components/ui/Icon';
 import { StatusChip, ProjectStatusChip } from '@components/ui/StatusChip';
 
-// === 番茄钟组件 ===
+// === 番茄钟组件（R86: 自定义事件） ===
+interface PomodoroEvent {
+  id: string;
+  name: string;
+  minutes: number;
+  kind: 'focus' | 'rest';
+  builtin?: boolean;
+}
+
+const POMODORO_KEY = 'selenyx-pomodoro-events-v1';
+const DEFAULT_EVENTS: PomodoroEvent[] = [
+  { id: 'focus-25', name: '专注', minutes: 25, kind: 'focus', builtin: true },
+  { id: 'rest-5', name: '短休息', minutes: 5, kind: 'rest', builtin: true },
+  { id: 'rest-15', name: '长休息', minutes: 15, kind: 'rest', builtin: true },
+  { id: 'focus-50', name: '深度专注', minutes: 50, kind: 'focus', builtin: true },
+];
+
+function loadPomodoroEvents(): PomodoroEvent[] {
+  try {
+    const raw = localStorage.getItem(POMODORO_KEY);
+    if (!raw) return DEFAULT_EVENTS;
+    const customs = JSON.parse(raw) as PomodoroEvent[];
+    return [...DEFAULT_EVENTS, ...customs.filter((c) => c && c.id && c.name && c.minutes > 0)];
+  } catch {
+    return DEFAULT_EVENTS;
+  }
+}
+
 function PomodoroTimer() {
-  const [mode, setMode] = useState<'work' | 'break'>('work');
+  const [events, setEvents] = useState<PomodoroEvent[]>(loadPomodoroEvents);
+  const [activeId, setActiveId] = useState('focus-25');
   const [seconds, setSeconds] = useState(25 * 60);
   const [running, setRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newMinutes, setNewMinutes] = useState('30');
+  const [newKind, setNewKind] = useState<'focus' | 'rest'>('focus');
+
+  const active = events.find((e) => e.id === activeId) || events[0];
 
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => {
       setSeconds((prev) => {
         if (prev <= 1) {
-          // 切换模式
-          const newMode = mode === 'work' ? 'break' : 'work';
-          const newSeconds = newMode === 'work' ? 25 * 60 : 5 * 60;
-          if (mode === 'work') setSessions((s) => s + 1);
-          setMode(newMode);
+          if (active.kind === 'focus') setSessions((s) => s + 1);
           setRunning(false);
-          return newSeconds;
+          return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [running, mode]);
+  }, [running, active.kind]);
 
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  const totalSeconds = mode === 'work' ? 25 * 60 : 5 * 60;
-  const progress = ((totalSeconds - seconds) / totalSeconds) * 100;
+  const totalSeconds = active.minutes * 60;
+  const progress = totalSeconds > 0 ? ((totalSeconds - seconds) / totalSeconds) * 100 : 0;
+  const isFocus = active.kind === 'focus';
 
-  function reset() {
+  function selectEvent(id: string) {
+    const ev = events.find((e) => e.id === id);
+    if (!ev) return;
     setRunning(false);
-    setSeconds(mode === 'work' ? 25 * 60 : 5 * 60);
+    setActiveId(id);
+    setSeconds(ev.minutes * 60);
   }
 
-  function switchMode(m: 'work' | 'break') {
-    setRunning(false);
-    setMode(m);
-    setSeconds(m === 'work' ? 25 * 60 : 5 * 60);
+  function addEvent() {
+    const m = parseInt(newMinutes, 10);
+    if (!newName.trim() || !m || m <= 0 || m > 480) return;
+    const ev: PomodoroEvent = {
+      id: `custom-${Date.now()}`,
+      name: newName.trim(),
+      minutes: m,
+      kind: newKind,
+    };
+    const next = [...events, ev];
+    setEvents(next);
+    localStorage.setItem(POMODORO_KEY, JSON.stringify(next.filter((e) => !e.builtin)));
+    setNewName('');
+    setShowAdd(false);
+    selectEvent(ev.id);
+  }
+
+  function removeEvent(id: string) {
+    const next = events.filter((e) => e.id !== id);
+    setEvents(next);
+    localStorage.setItem(POMODORO_KEY, JSON.stringify(next.filter((e) => !e.builtin)));
+    if (activeId === id) selectEvent('focus-25');
   }
 
   return (
-    <div className="card" style={{ padding: 16, marginBottom: 24 }}>
+    <div className="card" style={{ padding: 16, height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h3 style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Icon name="pipeline" size={18} /> 番茄钟
         </h3>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>已完成 {sessions} 轮</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>已完成 {sessions} 轮专注</span>
       </div>
 
-      {/* 模式切换 */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-        <button
-          className={`btn btn-sm ${mode === 'work' ? 'btn-primary' : ''}`}
-          onClick={() => switchMode('work')}
-          style={{ flex: 1, fontSize: 12 }}
-        >
-          专注 25min
-        </button>
-        <button
-          className={`btn btn-sm ${mode === 'break' ? 'btn-primary' : ''}`}
-          onClick={() => switchMode('break')}
-          style={{ flex: 1, fontSize: 12 }}
-        >
-          休息 5min
+      {/* 事件选择（预设 + 自定义） */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {events.map((ev) => (
+          <span key={ev.id} style={{ position: 'relative', display: 'inline-flex' }}>
+            <button
+              className={`btn btn-sm ${activeId === ev.id ? 'btn-primary' : ''}`}
+              onClick={() => selectEvent(ev.id)}
+              style={{ fontSize: 12, paddingRight: ev.builtin ? undefined : 22 }}
+            >
+              {ev.name} {ev.minutes}m
+            </button>
+            {!ev.builtin && (
+              <button
+                onClick={() => removeEvent(ev.id)}
+                title="删除此事件"
+                style={{
+                  position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)',
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  color: activeId === ev.id ? '#fff' : 'var(--text-muted)',
+                  fontSize: 12, padding: '0 4px', lineHeight: 1,
+                }}
+              >×</button>
+            )}
+          </span>
+        ))}
+        <button className="btn btn-sm" onClick={() => setShowAdd(!showAdd)} title="添加自定义事件" style={{ fontSize: 12 }}>
+          <Icon name="plus" size={12} /> 自定义
         </button>
       </div>
+
+      {/* 添加自定义事件 */}
+      {showAdd && (
+        <div style={{
+          display: 'flex', gap: 6, marginBottom: 12, padding: 10,
+          background: 'var(--bg-canvas)', borderRadius: 'var(--radius-sm)', flexWrap: 'wrap',
+        }}>
+          <input
+            className="input" placeholder="事件名（如：读文献）" value={newName}
+            onChange={(e) => setNewName(e.target.value)} style={{ flex: 2, minWidth: 110, fontSize: 12 }}
+          />
+          <input
+            className="input" type="number" min={1} max={480} placeholder="分钟" value={newMinutes}
+            onChange={(e) => setNewMinutes(e.target.value)} style={{ width: 64, fontSize: 12 }}
+          />
+          <select className="input" value={newKind} onChange={(e) => setNewKind(e.target.value as 'focus' | 'rest')} style={{ width: 76, fontSize: 12 }}>
+            <option value="focus">专注</option>
+            <option value="rest">休息</option>
+          </select>
+          <button className="btn btn-sm btn-primary" onClick={addEvent}>添加</button>
+        </div>
+      )}
 
       {/* 计时显示 */}
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
         <div style={{
           fontSize: 42, fontWeight: 700, fontFamily: 'monospace',
-          color: mode === 'work' ? 'var(--accent)' : '#2e7d32',
+          color: isFocus ? 'var(--accent)' : '#2e7d32',
           lineHeight: 1,
         }}>
           {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-          {mode === 'work' ? '专注中...' : '休息中...'}
+          {active.name} · {seconds === 0 ? '时间到！' : running ? (isFocus ? '专注中…' : '休息中…') : '已暂停'}
         </div>
       </div>
 
@@ -97,7 +183,7 @@ function PomodoroTimer() {
         <div style={{
           height: '100%',
           width: `${progress}%`,
-          background: mode === 'work' ? 'var(--accent)' : '#2e7d32',
+          background: isFocus ? 'var(--accent)' : '#2e7d32',
           transition: 'width 1s linear',
           borderRadius: 2,
         }} />
@@ -105,10 +191,10 @@ function PomodoroTimer() {
 
       {/* 控制按钮 */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        <button className="btn btn-primary" onClick={() => setRunning(!running)} style={{ minWidth: 80 }}>
-          {running ? '暂停' : '开始'}
+        <button className="btn btn-primary" onClick={() => { if (seconds === 0) setSeconds(active.minutes * 60); setRunning(!running); }} style={{ minWidth: 80 }}>
+          {running ? '暂停' : seconds === 0 ? '再来一轮' : '开始'}
         </button>
-        <button className="btn" onClick={reset} style={{ minWidth: 60 }}>重置</button>
+        <button className="btn" onClick={() => { setRunning(false); setSeconds(active.minutes * 60); }} style={{ minWidth: 60 }}>重置</button>
       </div>
     </div>
   );
@@ -293,14 +379,12 @@ export function DashboardView() {
         ))}
       </div>
 
-      {/* 左右布局：时钟+番茄钟 | 时间线 */}
-      <div className="grid grid-2" style={{ gap: 16, marginBottom: 24, alignItems: 'flex-start' }}>
-        <div>
-          <ClockWidget />
-          <PomodoroTimer />
-        </div>
-        <TimelineWidget />
+      {/* 时钟 | 番茄钟 双列；时间线全宽一行（R86 修复右侧空白） */}
+      <div className="grid grid-2" style={{ gap: 16, marginBottom: 24, alignItems: 'stretch' }}>
+        <ClockWidget />
+        <PomodoroTimer />
       </div>
+      <TimelineWidget />
 
       {/* 快捷操作 */}
       <div className="card" style={{ marginBottom: 24, padding: 16 }}>

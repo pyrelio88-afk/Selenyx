@@ -9,6 +9,21 @@ export interface DisciplineGlossary {
   termEn: string;
   definition: string;
   category: string;
+  /** R86 词典级扩展字段（可选，数据扩充后逐步补全） */
+  example?: string;      // 例句/应用示例
+  aliases?: string;      // 同义词/别称
+  source?: string;       // 出处/参考
+}
+
+/** R86 新增：常用参数/数值 */
+export interface DisciplineParameter {
+  name: string;
+  symbol?: string;       // 符号
+  value: string;         // 数值或范围
+  unit?: string;
+  description: string;   // 完整解释
+  category: string;
+  source?: string;
 }
 
 export interface DisciplineFormula {
@@ -17,12 +32,15 @@ export interface DisciplineFormula {
   description: string;
   unit?: string;
   reference?: string;
+  variables?: string;    // R86: 变量说明
 }
 
 export interface DisciplineStandard {
   name: string;
   code: string;
   description: string;
+  issuer?: string;       // R86: 发布机构
+  year?: string;         // R86: 发布/现行年份
 }
 
 export interface Discipline {
@@ -33,6 +51,7 @@ export interface Discipline {
   color: string;
   description: string;
   glossary: DisciplineGlossary[];
+  parameters?: DisciplineParameter[];
   formulas: DisciplineFormula[];
   standards: DisciplineStandard[];
 }
@@ -3211,3 +3230,17 @@ export const DISCIPLINES: Discipline[] = [
   },
 
 ];
+
+// ── R86: 扩展数据合并 ────────────────────────────────────────────────
+// 分学科增量文件在 ./expansion/ 下按轮次持续扩充，此处合并进主数据集。
+// 目标（每学科）：名词 ≥500 · 数值参数 ≥200 · 公式 ≥300 · 标准规范 ≥20
+import { DISCIPLINE_EXPANSIONS } from './expansion';
+
+for (const d of DISCIPLINES) {
+  const ext = DISCIPLINE_EXPANSIONS[d.id];
+  if (!ext) continue;
+  if (ext.glossary) d.glossary.push(...ext.glossary);
+  if (ext.parameters) d.parameters = [...(d.parameters || []), ...ext.parameters];
+  if (ext.formulas) d.formulas.push(...ext.formulas);
+  if (ext.standards) d.standards.push(...ext.standards);
+}

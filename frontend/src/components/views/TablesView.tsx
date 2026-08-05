@@ -111,6 +111,9 @@ export function TablesView() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [filterText, setFilterText] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
+  // R86: 看板拖拽状态
+  const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
+  const [dropTargetGroup, setDropTargetGroup] = useState<string | null>(null);
 
   const selected = tables.find((t) => t.id === selectedId);
 
@@ -276,28 +279,56 @@ export function TablesView() {
                       const val = r[selectField.id];
                       return val === group.label || (!val && group.label === groups[0]?.label);
                     });
+                    const isDropTarget = dropTargetGroup === group.label && dragRowIdx !== null;
                     return (
-                      <div key={group.label} style={{
-                        minWidth: 240, flex: '0 0 240px',
-                        background: 'var(--bg-canvas)', borderRadius: 'var(--radius-md)',
-                        padding: 10, display: 'flex', flexDirection: 'column',
-                      }}>
+                      <div
+                        key={group.label}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dropTargetGroup !== group.label) setDropTargetGroup(group.label); }}
+                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTargetGroup(null); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragRowIdx !== null) {
+                            updateTableRecord(selected.id, dragRowIdx, { [selectField.id]: group.label });
+                          }
+                          setDragRowIdx(null);
+                          setDropTargetGroup(null);
+                        }}
+                        style={{
+                          minWidth: 240, flex: '0 0 240px',
+                          background: isDropTarget ? 'var(--accent-light)' : 'var(--bg-canvas)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: 10, display: 'flex', flexDirection: 'column',
+                          outline: isDropTarget ? '2px dashed var(--accent)' : 'none',
+                          outlineOffset: -2,
+                          transition: 'background .15s, outline .15s',
+                        }}
+                      >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '0 4px' }}>
                           <span style={{ width: 8, height: 8, borderRadius: '50%', background: group.color, flexShrink: 0 }} />
                           <span style={{ fontSize: 13, fontWeight: 600 }}>{group.label}</span>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{groupRecords.length}</span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 60 }}>
                           {groupRecords.map((record) => {
                             const rowIdx = record.__idx;
+                            const isDragging = dragRowIdx === rowIdx;
                             return (
                               <div
                                 key={rowIdx}
                                 className="card"
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  e.dataTransfer.setData('text/plain', String(rowIdx));
+                                  setDragRowIdx(rowIdx);
+                                }}
+                                onDragEnd={() => { setDragRowIdx(null); setDropTargetGroup(null); }}
                                 style={{
-                                  padding: 10, cursor: 'pointer', fontSize: 13,
+                                  padding: 10, cursor: 'grab', fontSize: 13,
                                   borderLeft: `3px solid ${group.color}`,
                                   minHeight: 48,
+                                  opacity: isDragging ? 0.4 : 1,
+                                  transition: 'opacity .15s',
                                 }}
                                 onClick={() => setEditingCell({ rowIdx, fieldId: titleField.id })}
                               >

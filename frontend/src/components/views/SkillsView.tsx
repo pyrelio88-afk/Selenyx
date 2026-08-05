@@ -31,6 +31,7 @@ export function SkillsView() {
         s.name.toLowerCase().includes(q) ||
         s.nameEn.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
+        (s.prompt || '').toLowerCase().includes(q) ||
         s.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
