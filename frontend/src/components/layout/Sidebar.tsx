@@ -11,12 +11,13 @@ const NAV_GROUPS: NavGroup[] = [
     label: '',
     items: [
       { key: 'dashboard', label: '总览' },
+      { key: 'aiChat', label: 'AI 助手' },
     ],
   },
   {
-    label: '研究',
+    label: '项目',
     items: [
-      { key: 'projects', label: '项目' },
+      { key: 'projects', label: '项目管理' },
       { key: 'references', label: '文献库' },
       { key: 'pipeline', label: '科研流水线' },
     ],
@@ -32,7 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: '工具',
     items: [
-      { key: 'aiChat', label: 'AI 助手' },
+      { key: 'skills', label: '科研技能' },
       { key: 'tools', label: '工具箱' },
       { key: 'settings', label: '设置' },
     ],

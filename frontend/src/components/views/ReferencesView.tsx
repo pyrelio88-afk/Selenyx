@@ -190,6 +190,16 @@ export function ReferencesView() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
           />
           <button className="btn" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
+          <button className="btn" onClick={() => {
+            import('@data/seedReferences').then(({ getSeedReferences }) => {
+              const refs = getSeedReferences();
+              const existingDois = new Set(references.map((r) => r.doi).filter(Boolean));
+              const newRefs = refs.filter((r) => !r.doi || !existingDois.has(r.doi));
+              if (newRefs.length === 0) { flashToast('精读文献已全部导入，无新增'); return; }
+              addReferences(newRefs);
+              flashToast(`成功导入 ${newRefs.length} 篇精读文献（来自每日精读自动化）`);
+            });
+          }}><Icon name="references" size={16} /> 导入精读文献</button>
           <div className="export-group">
             <button className="btn" aria-label="导出文献" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
           </div>

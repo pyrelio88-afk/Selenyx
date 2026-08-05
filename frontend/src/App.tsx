@@ -10,6 +10,7 @@ import { ClinicalDataView } from '@components/views/ClinicalDataView';
 import { AIChatView } from '@components/views/AIChatView';
 import { SettingsView } from '@components/views/SettingsView';
 import { ToolsView } from '@components/views/ToolsView';
+import { SkillsView } from '@components/views/SkillsView';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
 import './styles/tokens.css';
@@ -27,6 +28,7 @@ const VIEWS: Record<ViewKey, () => React.ReactNode> = {
   aiChat: () => <AIChatView />,
   settings: () => <SettingsView />,
   tools: () => <ToolsView />,
+  skills: () => <SkillsView />,
 };
 
 export default function App() {

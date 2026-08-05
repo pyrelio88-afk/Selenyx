@@ -7,9 +7,10 @@ import { useState } from 'react';
 import { Icon } from '@components/ui/Icon';
 import { fetchByDOI, searchArXiv, type FetchedReference } from '@services/metadataFetch';
 
-type ToolTab = 'doi' | 'cite' | 'count' | 'models';
+type ToolTab = 'doi' | 'cite' | 'count' | 'models' | 'browser';
 
 const TABS: { key: ToolTab; label: string; icon: string }[] = [
+  { key: 'browser', label: '网页浏览', icon: 'search' },
   { key: 'doi', label: 'DOI 查询', icon: 'search' },
   { key: 'cite', label: '引用格式化', icon: 'tag' },
   { key: 'count', label: '字数统计', icon: 'references' },
@@ -38,6 +39,7 @@ export function ToolsView() {
         ))}
       </div>
 
+      {tab === 'browser' && <WebBrowser />}
       {tab === 'doi' && <DOILookup />}
       {tab === 'cite' && <CiteFormatter />}
       {tab === 'count' && <WordCounter />}
@@ -300,6 +302,112 @@ function LocalModels() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+
+/** 网页浏览器 — 内置 iframe 浏览器，可在线阅读文献 */
+function WebBrowser() {
+  const [url, setUrl] = useState('');
+  const [currentUrl, setCurrentUrl] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIdx, setHistoryIdx] = useState(-1);
+
+  const QUICK_LINKS = [
+    { label: 'PubMed', url: 'https://pubmed.ncbi.nlm.nih.gov/' },
+    { label: 'Google Scholar', url: 'https://scholar.google.com/' },
+    { label: 'CNKI', url: 'https://www.cnki.net/' },
+    { label: 'arXiv', url: 'https://arxiv.org/' },
+    { label: 'Semantic Scholar', url: 'https://www.semanticscholar.org/' },
+    { label: 'Connected Papers', url: 'https://www.connectedpapers.com/' },
+    { label: 'ResearchGate', url: 'https://www.researchgate.net/' },
+    { label: 'DOI 解析', url: 'https://doi.org/' },
+  ];
+
+  function navigate(targetUrl: string) {
+    let full = targetUrl.trim();
+    if (!full) return;
+    if (!full.startsWith('http://') && !full.startsWith('https://')) {
+      // 自动判断是否是 DOI
+      if (/^10\.\d{4,}/.test(full)) full = 'https://doi.org/' + full;
+      else full = 'https://' + full;
+    }
+    setCurrentUrl(full);
+    setUrl(full);
+    const newHistory = [...history.slice(0, historyIdx + 1), full];
+    setHistory(newHistory);
+    setHistoryIdx(newHistory.length - 1);
+  }
+
+  function goBack() {
+    if (historyIdx > 0) { setHistoryIdx(historyIdx - 1); setCurrentUrl(history[historyIdx - 1]); setUrl(history[historyIdx - 1]); }
+  }
+  function goForward() {
+    if (historyIdx < history.length - 1) { setHistoryIdx(historyIdx + 1); setCurrentUrl(history[historyIdx + 1]); setUrl(history[historyIdx + 1]); }
+  }
+
+  return (
+    <div>
+      {/* 地址栏 */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, alignItems: 'center' }}>
+        <button className="btn btn-sm" onClick={goBack} disabled={historyIdx <= 0} style={{ padding: '4px 10px' }}>←</button>
+        <button className="btn btn-sm" onClick={goForward} disabled={historyIdx >= history.length - 1} style={{ padding: '4px 10px' }}>→</button>
+        <input
+          className="input"
+          placeholder="输入网址或 DOI（如 10.1186/s12909-023-04495-8）"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') navigate(url); }}
+          style={{ flex: 1 }}
+          aria-label="浏览器地址栏"
+        />
+        <button className="btn btn-primary" onClick={() => navigate(url)}>访问</button>
+      </div>
+
+      {/* 快捷链接 */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {QUICK_LINKS.map((l) => (
+          <button
+            key={l.url}
+            className="btn btn-sm"
+            onClick={() => navigate(l.url)}
+            style={{ fontSize: 12, padding: '3px 12px', borderRadius: 14 }}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 浏览区域 */}
+      {currentUrl ? (
+        <div style={{
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          height: '70vh',
+          background: '#fff',
+        }}>
+          <iframe
+            src={currentUrl}
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            title="内置浏览器"
+          />
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="icon" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="search" size={48} strokeWidth={1.2} /></div>
+          <p>输入网址或 DOI 开始浏览文献，或点击上方快捷链接</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+            支持 PubMed、Google Scholar、CNKI、arXiv 等学术网站
+          </p>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+        注意：部分网站可能因安全策略限制嵌入显示，如遇空白请直接在新标签页打开。
       </div>
     </div>
   );
