@@ -5,12 +5,18 @@ import type { Reference } from '@types/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
 import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
+import { ViewSwitcher, type ViewMode } from '@components/datagrid/ViewSwitcher';
+import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
+import { GalleryView } from '@components/datagrid/GalleryView';
+import { CalendarView } from '@components/datagrid/CalendarView';
 
 export function ReferencesView() {
-  const { references, searchQuery, setSearchQuery, addReferences } = useAppStore();
+  const { references, searchQuery, setSearchQuery, addReferences, updateReference } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [groupBy, setGroupBy] = useState<GroupField>('readStatus');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
@@ -88,22 +94,30 @@ export function ReferencesView() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
           placeholder="搜索标题、作者、DOI..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 200 }}
           aria-label="搜索文献"
         />
-        <select className="input" style={{ width: 160 }} value={filterType} onChange={(e) => setFilterType(e.target.value)} aria-label="按类型筛选">
+        <select className="input" style={{ width: 140 }} value={filterType} onChange={(e) => setFilterType(e.target.value)} aria-label="按类型筛选">
           <option value="all">全部类型</option>
           <option value="journalArticle">期刊论文</option>
           <option value="book">书籍</option>
           <option value="preprint">预印本</option>
           <option value="webpage">网页</option>
         </select>
+        <ViewSwitcher mode={viewMode} onChange={setViewMode} />
+        {viewMode === 'kanban' && (
+          <select className="input" style={{ width: 120 }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupField)} aria-label="看板分组字段">
+            <option value="readStatus">按状态</option>
+            <option value="type">按类型</option>
+            <option value="importance">按重要度</option>
+          </select>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -111,6 +125,17 @@ export function ReferencesView() {
           <div className="icon" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="references" size={48} strokeWidth={1.2} /></div>
           <p>暂无文献。点击「检索」从 OpenAlex/Crossref/arXiv 检索，或「导入」BibTeX/RIS。</p>
         </div>
+      ) : viewMode === 'kanban' ? (
+        <KanbanView
+          references={filtered}
+          groupBy={groupBy}
+          onGroupChange={(id, patch) => { updateReference(id, patch); flashToast('已更新'); }}
+          onSelect={setSelectedId}
+        />
+      ) : viewMode === 'gallery' ? (
+        <GalleryView references={filtered} onSelect={setSelectedId} />
+      ) : viewMode === 'calendar' ? (
+        <CalendarView references={filtered} onSelect={setSelectedId} />
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
