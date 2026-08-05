@@ -11,6 +11,7 @@ import type {
   DisciplineStandard,
 } from '../disciplines';
 import { MEDICINE_EXTRA } from './medicine';
+import { SCIENCE_EXTRA } from './science';
 
 export interface DisciplineExpansion {
   glossary?: DisciplineGlossary[];
@@ -21,4 +22,5 @@ export interface DisciplineExpansion {
 
 export const DISCIPLINE_EXPANSIONS: Record<string, DisciplineExpansion> = {
   medicine: MEDICINE_EXTRA,
+  science: SCIENCE_EXTRA,
 };
