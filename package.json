@@ -1,0 +1,21 @@
+{
+  "name": "selenyx",
+  "version": "2.0.0-alpha",
+  "private": true,
+  "description": "Selenyx 科研工作台 — 本地优先、BYOK、八段科研流水线（TypeScript + Python + Tauri 多语言架构）",
+  "license": "MIT",
+  "packageManager": "pnpm@9.14.0",
+  "scripts": {
+    "dev": "pnpm --filter @selenyx/frontend dev",
+    "build": "pnpm --filter @selenyx/frontend build",
+    "typecheck": "pnpm --filter @selenyx/frontend typecheck",
+    "backend:dev": "cd backend && uv run uvicorn selenyx_backend.main:app --reload --port 8770",
+    "backend:test": "cd backend && uv run pytest -q",
+    "desktop:dev": "cd desktop && cargo tauri dev",
+    "desktop:build": "cd desktop && cargo tauri build",
+    "lint": "pnpm --filter @selenyx/frontend lint"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

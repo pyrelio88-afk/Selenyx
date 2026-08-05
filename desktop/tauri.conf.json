@@ -1,0 +1,46 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicovank/cocogitto/main/.schema/v2.json",
+  "productName": "Selenyx",
+  "version": "2.0.0-alpha",
+  "identifier": "com.selenyx.app",
+  "build": {
+    "frontendDist": "../frontend/dist",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeDevCommand": "cd ../frontend && pnpm dev",
+    "beforeBuildCommand": "cd ../frontend && pnpm build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Selenyx 科研工作台",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 768,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "externalBin": []
+  },
+  "plugins": {
+    "shell": { "open": true },
+    "fs": { "scope": ["$HOME/.selenyx/**", "$DOCUMENT/**"] }
+  }
+}
