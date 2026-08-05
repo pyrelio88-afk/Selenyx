@@ -12,7 +12,7 @@ import type {
 
 export type ViewKey =
   | 'dashboard' | 'projects' | 'references' | 'pipeline'
-  | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings';
+  | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings' | 'tools';
 
 export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic';
 export type ThemeMode = 'light' | 'dark';

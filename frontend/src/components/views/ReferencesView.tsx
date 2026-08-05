@@ -5,7 +5,7 @@ import type { Reference } from '@types/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
 import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
-import { lazy, Suspense } from 'react';
+import { fetchByDOI, type FetchedReference } from '@services/metadataFetch';
 import { ViewSwitcher, type ViewMode } from '@components/datagrid/ViewSwitcher';
 import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
 import { GalleryView } from '@components/datagrid/GalleryView';
@@ -22,6 +22,11 @@ export function ReferencesView() {
   const [toast, setToast] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [groupBy, setGroupBy] = useState<GroupField>('readStatus');
+  const [sortField, setSortField] = useState<'title' | 'year' | 'doi' | 'readStatus' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [doiInput, setDoiInput] = useState('');
+  const [doiLoading, setDoiLoading] = useState(false);
+  const [webViewerUrl, setWebViewerUrl] = useState<string | null>(null);
   const [pdfSource, setPdfSource] = useState<ArrayBuffer | null>(null);
   const [pdfRefId, setPdfRefId] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -41,8 +46,82 @@ export function ReferencesView() {
     if (filterType !== 'all') {
       result = result.filter((r) => r.type === filterType);
     }
+    // 排序
+    if (sortField) {
+      result = [...result].sort((a, b) => {
+        let cmp = 0;
+        if (sortField === 'title') cmp = a.title.localeCompare(b.title, 'zh');
+        else if (sortField === 'year') cmp = (a.year || 0) - (b.year || 0);
+        else if (sortField === 'doi') cmp = (a.doi || '').localeCompare(b.doi || '');
+        else if (sortField === 'readStatus') cmp = (a.readStatus || '').localeCompare(b.readStatus || '');
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
     return result;
-  }, [references, searchQuery, filterType]);
+  }, [references, searchQuery, filterType, sortField, sortDir]);
+
+  function toggleSort(field: 'title' | 'year' | 'doi' | 'readStatus') {
+    if (sortField === field) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+  }
+
+  /** DOI 自动抓取元数据 → 入库 */
+  async function handleDoiFetch() {
+    if (!doiInput.trim()) return;
+    setDoiLoading(true);
+    try {
+      const ref = await fetchByDOI(doiInput.trim());
+      if (ref) {
+        addReferences([{
+          id: 'ref_' + Date.now().toString(36),
+          title: ref.title,
+          creators: ref.creators,
+          type: ref.type as any,
+          doi: ref.doi,
+          publication: ref.publication,
+          year: ref.year,
+          volume: ref.volume,
+          issue: ref.issue,
+          pages: ref.pages,
+          abstract: ref.abstract,
+          tags: [],
+          readStatus: 'unread',
+          importance: 3,
+          citeKey: ref.doi.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20),
+          openAccess: ref.openAccess,
+          annotations: [],
+        }]);
+        flashToast(`已抓取并添加: ${ref.title.slice(0, 40)}...`);
+        setDoiInput('');
+      } else {
+        // Crossref 没找到，降级为手动添加
+        const doi = doiInput.trim().replace(/^https?:\/\/doi\.org\//, '');
+        addReferences([{
+          id: 'ref_' + Date.now().toString(36),
+          title: `[待补充] DOI: ${doi}`,
+          creators: [],
+          type: 'journalArticle',
+          doi,
+          publication: '',
+          year: new Date().getFullYear(),
+          volume: '', issue: '', pages: '',
+          abstract: '',
+          tags: [],
+          readStatus: 'unread',
+          importance: 3,
+          citeKey: doi.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20),
+          openAccess: false,
+          annotations: [],
+        }]);
+        flashToast(`Crossref 未找到元数据，已创建占位条目 (DOI: ${doi})`);
+        setDoiInput('');
+      }
+    } catch {
+      flashToast('抓取失败，请检查网络或 DOI 是否正确');
+    } finally {
+      setDoiLoading(false);
+    }
+  }
 
   const selected = useMemo(() => references.find((r) => r.id === selectedId) ?? null, [references, selectedId]);
   const closePanel = useCallback(() => setSelectedId(null), []);
@@ -146,6 +225,48 @@ export function ReferencesView() {
         )}
       </div>
 
+      {/* DOI 自动抓取元数据 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <input
+          className="input"
+          placeholder="粘贴 DOI 自动抓取文献信息（如 10.1234/abc.def）"
+          value={doiInput}
+          onChange={(e) => setDoiInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleDoiFetch(); }}
+          style={{ flex: 1 }}
+          aria-label="DOI 自动抓取"
+        />
+        <button className="btn btn-primary" onClick={handleDoiFetch} disabled={doiLoading}>
+          {doiLoading ? '抓取中...' : '抓取元数据'}
+        </button>
+      </div>
+
+      {/* 统计概览 */}
+      {references.length > 0 && (
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', fontSize: 12 }}>
+          <span className="status-chip" style={{ background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>
+            共 {references.length} 篇
+          </span>
+          <span className="status-chip" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+            已读 {references.filter((r) => r.readStatus === 'read').length}
+          </span>
+          <span className="status-chip" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+            阅读中 {references.filter((r) => r.readStatus === 'reading').length}
+          </span>
+          <span className="status-chip" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+            未读 {references.filter((r) => r.readStatus === 'unread').length}
+          </span>
+          <span className="status-chip" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+            期刊 {references.filter((r) => r.type === 'journalArticle').length}
+          </span>
+          {references.filter((r) => r.openAccess).length > 0 && (
+            <span className="status-chip" style={{ background: '#e8f5e9', color: '#2e7d32' }}>
+              OA {references.filter((r) => r.openAccess).length}
+            </span>
+          )}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="empty-state">
           <div className="icon" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="references" size={48} strokeWidth={1.2} /></div>
@@ -167,12 +288,20 @@ export function ReferencesView() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>{FIELD_LABELS.title}</th>
+                <th className="sortable-th" onClick={() => toggleSort('title')} style={{ cursor: 'pointer' }}>
+                  {FIELD_LABELS.title}{sortField === 'title' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                </th>
                 <th>{FIELD_LABELS.creators}</th>
                 <th>{FIELD_LABELS.publication}</th>
-                <th>{FIELD_LABELS.year}</th>
-                <th>DOI</th>
-                <th>状态</th>
+                <th className="sortable-th" onClick={() => toggleSort('year')} style={{ cursor: 'pointer' }}>
+                  {FIELD_LABELS.year}{sortField === 'year' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                </th>
+                <th className="sortable-th" onClick={() => toggleSort('doi')} style={{ cursor: 'pointer' }}>
+                  DOI{sortField === 'doi' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                </th>
+                <th className="sortable-th" onClick={() => toggleSort('readStatus')} style={{ cursor: 'pointer' }}>
+                  状态{sortField === 'readStatus' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -202,7 +331,7 @@ export function ReferencesView() {
 
       {/* 详情侧滑面板（ONES/Mobbin 模式：点击行 → 右侧详情，不离开列表上下文） */}
       <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />
-      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} />}
+      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onOpenWeb={(url) => setWebViewerUrl(url)} />}
 
       {/* 隐藏 PDF 文件输入 */}
       <input
@@ -226,6 +355,35 @@ export function ReferencesView() {
         </Suspense>
       )}
 
+      {/* 内置网页浏览器 — 在线阅读文献 */}
+      {webViewerUrl && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'var(--bg-canvas)', display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
+            background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)',
+          }}>
+            <button className="btn btn-sm" onClick={() => setWebViewerUrl(null)}>
+              <Icon name="close" size={16} /> 关闭
+            </button>
+            <span style={{ flex: 1, fontSize: 13, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {webViewerUrl}
+            </span>
+            <a href={webViewerUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+              <Icon name="link" size={14} /> 新窗口打开
+            </a>
+          </div>
+          <iframe
+            src={webViewerUrl}
+            style={{ flex: 1, border: 'none', width: '100%' }}
+            title="文献在线阅读"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+          />
+        </div>
+      )}
+
       {/* 操作反馈 toast */}
       {toast && (
         <div className="toast" role="status" aria-live="polite">{toast}</div>
@@ -235,7 +393,38 @@ export function ReferencesView() {
 }
 
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose, onOpenPdf }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf, onOpenWeb }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onOpenWeb: (url: string) => void }) {
+  const [copied, setCopied] = useState(false);
+
+  function generateGBT7714(): string {
+    const authors = r.creators.map((c) => `${c.lastName}${c.firstName}`).join(', ');
+    const typeMap: Record<string, string> = {
+      'journalArticle': '[J]', 'book': '[M]', 'bookSection': '[M]', 'conferencePaper': '[C]',
+      'thesis': '[D]', 'report': '[R]', 'webpage': '[EB/OL]', 'preprint': '[J]',
+    };
+    const typeTag = typeMap[r.type] || '[J]';
+    let citation = `${authors}. ${r.title}${typeTag}. `;
+    if (r.publication) citation += `${r.publication}, `;
+    if (r.year) citation += `${r.year}`;
+    if (r.volume) citation += `, ${r.volume}`;
+    if (r.issue) citation += `(${r.issue})`;
+    if (r.pages) citation += `: ${r.pages}`;
+    citation += '.';
+    if (r.doi) citation += ` DOI: ${r.doi}.`;
+    return citation;
+  }
+
+  function copyCitation() {
+    const text = generateGBT7714();
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      // Fallback: select and prompt
+      window.prompt('复制以下引用文本：', text);
+    });
+  }
+
   return (
     <aside className="ref-detail-panel open" role="dialog" aria-label={`文献详情：${r.title}`}>
       <div className="ref-detail-header">
@@ -328,8 +517,40 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf }: { ref: Reference; onClos
           </div>
         )}
 
+        {/* GB/T 7714 引用生成 */}
+        <div className="ref-detail-field" style={{ marginTop: 4 }}>
+          <span className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            GB/T 7714 引用格式
+            <button
+              className="btn btn-xs"
+              onClick={copyCitation}
+              style={{ padding: '2px 10px', fontSize: 11, lineHeight: 1.4 }}
+              aria-label="复制引用文本"
+            >
+              {copied ? '✓ 已复制' : '复制'}
+            </button>
+          </span>
+          <div style={{
+            marginTop: 6,
+            padding: '10px 12px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 12.5,
+            lineHeight: 1.7,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-secondary)',
+            wordBreak: 'break-all',
+          }}>
+            {generateGBT7714()}
+          </div>
+        </div>
+
         <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onOpenPdf(r.id)}><Icon name="download" size={15} /> 获取全文</button>
+          {r.doi && (
+            <button className="btn" style={{ flex: 1 }} onClick={() => onOpenWeb(`https://doi.org/${r.doi}`)}><Icon name="link" size={15} /> 在线阅读</button>
+          )}
           <button className="btn" style={{ flex: 1 }}><Icon name="tag" size={15} /> 编辑标签</button>
         </div>
       </div>

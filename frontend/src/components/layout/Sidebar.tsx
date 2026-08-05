@@ -26,13 +26,14 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'tables', label: '多维表格' },
       { key: 'statTools', label: '统计工具' },
-      { key: 'clinicalData', label: '临床数据' },
+      { key: 'clinicalData', label: '学科数据' },
     ],
   },
   {
     label: '工具',
     items: [
       { key: 'aiChat', label: 'AI 助手' },
+      { key: 'tools', label: '工具箱' },
       { key: 'settings', label: '设置' },
     ],
   },

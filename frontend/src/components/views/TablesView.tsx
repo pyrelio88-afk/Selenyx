@@ -110,6 +110,7 @@ export function TablesView() {
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [filterText, setFilterText] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
 
   const selected = tables.find((t) => t.id === selectedId);
 
@@ -237,13 +238,113 @@ export function TablesView() {
                   onChange={(e) => setFilterText(e.target.value)}
                   style={{ width: 160 }}
                 />
+                <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                  <button
+                    className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : ''}`}
+                    onClick={() => setViewMode('table')}
+                    style={{ borderRadius: 0, border: 'none' }}
+                  >📊 表格</button>
+                  <button
+                    className={`btn btn-sm ${viewMode === 'board' ? 'btn-primary' : ''}`}
+                    onClick={() => setViewMode('board')}
+                    style={{ borderRadius: 0, border: 'none' }}
+                  >📋 看板</button>
+                </div>
                 <button className="btn btn-danger-ghost" onClick={() => { if (confirm(`删除表格「${selected.name}」？此操作不可撤销。`)) { deleteTable(selected.id); setSelectedId(null); } }}>
                   删除表格
                 </button>
               </div>
             </div>
 
-            {/* 表格 */}
+            {/* 看板视图 */}
+            {viewMode === 'board' && (() => {
+              const selectField = selected.fields.find((f) => f.type === 'select' && f.options);
+              if (!selectField || !selectField.options) {
+                return (
+                  <div className="empty-state" style={{ marginTop: 40 }}>
+                    <p>看板视图需要一个「单选」字段来分组</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>请先添加一个单选字段并设置选项</p>
+                  </div>
+                );
+              }
+              const groups = selectField.options;
+              const titleField = selected.fields.find((f) => f.type === 'text') || selected.fields[0];
+              return (
+                <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12, minHeight: 400 }}>
+                  {groups.map((group) => {
+                    const groupRecords = sortedFilteredRecords.filter((r) => {
+                      const val = r[selectField.id];
+                      return val === group.label || (!val && group.label === groups[0]?.label);
+                    });
+                    return (
+                      <div key={group.label} style={{
+                        minWidth: 240, flex: '0 0 240px',
+                        background: 'var(--bg-canvas)', borderRadius: 'var(--radius-md)',
+                        padding: 10, display: 'flex', flexDirection: 'column',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '0 4px' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: group.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{group.label}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{groupRecords.length}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
+                          {groupRecords.map((record) => {
+                            const rowIdx = record.__idx;
+                            return (
+                              <div
+                                key={rowIdx}
+                                className="card"
+                                style={{
+                                  padding: 10, cursor: 'pointer', fontSize: 13,
+                                  borderLeft: `3px solid ${group.color}`,
+                                  minHeight: 48,
+                                }}
+                                onClick={() => setEditingCell({ rowIdx, fieldId: titleField.id })}
+                              >
+                                <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                                  {String(record[titleField.id] ?? '未命名') || '未命名'}
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {selected.fields.filter((f) => f.id !== selectField.id && f.id !== titleField.id).slice(0, 3).map((f) => {
+                                    const v = record[f.id];
+                                    if (v === null || v === undefined || v === '') return null;
+                                    return (
+                                      <span key={f.id} style={{
+                                        fontSize: 10, padding: '1px 5px', borderRadius: 'var(--radius-sm)',
+                                        background: 'var(--bg-surface)', color: 'var(--text-secondary)',
+                                      }}>{String(v)}</span>
+                                    );
+                                  })}
+                                </div>
+                                {editingCell?.rowIdx === rowIdx && editingCell?.fieldId === titleField.id && (
+                                  <input
+                                    className="cell-input"
+                                    autoFocus
+                                    value={String(record[titleField.id] ?? '')}
+                                    onChange={(e) => updateTableRecord(selected.id, rowIdx, { [titleField.id]: e.target.value })}
+                                    onBlur={() => setEditingCell(null)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null); }}
+                                    style={{ marginTop: 4, width: '100%' }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {groupRecords.length === 0 && (
+                            <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>
+                              拖拽或添加记录
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* 表格视图 */}
+            {viewMode === 'table' && (
             <div className="data-table-wrapper" style={{ overflowX: 'auto' }}>
               <table className="data-table">
                 <thead>
@@ -314,6 +415,7 @@ export function TablesView() {
                 </tbody>
               </table>
             </div>
+            )}
 
             <button className="btn add-row-btn" onClick={handleAddRow}>
               <Icon name="plus" size={16} /> 添加记录

@@ -9,6 +9,7 @@ import { StatToolsView } from '@components/views/StatToolsView';
 import { ClinicalDataView } from '@components/views/ClinicalDataView';
 import { AIChatView } from '@components/views/AIChatView';
 import { SettingsView } from '@components/views/SettingsView';
+import { ToolsView } from '@components/views/ToolsView';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
 import './styles/tokens.css';
@@ -25,6 +26,7 @@ const VIEWS: Record<ViewKey, () => React.ReactNode> = {
   clinicalData: () => <ClinicalDataView />,
   aiChat: () => <AIChatView />,
   settings: () => <SettingsView />,
+  tools: () => <ToolsView />,
 };
 
 export default function App() {
