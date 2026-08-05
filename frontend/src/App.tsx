@@ -10,6 +10,7 @@ import { AIChatView } from '@components/views/AIChatView';
 import { SettingsView } from '@components/views/SettingsView';
 import { useAppStore } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
+import './styles/tokens.css';
 
 export type ViewKey =
   | 'dashboard' | 'references' | 'pipeline' | 'projects'
@@ -28,12 +29,13 @@ const VIEWS: Record<ViewKey, () => React.ReactNode> = {
 
 export default function App() {
   const [view, setView] = useState<ViewKey>('dashboard');
-  const { theme, mode } = useAppStore();
+  const { theme, mode, density } = useAppStore();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.mode = mode;
-  }, [theme, mode]);
+    document.documentElement.dataset.density = density;
+  }, [theme, mode, density]);
 
   const CurrentView = VIEWS[view];
 

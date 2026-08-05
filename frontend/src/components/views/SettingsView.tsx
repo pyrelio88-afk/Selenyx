@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { THEME_OPTIONS } from '@hooks/useTheme';
 import type { LLMProvider } from '@types/index';
+import { Icon } from '@components/ui/Icon';
+import { DensityToggle } from '@components/ui/StatusChip';
 
 export function SettingsView() {
-  const { theme, setTheme, mode, setMode, llmConfig, setLLMConfig } = useAppStore();
+  const { theme, setTheme, mode, setMode, density, setDensity, llmConfig, setLLMConfig } = useAppStore();
   const [provider, setProvider] = useState<LLMProvider>(llmConfig?.provider ?? 'openai');
   const [apiKey, setApiKey] = useState(llmConfig?.apiKey ?? '');
   const [baseUrl, setBaseUrl] = useState(llmConfig?.baseUrl ?? 'https://api.openai.com/v1');
@@ -40,8 +42,14 @@ export function SettingsView() {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className={`btn ${mode === 'light' ? 'btn-primary' : ''}`} onClick={() => setMode('light')}>☀️ 日间</button>
-          <button className={`btn ${mode === 'dark' ? 'btn-primary' : ''}`} onClick={() => setMode('dark')}>🌙 夜间</button>
+          <button className={`btn ${mode === 'light' ? 'btn-primary' : ''}`} onClick={() => setMode('light')}><Icon name="sun" size={16} /> 日间</button>
+          <button className={`btn ${mode === 'dark' ? 'btn-primary' : ''}`} onClick={() => setMode('dark')}><Icon name="moon" size={16} /> 夜间</button>
+        </div>
+
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <label style={{ fontSize: 13, display: 'block', marginBottom: 8, color: 'var(--text-secondary)' }}>界面密度</label>
+          <DensityToggle density={density} onChange={setDensity} />
+          <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>紧凑模式信息密度更高，宽松模式留白更舒适。</p>
         </div>
       </div>
 

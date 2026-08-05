@@ -1,0 +1,141 @@
+/**
+ * Selenyx 设计 Token 分层系统
+ *
+ * 依据 2026 设计趋势（UXPin「design tokens as universal language」+
+ * Awwwards「functional motion」+ ONES「color never alone」）：
+ * 三层 token：primitive（原始）→ semantic（语义）→ component（组件）
+ * 动效 token：≤300ms + easing，全程 honor prefers-reduced-motion
+ * 密度 token：compact / comfortable / spacious 三档
+ */
+
+/* ===== 第一层：Primitive Tokens（原始值，不直接使用） ===== */
+:root {
+  /* 间距尺度（4px 基准，1.25 比例） */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* 圆角 */
+  --raw-radius-xs: 2px;
+  --raw-radius-sm: 4px;
+  --raw-radius-md: 8px;
+  --raw-radius-lg: 12px;
+  --raw-radius-xl: 16px;
+  --raw-radius-pill: 999px;
+
+  /* 字号 */
+  --font-xs: 11px;
+  --font-sm: 13px;
+  --font-base: 14px;
+  --font-md: 16px;
+  --font-lg: 18px;
+  --font-xl: 22px;
+  --font-2xl: 28px;
+
+  /* 行高 */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  /* 字重 */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* 动效时长（UXPin: 功能性动效 ≤300ms） */
+  --motion-instant: 100ms;
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 280ms;
+
+  /* 缓动曲线（material/linear 风格，非机械 linear） */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+  --ease-out: cubic-bezier(0.0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* z-index 层级 */
+  --z-base: 1;
+  --z-sticky: 10;
+  --z-dropdown: 100;
+  --z-overlay: 1000;
+  --z-modal: 2000;
+  --z-toast: 3000;
+
+  /* 描边宽度（线性图标统一） */
+  --stroke-icon: 1.6;
+  --stroke-thin: 1px;
+  --stroke-thick: 2px;
+}
+
+/* ===== 第二层：Semantic Tokens（语义，随主题/模式切换） ===== */
+/* 已在 global.css 主题块中定义：--bg-canvas / --text-primary / --accent / --border 等 */
+/* 此处补充密度语义 token（随 data-density 切换） */
+
+[data-density="comfortable"] {
+  --space-card-pad: var(--space-5);
+  --space-row-pad: 10px;
+  --space-section-gap: var(--space-6);
+  --space-view-pad: 24px 32px;
+  --sidebar-width: 220px;
+}
+[data-density="compact"] {
+  --space-card-pad: var(--space-3);
+  --space-row-pad: 6px;
+  --space-section-gap: var(--space-4);
+  --space-view-pad: 16px 20px;
+  --sidebar-width: 200px;
+}
+[data-density="spacious"] {
+  --space-card-pad: var(--space-6);
+  --space-row-pad: 14px;
+  --space-section-gap: var(--space-8);
+  --space-view-pad: 32px 40px;
+  --sidebar-width: 240px;
+}
+
+/* 默认 comfortable */
+:root { --space-card-pad: var(--space-5); --space-row-pad: 10px; --space-section-gap: var(--space-6); --space-view-pad: 24px 32px; --sidebar-width: 220px; }
+
+/* ===== 动效规范（功能性，≤300ms，可被 prefers-reduced-motion 全局关闭） ===== */
+:root {
+  --transition: var(--motion-base) var(--ease-standard);
+  --transition-fast: var(--motion-fast) var(--ease-out);
+  --transition-slow: var(--motion-slow) var(--ease-emphasized);
+  --transition-color: var(--motion-fast) var(--ease-standard);
+}
+
+/* 无障碍：尊重「减少动效」系统偏好——所有过渡/动画归零（WCAG 2.3.3） */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-instant: 0ms;
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-slow: 0ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== 第三层：Component Tokens（组件级，组合语义 token） ===== */
+:root {
+  /* 焦点环（ONES: color never alone——焦点不只是颜色，是 2px 实环 + 偏移） */
+  --focus-ring: 0 0 0 2px var(--bg-canvas), 0 0 0 4px var(--accent);
+
+  /* 状态徽章：每态一个语义色 + 形状点（色+形双编码） */
+  --status-unread-dot: var(--text-muted);
+  --status-reading-dot: var(--warning);
+  --status-read-dot: var(--accent);
+  --status-archived-dot: var(--text-secondary);
+}

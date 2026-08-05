@@ -12,14 +12,17 @@ import type {
 
 export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic';
 export type ThemeMode = 'light' | 'dark';
+export type Density = 'compact' | 'comfortable' | 'spacious';
 
 interface AppState {
   // === 主题 ===
   theme: ThemeName;
   mode: ThemeMode;
+  density: Density;
   setTheme: (t: ThemeName) => void;
   setMode: (m: ThemeMode) => void;
   toggleMode: () => void;
+  setDensity: (d: Density) => void;
 
   // === 文献 ===
   references: Reference[];
@@ -56,12 +59,14 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       theme: 'paper-green',
       mode: 'light',
+      density: 'comfortable',
       setTheme: (t) => set({ theme: t }),
       setMode: (m) => set({ mode: m }),
       toggleMode: () => set((s) => ({ mode: s.mode === 'light' ? 'dark' : 'light' })),
+      setDensity: (d) => set({ density: d }),
 
       references: [],
       collections: [],
