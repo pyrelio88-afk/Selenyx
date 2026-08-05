@@ -1,14 +1,19 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { FIELD_LABELS } from '@types/index';
 import type { Reference } from '@types/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
 import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
+import { lazy, Suspense } from 'react';
 import { ViewSwitcher, type ViewMode } from '@components/datagrid/ViewSwitcher';
 import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
 import { GalleryView } from '@components/datagrid/GalleryView';
 import { CalendarView } from '@components/datagrid/CalendarView';
+import type { Annotation } from '@types/reference';
+
+// PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
+const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
 
 export function ReferencesView() {
   const { references, searchQuery, setSearchQuery, addReferences, updateReference } = useAppStore();
@@ -17,6 +22,9 @@ export function ReferencesView() {
   const [toast, setToast] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [groupBy, setGroupBy] = useState<GroupField>('readStatus');
+  const [pdfSource, setPdfSource] = useState<ArrayBuffer | null>(null);
+  const [pdfRefId, setPdfRefId] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
@@ -71,6 +79,24 @@ export function ReferencesView() {
     URL.revokeObjectURL(url);
     flashToast(`已导出 ${target.length} 条文献为 ${format.toUpperCase()}`);
   }, [filtered, references, flashToast]);
+
+  /** 打开 PDF 阅读器：读取文件 → ArrayBuffer → 渲染 */
+  const handleOpenPdf = useCallback(async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      setPdfSource(buf);
+      flashToast(`已加载 ${file.name}`);
+    } catch {
+      flashToast('PDF 读取失败');
+    }
+  }, [flashToast]);
+
+  /** 批注变更 → 写回文献 */
+  const handleAnnotationsChange = useCallback((annos: Annotation[]) => {
+    if (pdfRefId) updateReference(pdfRefId, { annotations: annos });
+  }, [pdfRefId, updateReference]);
+
+  const pdfRef = pdfRefId ? references.find((r) => r.id === pdfRefId) : null;
 
   return (
     <div>
@@ -176,7 +202,29 @@ export function ReferencesView() {
 
       {/* 详情侧滑面板（ONES/Mobbin 模式：点击行 → 右侧详情，不离开列表上下文） */}
       <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />
-      {selected && <RefDetailPanel ref={selected} onClose={closePanel} />}
+      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} />}
+
+      {/* 隐藏 PDF 文件输入 */}
+      <input
+        ref={pdfInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        style={{ display: 'none' }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOpenPdf(f); e.target.value = ''; }}
+      />
+
+      {/* PDF 阅读器全屏覆盖（懒加载） */}
+      {pdfSource && pdfRef && (
+        <Suspense fallback={<div className="pdf-loading"><div className="skeleton" style={{ width: 400, height: 560 }} /></div>}>
+          <PdfReader
+            source={pdfSource}
+            title={pdfRef.title || pdfRef.citeKey}
+            annotations={pdfRef.annotations}
+            onAnnotationsChange={handleAnnotationsChange}
+            onClose={() => { setPdfSource(null); setPdfRefId(null); }}
+          />
+        </Suspense>
+      )}
 
       {/* 操作反馈 toast */}
       {toast && (
@@ -187,7 +235,7 @@ export function ReferencesView() {
 }
 
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose }: { ref: Reference; onClose: () => void }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void }) {
   return (
     <aside className="ref-detail-panel open" role="dialog" aria-label={`文献详情：${r.title}`}>
       <div className="ref-detail-header">
@@ -281,7 +329,7 @@ function RefDetailPanel({ ref: r, onClose }: { ref: Reference; onClose: () => vo
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn btn-primary" style={{ flex: 1 }}><Icon name="download" size={15} /> 获取全文</button>
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onOpenPdf(r.id)}><Icon name="download" size={15} /> 获取全文</button>
           <button className="btn" style={{ flex: 1 }}><Icon name="tag" size={15} /> 编辑标签</button>
         </div>
       </div>
