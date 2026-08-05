@@ -11,6 +11,8 @@
  *     选区逐行归一化为多条 rect 存入 annotation.rects，缩放/翻页后仍精确命中
  * - 批注点击 → 弹出详情（编辑 note / 删除）
  * - 多行高亮按行渲染，重叠/合并对齐 Zotero 存储模型
+ * - R77：左侧栏——批注列表（跨页汇总，点击跳页定位，对齐 Zotero Annotations 侧栏）
+ *   + PDF 大纲导航（getOutline 目录树，dest 解析为页码，点击跳页）
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -56,6 +58,46 @@ interface PageViewport {
   scale: number;
 }
 
+/** R77 大纲节点（含解析后的页码） */
+interface OutlineNode {
+  title: string;
+  page: number | null; // null = 无可定位目标
+  depth: number;
+  children: OutlineNode[];
+}
+
+/** R77：递归解析 PDF 大纲，dest → 页码（1-based） */
+async function resolveOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNode[]> {
+  const raw = await doc.getOutline();
+  if (!raw || raw.length === 0) return [];
+  const resolveDest = async (dest: unknown): Promise<number | null> => {
+    try {
+      let d = dest;
+      if (typeof d === 'string') d = await doc.getDestination(d);
+      if (Array.isArray(d) && d[0]) {
+        const ref = d[0];
+        // 显式目标数组第一项是页引用对象
+        if (ref && typeof ref === 'object' && 'num' in ref) {
+          return (await doc.getPageIndex(ref as pdfjsLib.Ref)) + 1;
+        }
+      }
+    } catch {
+      /* 忽略单项解析失败 */
+    }
+    return null;
+  };
+  const walk = async (items: typeof raw, depth: number): Promise<OutlineNode[]> => {
+    const nodes: OutlineNode[] = [];
+    for (const it of items) {
+      const page = await resolveDest(it.dest);
+      const children = it.items?.length ? await walk(it.items, depth + 1) : [];
+      nodes.push({ title: it.title || '(无标题)', page, depth, children });
+    }
+    return nodes;
+  };
+  return walk(raw, 0);
+}
+
 export function PdfReader({ source, annotations = [], onAnnotationsChange, onClose, title }: PdfReaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -78,6 +120,10 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
     left: number; top: number;                   // 弹层定位（px，相对 page-wrap）
   } | null>(null);
   const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null);
+  // R77：左侧栏
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<'annotations' | 'outline'>('annotations');
+  const [outline, setOutline] = useState<OutlineNode[] | null>(null);
 
   // ===== 加载文档 =====
   useEffect(() => {
@@ -86,12 +132,17 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
     setError(null);
     const params = typeof source === 'string' ? { url: source } : { data: source };
     pdfjsLib.getDocument(params).promise
-      .then((d) => {
+      .then(async (d) => {
         if (cancelled) return;
         setDoc(d);
         setNumPages(d.numPages);
         setPageNum(1);
         setLoading(false);
+        // R77：解析大纲目录树
+        try {
+          const ol = await resolveOutline(d);
+          if (!cancelled) setOutline(ol);
+        } catch { setOutline([]); }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -318,6 +369,16 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
               <Icon name="close" size={16} />
             </button>
           )}
+          {/* R77：侧边栏开关 */}
+          <button
+            className={`icon-btn ${sidebarOpen ? 'active' : ''}`}
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-label="切换侧边栏"
+            aria-pressed={sidebarOpen}
+            title="侧边栏（批注 / 大纲）"
+          >
+            <Icon name="menu" size={16} />
+          </button>
           {title && <span className="pdf-title" title={title}>{title}</span>}
         </div>
 
@@ -367,6 +428,82 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
           ))}
         </div>
       </div>
+
+      {/* ===== R77 阅读区：侧边栏 + 页面区 ===== */}
+      <div className="pdf-body-wrapper">
+        {/* ===== R77 左侧栏：批注列表 / 大纲导航 ===== */}
+        {sidebarOpen && (
+          <aside className="pdf-sidebar" aria-label="批注与大纲侧栏">
+            <div className="pdf-sidebar-tabs" role="tablist">
+              <button
+                role="tab"
+                aria-selected={sidebarTab === 'annotations'}
+                className={`pdf-sidebar-tab ${sidebarTab === 'annotations' ? 'active' : ''}`}
+                onClick={() => setSidebarTab('annotations')}
+              >
+                批注（{annotations.length}）
+              </button>
+              <button
+                role="tab"
+                aria-selected={sidebarTab === 'outline'}
+                className={`pdf-sidebar-tab ${sidebarTab === 'outline' ? 'active' : ''}`}
+                onClick={() => setSidebarTab('outline')}
+              >
+                大纲
+              </button>
+            </div>
+            <div className="pdf-sidebar-content">
+              {sidebarTab === 'annotations' && (
+                annotations.length === 0 ? (
+                  <p className="pdf-sidebar-empty">暂无批注。选中文本或选择工具后在页面上添加。</p>
+                ) : (
+                  <ul className="pdf-anno-list">
+                    {annotations
+                      .slice()
+                      .sort((a, b) => a.page - b.page)
+                      .map((a) => {
+                        const c = ANNOTATION_COLORS[a.type];
+                        const isActive = selectedAnnotation === a.id;
+                        return (
+                          <li key={a.id}>
+                            <button
+                              className={`pdf-anno-item ${isActive ? 'active' : ''}`}
+                              onClick={() => { setPageNum(a.page); setSelectedAnnotation(a.id); }}
+                              aria-current={isActive}
+                            >
+                              <span className="pdf-tool-dot" style={{ background: c.border, flexShrink: 0 }} />
+                              <span className="pdf-anno-item-main">
+                                <span className="pdf-anno-item-top">
+                                  <span className="pdf-anno-item-type">{c.label}</span>
+                                  <span className="pdf-anno-item-page">第 {a.page} 页</span>
+                                </span>
+                                <span className="pdf-anno-item-text">
+                                  {(a.text || a.note || '').slice(0, 60) || '(无文本)'}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                  </ul>
+                )
+              )}
+              {sidebarTab === 'outline' && (
+                outline === null ? (
+                  <p className="pdf-sidebar-empty">正在解析大纲…</p>
+                ) : outline.length === 0 ? (
+                  <p className="pdf-sidebar-empty">此 PDF 无目录大纲。</p>
+                ) : (
+                  <ul className="pdf-outline-tree" role="tree">
+                    {outline.map((node, i) => (
+                      <OutlineItem key={i} node={node} onJump={goTo} />
+                    ))}
+                  </ul>
+                )
+              )}
+            </div>
+          </aside>
+        )}
 
       {/* ===== 页面区 ===== */}
       <div className="pdf-body" ref={containerRef}>
@@ -472,6 +609,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
           </div>
         )}
       </div>
+      </div>
 
       {/* ===== 批注详情弹层 ===== */}
       {currentAnno && (
@@ -501,5 +639,43 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
         <span className="pdf-hint">←→ 翻页 · +/− 缩放 · 选中文本直接高亮 · Esc 取消</span>
       </div>
     </div>
+  );
+}
+
+/** R77：大纲树递归节点 */
+function OutlineItem({ node, onJump }: { node: OutlineNode; onJump: (n: number) => void }) {
+  const [expanded, setExpanded] = useState(true);
+  const hasChildren = node.children.length > 0;
+  return (
+    <li role="treeitem" aria-expanded={hasChildren ? expanded : undefined}>
+      <div className="pdf-outline-row" style={{ paddingLeft: 8 + node.depth * 14 }}>
+        {hasChildren ? (
+          <button
+            className="pdf-outline-toggle"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? '折叠' : '展开'}
+          >
+            <Icon name="chevronRight" size={11} className={expanded ? 'icon-rotate-90' : ''} />
+          </button>
+        ) : (
+          <span className="pdf-outline-bullet" />
+        )}
+        <button
+          className="pdf-outline-link"
+          disabled={node.page === null}
+          onClick={() => node.page !== null && onJump(node.page)}
+          title={node.page !== null ? `跳转到第 ${node.page} 页` : '无可定位目标'}
+        >
+          {node.title}
+        </button>
+      </div>
+      {hasChildren && expanded && (
+        <ul role="group" className="pdf-outline-children">
+          {node.children.map((child, i) => (
+            <OutlineItem key={i} node={child} onJump={onJump} />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }

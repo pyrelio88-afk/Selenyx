@@ -992,6 +992,116 @@ kbd {
 
 /* 图标翻转（上一页箭头） */
 .icon-flip { transform: scaleX(-1); }
+.icon-rotate-90 { transform: rotate(90deg); }
+
+/* ===== R77 侧边栏 + 大纲 ===== */
+.pdf-body-wrapper { display: flex; flex: 1; min-height: 0; }
+
+.pdf-sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+.pdf-sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.pdf-sidebar-tab {
+  flex: 1;
+  padding: 9px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.pdf-sidebar-tab:hover { color: var(--text); }
+.pdf-sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+.pdf-sidebar-content { flex: 1; overflow-y: auto; padding: 4px 0; }
+.pdf-sidebar-empty {
+  padding: 20px 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* 批注列表 */
+.pdf-anno-list { list-style: none; margin: 0; padding: 0; }
+.pdf-anno-list > li { padding: 0 6px; }
+.pdf-anno-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.pdf-anno-item:hover { background: var(--modifier-hover); }
+.pdf-anno-item.active { background: var(--modifier-active); box-shadow: inset 3px 0 0 var(--accent); }
+.pdf-anno-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pdf-anno-item-top { display: flex; justify-content: space-between; align-items: center; }
+.pdf-anno-item-type { font-size: 12px; font-weight: 600; }
+.pdf-anno-item-page { font-size: 11px; color: var(--text-muted); }
+.pdf-anno-item-text {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* 大纲树 */
+.pdf-outline-tree, .pdf-outline-children { list-style: none; margin: 0; padding: 0; }
+.pdf-outline-row { display: flex; align-items: center; gap: 4px; }
+.pdf-outline-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  border: none; background: transparent;
+  cursor: pointer; color: var(--text-muted);
+  border-radius: 3px; flex-shrink: 0;
+}
+.pdf-outline-toggle:hover { background: var(--modifier-hover); color: var(--text); }
+.pdf-outline-bullet { display: inline-block; width: 18px; height: 18px; flex-shrink: 0; }
+.pdf-outline-link {
+  flex: 1;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.pdf-outline-link:hover:not(:disabled) { background: var(--modifier-hover); color: var(--accent); }
+.pdf-outline-link:disabled { color: var(--text-muted); cursor: default; }
+
+[data-mode="dark"] .pdf-sidebar { background: var(--surface-elevated, var(--surface)); }
+
+/* 侧边栏打开时页面区不再独占；移动端侧边栏收窄为抽屉 */
+@media (max-width: 768px) {
+  .pdf-sidebar { width: 200px; position: absolute; z-index: 30; height: 100%; box-shadow: 2px 0 12px rgba(0,0,0,0.15); }
+}
 
 /* 暗色模式 */
 [data-mode="dark"] .pdf-page-wrap { box-shadow: 0 4px 24px rgba(0,0,0,0.4); }

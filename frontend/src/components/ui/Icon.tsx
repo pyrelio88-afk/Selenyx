@@ -19,6 +19,7 @@ export type IconName =
   // 操作
   | 'plus' | 'search' | 'import' | 'download' | 'close' | 'check' | 'chevronRight'
   | 'filter' | 'sort' | 'more'
+  | 'menu'
   // 流水线阶段
   | 'stageProblem' | 'stageLiterature' | 'stageFulltext' | 'stageScreening'
   | 'stageReading' | 'stageEvidence' | 'stageSynthesis' | 'stageWriting'
@@ -51,6 +52,7 @@ const PATHS: Record<IconName, ReactNode> = {
   filter: (<><path d="M4 6h16l-6 7v5l-4 2v-7z" /></>),
   sort: (<><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></>),
   more: (<><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></>),
+  menu: (<><rect x="3" y="4" width="18" height="2.4" rx="1.2" /><rect x="3" y="10.8" width="18" height="2.4" rx="1.2" /><rect x="3" y="17.6" width="12" height="2.4" rx="1.2" /></>),
 
   // 流水线阶段 —— 每阶段独立意象，非统一方块
   stageProblem: (<><circle cx="12" cy="12" r="8.5" /><path d="M9.2 9.2a2.8 2.8 0 0 1 5.3 1c0 1.8-2.5 2-2.5 3.5" /><circle cx="12" cy="16.8" r="0.6" fill="currentColor" stroke="none" /></>),
