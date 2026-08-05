@@ -7,8 +7,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   Reference, ResearchProject, RefCollection, RefTag,
-  KanbanTask, LLMConfig, MultiDimTable, PipelineStageKey, TableField,
-} from '@types/index';
+  KanbanTask, LLMConfig, MultiDimTable, TableField,
+} from '@apptypes/index';
 
 export type ViewKey =
   | 'dashboard' | 'projects' | 'references' | 'pipeline'

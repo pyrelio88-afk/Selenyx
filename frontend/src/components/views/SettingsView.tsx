@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { THEME_OPTIONS } from '@hooks/useTheme';
-import type { LLMProvider } from '@types/index';
+import type { LLMProvider } from '@apptypes/index';
 import { Icon } from '@components/ui/Icon';
 import { DensityToggle } from '@components/ui/StatusChip';
 import { testConnection, PROVIDER_DEFAULTS, type TestResult } from '@services/llm';

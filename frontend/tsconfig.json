@@ -22,7 +22,7 @@
       "@components/*": ["src/components/*"],
       "@stores/*": ["src/stores/*"],
       "@services/*": ["src/services/*"],
-      "@types/*": ["src/types/*"],
+      "@apptypes/*": ["src/types/*"],
       "@utils/*": ["src/utils/*"],
       "@hooks/*": ["src/hooks/*"],
       "@data/*": ["src/data/*"]

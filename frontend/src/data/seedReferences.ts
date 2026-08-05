@@ -1,11 +1,30 @@
 /**
  * 精读文献种子数据 —— 从飞书 Base「科研工作台」文献库导入
  * 来源：每日科研论文精读自动化任务(auto_4kpjtqmy866q3)
+ * 原始数据为宽松结构，由 getSeedReferences() 归一化为完整 Reference。
  */
 
-import type { Reference } from '@types/reference';
+import type { Reference, Creator, ItemType } from '@apptypes/reference';
 
-export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[] = [
+interface RawSeed {
+  title: string;
+  creators: { firstName: string; lastName: string }[];
+  type: ItemType;
+  doi: string;
+  publication: string;
+  year: number;
+  volume: string;
+  issue: string;
+  pages: string;
+  abstract: string;
+  tags: string[];
+  readStatus: Reference['readStatus'];
+  importance: Reference['importance'];
+  citeKey: string;
+  openAccess: boolean;
+}
+
+export const SEED_REFERENCES: RawSeed[] = [
   {
     title: 'Effects of Handover Education Using the Outcome-Present State Test (OPT) Model and SBAR in Nursing Students: A Quasi-Experimental Design',
     creators: [{ firstName: 'Seo', lastName: 'YH' }, { firstName: 'Jang', lastName: 'K' }, { firstName: 'Ahn', lastName: 'JW' }],
@@ -19,7 +38,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'seo2023opt_sbar',
     openAccess: true,
-    annotations: [],
   },
   {
     title: 'Effect of desktop virtual patient simulation on clinical reasoning skills of nursing students: A systematic review and meta-analysis',
@@ -34,7 +52,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 4,
     citeKey: 'zhao2026_virtual_simulation',
     openAccess: false,
-    annotations: [],
   },
   {
     title: '基于屏端交互的虚拟教学对护理专业学生临床推理能力影响的系统评价',
@@ -49,7 +66,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 4,
     citeKey: 'zhang2026_virtual_teaching',
     openAccess: false,
-    annotations: [],
   },
   {
     title: 'Effectiveness of SBAR-based simulation programs for nursing students: a systematic review',
@@ -64,7 +80,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'yun2023_sbar_simulation',
     openAccess: true,
-    annotations: [],
   },
   {
     title: 'Effectiveness of AI chatbot-assisted flipped learning on patient handover for nursing students',
@@ -79,7 +94,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'chang2026_aichatbot_handover',
     openAccess: false,
-    annotations: [],
   },
   {
     title: 'Blended learning programme for clinical handovers: a randomised controlled trial',
@@ -94,7 +108,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'chung2022_blended_rct',
     openAccess: true,
-    annotations: [],
   },
   {
     title: 'Assessing the efficacy of adaptive learning for enhancing communication skills utilizing ISBAR in healthcare students: A quasi-experimental study',
@@ -109,7 +122,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 4,
     citeKey: 'chan2026_isbar_adaptive',
     openAccess: false,
-    annotations: [],
   },
   {
     title: 'AI-Powered Simulation for Nursing Education: Mixed Methods Systematic Review',
@@ -124,7 +136,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 4,
     citeKey: 'jiang2026_ai_simulation',
     openAccess: true,
-    annotations: [],
   },
   {
     title: 'Improving clinical judgment by simulation: a randomized trial and validation of the Lasater clinical judgment rubric in Chinese',
@@ -139,7 +150,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'yang2019_clcjr_validation',
     openAccess: true,
-    annotations: [],
   },
   {
     title: 'Effect of the SBAR model combined with mini-CEX assessment on clinical communication, thinking and comprehensive abilities of nursing interns',
@@ -154,7 +164,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'xu2025_sbar_minicex',
     openAccess: true,
-    annotations: [],
   },
   {
     title: 'The effect of an ISBAR-based clinical supervision model during handover on clinical decision-making and self-efficacy of nursing internship students',
@@ -169,7 +178,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 4,
     citeKey: 'gheisari2025_isbar_supervision',
     openAccess: true,
-    annotations: [],
   },
   {
     title: 'Development and application of an AI agent-based case teaching model for health assessment: A quasi-experimental study',
@@ -184,7 +192,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'yang2026_aiagent_case',
     openAccess: false,
-    annotations: [],
   },
   {
     title: 'Effectiveness of the SBAR-Based training program in self-efficacy and clinical decision-making of undergraduate anesthesiology nursing students',
@@ -199,7 +206,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 4,
     citeKey: 'farzaneh2023_sbar_anesthesia',
     openAccess: true,
-    annotations: [],
   },
   {
     title: '中美合作高仿真案例设计融合SBAR情景模拟教学在内外科护理教学中的效果',
@@ -214,7 +220,6 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 3,
     citeKey: 'liu2021_sbar_simulation',
     openAccess: false,
-    annotations: [],
   },
   {
     title: 'Efficacy of a blended learning programme in enhancing communication skill competence and self-efficacy of nursing students in clinical handovers: RCT',
@@ -229,17 +234,65 @@ export const SEED_REFERENCES: Omit<Reference, 'id' | 'createdAt' | 'updatedAt'>[
     importance: 5,
     citeKey: 'chung2022_blended_rct2',
     openAccess: true,
-    annotations: [],
   },
 ];
 
-/** 生成带 ID 和时间戳的完整 Reference 数组 */
+/** 生成带 ID 和时间戳的完整 Reference 数组（归一化：year 转 string、Creator 补全字段） */
 export function getSeedReferences(): Reference[] {
   const now = new Date().toISOString();
-  return SEED_REFERENCES.map((r, i) => ({
-    ...r,
-    id: `seed_ref_${Date.now().toString(36)}_${i}`,
-    createdAt: now,
-    updatedAt: now,
-  }));
+  const stamp = Date.now().toString(36);
+  return SEED_REFERENCES.map((r, i) => {
+    const creators: Creator[] = r.creators.map((c, ci) => ({
+      id: `seed_c_${stamp}_${i}_${ci}`,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      type: 'author',
+      order: ci,
+    }));
+    const ref: Reference = {
+      id: `seed_ref_${stamp}_${i}`,
+      citeKey: r.citeKey,
+      type: r.type,
+      title: r.title,
+      shortTitle: '',
+      abstract: r.abstract,
+      creators,
+      publication: r.publication,
+      volume: r.volume,
+      issue: r.issue,
+      pages: r.pages,
+      publisher: '',
+      place: '',
+      year: String(r.year),
+      date: '',
+      accessionDate: '',
+      doi: r.doi,
+      isbn: '',
+      issn: '',
+      pmid: '',
+      pmcid: '',
+      arxivId: '',
+      url: r.doi ? `https://doi.org/${r.doi}` : '',
+      uri: '',
+      collections: [],
+      tags: r.tags,
+      language: 'zh',
+      rights: '',
+      attachments: [],
+      annotations: [],
+      notes: '',
+      impactFactor: null,
+      jcrQuartile: null,
+      openAccess: r.openAccess,
+      pageCharge: null,
+      reviewWeeks: null,
+      pipelineStage: null,
+      readStatus: r.readStatus,
+      importance: r.importance,
+      createdAt: now,
+      updatedAt: now,
+      source: 'import',
+    };
+    return ref;
+  });
 }

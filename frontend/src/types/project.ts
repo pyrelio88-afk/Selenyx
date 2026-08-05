@@ -31,7 +31,7 @@ export interface ResearchProject {
   name: string;
   description: string;
   currentStage: PipelineStageKey;
-  pico: PICO;
+  pico?: PICO;
   tags: string[];
   sbar?: SBARInfo;
   referenceIds: string[];
@@ -102,7 +102,7 @@ export interface MultiDimTable {
   name: string;
   fields: TableField[];
   views: TableView[];
-  records: Record<string, Record<string, unknown>>[];
+  records: Record<string, unknown>[];
   createdAt: string;
   updatedAt: string;
 }

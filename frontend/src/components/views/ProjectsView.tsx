@@ -5,8 +5,8 @@
 
 import { useState } from 'react';
 import { useAppStore } from '@stores/appStore';
-import { PIPELINE_STAGES } from '@types/index';
-import type { ResearchProject, PipelineStageKey } from '@types/index';
+import { PIPELINE_STAGES } from '@apptypes/index';
+import type { ResearchProject, PipelineStageKey } from '@apptypes/index';
 import { Icon, NAV_ICONS, STAGE_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';

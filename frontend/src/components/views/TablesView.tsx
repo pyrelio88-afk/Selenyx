@@ -6,7 +6,7 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
-import type { MultiDimTable, TableField, FieldType } from '@types/index';
+import type { MultiDimTable, TableField, FieldType } from '@apptypes/index';
 
 function genId() {
   return 'f_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

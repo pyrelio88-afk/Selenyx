@@ -6,9 +6,9 @@
  * 输出流式回填，过门控后可推进到下一段。
  */
 
-import { PIPELINE_STAGES } from '@types/project';
-import type { ResearchProject, Reference, PipelineStageKey } from '@types/index';
-import type { LLMConfig } from '@types/index';
+import { PIPELINE_STAGES } from '@apptypes/project';
+import type { ResearchProject, Reference, PipelineStageKey } from '@apptypes/index';
+import type { LLMConfig } from '@apptypes/index';
 import { streamChat, type LLMMessage } from '@services/llm';
 
 /** 每段的角色化系统提示（贴合该段产出物与门控） */
@@ -39,7 +39,7 @@ function projectContext(project: ResearchProject | undefined, references: Refere
     project.sbar ? `SBAR.A：${project.sbar.assessment}` : '',
     project.sbar ? `SBAR.R：${project.sbar.recommendation}` : '',
     `本段关联文献 ${stageRefs.length} 篇（共 ${references.length} 篇）：`,
-    ...stageRefs.slice(0, 12).map((r, i) => `${i + 1}. ${r.title?.slice(0, 80) ?? '(无标题)'} — ${r.authors?.[0] ?? '佚名'} ${r.year ?? ''} [${r.journal ?? ''}]`),
+    ...stageRefs.slice(0, 12).map((r, i) => `${i + 1}. ${r.title?.slice(0, 80) ?? '(无标题)'} — ${r.creators[0] ? `${r.creators[0].firstName} ${r.creators[0].lastName}` : '佚名'} ${r.year ?? ''} [${r.publication ?? ''}]`),
   ].filter(Boolean).join('\n');
   return picoText;
 }

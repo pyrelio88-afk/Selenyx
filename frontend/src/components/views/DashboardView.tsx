@@ -3,10 +3,10 @@
  * 新增：番茄钟、实时时钟、倒数日、横向时间线
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore, type ViewKey } from '@stores/appStore';
-import { PIPELINE_STAGES } from '@types/index';
-import { Icon, NAV_ICONS, STAGE_ICONS } from '@components/ui/Icon';
+import { PIPELINE_STAGES } from '@apptypes/index';
+import { Icon, NAV_ICONS, STAGE_ICONS, type IconName } from '@components/ui/Icon';
 import { StatusChip, ProjectStatusChip } from '@components/ui/StatusChip';
 
 // === 番茄钟组件 ===
@@ -265,7 +265,7 @@ export function DashboardView() {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
 
-  const stats: { label: string; value: number; delta: string; icon: React.ReactNode; view: ViewKey }[] = [
+  const stats: { label: string; value: number; delta: string; icon: IconName; view: ViewKey }[] = [
     { label: '文献总数', value: references.length, delta: `未读 ${unread} · 阅读中 ${reading}`, icon: NAV_ICONS.references, view: 'references' },
     { label: '活跃项目', value: activeProjects, delta: `共 ${projects.length} 个项目`, icon: NAV_ICONS.projects, view: 'projects' },
     { label: '待办任务', value: todoTasks, delta: `进行中 ${doingTasks}`, icon: NAV_ICONS.pipeline, view: 'pipeline' },

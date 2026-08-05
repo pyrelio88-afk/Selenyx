@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from 'react';
 import { Icon } from '@components/ui/Icon';
-import { DISCIPLINES, type Discipline } from '../../data/disciplines';
+import { DISCIPLINES } from '../../data/disciplines';
 
 type Tab = 'glossary' | 'formulas' | 'standards';
 

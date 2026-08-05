@@ -19,7 +19,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 // 引入官方 textLayer 样式（含 .textLayer span 定位/选区色，保证文本与画布像素级对齐）
 import 'pdfjs-dist/web/pdf_viewer.css';
-import type { Annotation, AnnotationType } from '@types/reference';
+import type { Annotation, AnnotationType } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
 
 // Worker 配置：pdfjs-dist 4.x 用 .mjs worker
@@ -84,7 +84,7 @@ async function resolveOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNo
         // 显式目标首元素可能是 ref 对象，也可能是页码数字（审查官 #1）
         if (typeof ref === 'number') return ref + 1;
         if (ref && typeof ref === 'object' && 'num' in ref) {
-          return (await doc.getPageIndex(ref as pdfjsLib.Ref)) + 1;
+          return (await doc.getPageIndex(ref as any)) + 1;
         }
       }
     } catch {

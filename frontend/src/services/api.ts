@@ -3,7 +3,7 @@
  * 所有 API 调用经 /api 代理到 FastAPI 后端
  */
 
-import type { Reference, ResearchProject, RetrievalResult, ChatMessage } from '@types/index';
+import type { Reference, ResearchProject, RetrievalResult, ChatMessage } from '@apptypes/index';
 
 const API_BASE = '/api';
 

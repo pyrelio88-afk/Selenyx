@@ -1,16 +1,16 @@
 import { useState, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useAppStore } from '@stores/appStore';
-import { FIELD_LABELS } from '@types/index';
-import type { Reference } from '@types/reference';
+import { FIELD_LABELS } from '@apptypes/index';
+import type { Reference } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
 import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
-import { fetchByDOI, type FetchedReference } from '@services/metadataFetch';
+import { fetchByDOI } from '@services/metadataFetch';
 import { ViewSwitcher, type ViewMode } from '@components/datagrid/ViewSwitcher';
 import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
 import { GalleryView } from '@components/datagrid/GalleryView';
 import { CalendarView } from '@components/datagrid/CalendarView';
-import type { Annotation } from '@types/reference';
+import type { Annotation } from '@apptypes/reference';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
@@ -51,7 +51,7 @@ export function ReferencesView() {
       result = [...result].sort((a, b) => {
         let cmp = 0;
         if (sortField === 'title') cmp = a.title.localeCompare(b.title, 'zh');
-        else if (sortField === 'year') cmp = (a.year || 0) - (b.year || 0);
+        else if (sortField === 'year') cmp = Number(a.year || 0) - Number(b.year || 0);
         else if (sortField === 'doi') cmp = (a.doi || '').localeCompare(b.doi || '');
         else if (sortField === 'readStatus') cmp = (a.readStatus || '').localeCompare(b.readStatus || '');
         return sortDir === 'asc' ? cmp : -cmp;
@@ -75,11 +75,11 @@ export function ReferencesView() {
         addReferences([{
           id: 'ref_' + Date.now().toString(36),
           title: ref.title,
-          creators: ref.creators,
+          creators: ref.creators.map((c, i) => ({ id: "c_" + i, firstName: c.firstName, lastName: c.lastName, type: "author" as const, order: i })),
           type: ref.type as any,
           doi: ref.doi,
           publication: ref.publication,
-          year: ref.year,
+          year: String(ref.year),
           volume: ref.volume,
           issue: ref.issue,
           pages: ref.pages,
@@ -90,7 +90,32 @@ export function ReferencesView() {
           citeKey: ref.doi.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20),
           openAccess: ref.openAccess,
           annotations: [],
-        }]);
+          shortTitle: '',
+          publisher: '',
+          place: '',
+          date: '',
+          accessionDate: '',
+          isbn: '',
+          issn: '',
+          pmid: '',
+          pmcid: '',
+          arxivId: '',
+          url: '',
+          uri: '',
+          collections: [],
+          language: '',
+          rights: '',
+          attachments: [],
+          notes: '',
+          impactFactor: null,
+          jcrQuartile: null,
+          pageCharge: null,
+          reviewWeeks: null,
+          pipelineStage: null,
+          source: 'manual',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          }]);
         flashToast(`已抓取并添加: ${ref.title.slice(0, 40)}...`);
         setDoiInput('');
       } else {
@@ -103,7 +128,7 @@ export function ReferencesView() {
           type: 'journalArticle',
           doi,
           publication: '',
-          year: new Date().getFullYear(),
+          year: String(new Date().getFullYear()),
           volume: '', issue: '', pages: '',
           abstract: '',
           tags: [],
@@ -112,7 +137,32 @@ export function ReferencesView() {
           citeKey: doi.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20),
           openAccess: false,
           annotations: [],
-        }]);
+          shortTitle: '',
+          publisher: '',
+          place: '',
+          date: '',
+          accessionDate: '',
+          isbn: '',
+          issn: '',
+          pmid: '',
+          pmcid: '',
+          arxivId: '',
+          url: '',
+          uri: '',
+          collections: [],
+          language: '',
+          rights: '',
+          attachments: [],
+          notes: '',
+          impactFactor: null,
+          jcrQuartile: null,
+          pageCharge: null,
+          reviewWeeks: null,
+          pipelineStage: null,
+          source: 'manual',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          }]);
         flashToast(`Crossref 未找到元数据，已创建占位条目 (DOI: ${doi})`);
         setDoiInput('');
       }

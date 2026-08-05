@@ -7,7 +7,7 @@
  * 多人用 " and "（BibTeX）或重复 A1/AU 标签（RIS）分隔。
  */
 
-import type { Reference, Creator, ItemType } from '@types/reference';
+import type { Reference, Creator, ItemType } from '@apptypes/reference';
 import { parseBibTeX, entryToBibTeX, BIBTEX_TYPE_MAP, ITEMTYPE_TO_BIBTEX, type BibEntry } from './bibtex';
 import { parseRIS, entryToRIS, firstTag, RIS_TYPE_MAP, ITEMTYPE_TO_RIS, type RISEntry } from './ris';
 

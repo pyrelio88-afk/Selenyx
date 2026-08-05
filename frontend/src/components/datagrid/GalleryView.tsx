@@ -3,7 +3,7 @@
  * 大图优先的视觉浏览，适合快速扫文献封面/标题/状态。
  */
 
-import type { Reference } from '@types/reference';
+import type { Reference } from '@apptypes/reference';
 import { StatusChip } from '@components/ui/StatusChip';
 import { Icon } from '@components/ui/Icon';
 

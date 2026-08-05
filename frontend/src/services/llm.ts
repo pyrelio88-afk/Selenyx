@@ -11,7 +11,7 @@
  * Anthropic（/v1/messages）、Google Gemini（:generateContent / :streamGenerateContent）。
  */
 
-import type { LLMConfig } from '@types/index';
+import type { LLMConfig } from '@apptypes/index';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -266,7 +266,7 @@ export async function streamChat(
     throw mapNetworkError(e, config.baseUrl);
   }
 
-  function finish(partial = false): LLMResult {
+  function finish(_partial = false): LLMResult {
     const used = estimateTokens(messages.map((m) => m.content).join('') + full);
     return { content: full, tokensUsed: used, estimated: true };
   }

@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import type { Reference } from '@types/reference';
+import type { Reference } from '@apptypes/reference';
 import { StatusChip } from '@components/ui/StatusChip';
 import { Icon } from '@components/ui/Icon';
 

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
-import { PIPELINE_STAGES } from '@types/project';
-import type { PipelineStageKey } from '@types/index';
+import { PIPELINE_STAGES } from '@apptypes/project';
+import type { PipelineStageKey } from '@apptypes/index';
 import { Icon, STAGE_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { runPipelineStage } from '@services/pipeline';
