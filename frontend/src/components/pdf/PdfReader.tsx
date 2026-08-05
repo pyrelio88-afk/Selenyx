@@ -1,21 +1,22 @@
 /**
- * PDF.js 阅读器骨架
+ * PDF.js 阅读器（R76：选区高亮）
  *
  * 基于 pdfjs-dist 4.x（ESM + Web Worker）。
  * 对齐 Zotero / ReadCube Papers 阅读器模式：
- * - Canvas 渲染当前页，翻页（上一页/下一页/页码跳转）
- * - 缩放（50%–300%）
- * - 五色批注层骨架：highlight/note/bookmark/underline/strikeout 五种类型，
- *   归一化坐标存储（缩放不变），渲染为绝对定位覆盖层
- * - 批注点击 → 弹出批注详情（编辑 note / 删除）
- * - 键盘 ←/→ 翻页，+/- 缩放
- *
- * 骨架性质：批注创建用「点击页面空白处新增 note」演示；
- * 选区高亮（textLayer 选择 → rect）留 R76 接入 Selection API。
+ * - Canvas 渲染当前页 + textLayer 文本层（支持选区）
+ * - 翻页（上一页/下一页/页码跳转）·缩放（50%–300%）·键盘 ←/→/+/-/Esc
+ * - 五色批注层：highlight/note/bookmark/underline/strikeout
+ *   · R75：选工具后点击页面空白处新增（演示）
+ *   · R76：选中文本 → 弹出浮动工具栏 → 一键创建高亮（Zotero 核心交互）
+ *     选区逐行归一化为多条 rect 存入 annotation.rects，缩放/翻页后仍精确命中
+ * - 批注点击 → 弹出详情（编辑 note / 删除）
+ * - 多行高亮按行渲染，重叠/合并对齐 Zotero 存储模型
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+// 引入官方 textLayer 样式（含 .textLayer span 定位/选区色，保证文本与画布像素级对齐）
+import 'pdfjs-dist/web/pdf_viewer.css';
 import type { Annotation, AnnotationType } from '@types/reference';
 import { Icon } from '@components/ui/Icon';
 
@@ -57,6 +58,8 @@ interface PageViewport {
 
 export function PdfReader({ source, annotations = [], onAnnotationsChange, onClose, title }: PdfReaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerRef = useRef<HTMLDivElement>(null);
+  const pageWrapRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pageNum, setPageNum] = useState(1);
@@ -67,6 +70,13 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
   const [error, setError] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<AnnotationType | null>(null);
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null);
+  // R76 选区高亮：选中文本后弹出的浮动工具栏
+  const [selectionPopup, setSelectionPopup] = useState<{
+    rects: [number, number, number, number][]; // 归一化逐行 rect
+    bbox: [number, number, number, number];     // 外接包围盒（rect 字段）
+    text: string;
+    left: number; top: number;                   // 弹层定位（px，相对 page-wrap）
+  } | null>(null);
   const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null);
 
   // ===== 加载文档 =====
@@ -91,14 +101,14 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
     return () => { cancelled = true; };
   }, [source]);
 
-  // ===== 渲染当前页 =====
+  // ===== 渲染当前页（Canvas + textLayer 文本层）=====
   useEffect(() => {
     if (!doc || !canvasRef.current) return;
     let cancelled = false;
     // 取消上一个渲染任务
     renderTaskRef.current?.cancel();
 
-    doc.getPage(pageNum).then((page) => {
+    doc.getPage(pageNum).then(async (page) => {
       if (cancelled) return;
       const vp = page.getViewport({ scale: scale * 1.5 }); // 1.5x 基础清晰度
       const canvas = canvasRef.current!;
@@ -116,6 +126,26 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
       task.promise.catch((e) => {
         if (e?.name !== 'RenderingCancelledException') console.error('render error', e);
       });
+
+      // R76：渲染文本层（选区高亮的前置）
+      const textLayerDiv = textLayerRef.current;
+      if (textLayerDiv) {
+        textLayerDiv.innerHTML = '';
+        textLayerDiv.style.width = `${vp.width}px`;
+        textLayerDiv.style.height = `${vp.height}px`;
+        // 官方 textLayer span 字号依赖 --scale-factor；设到容器即可
+        textLayerDiv.style.setProperty('--scale-factor', String(vp.scale));
+        try {
+          const textLayer = new pdfjsLib.TextLayer({
+            textContentSource: page.streamTextContent(),
+            container: textLayerDiv,
+            viewport: vp,
+          });
+          await textLayer.render();
+        } catch (e: any) {
+          if (e?.name !== 'RenderingCancelledException') console.warn('textLayer render', e);
+        }
+      }
     });
     return () => { cancelled = true; };
   }, [doc, pageNum, scale]);
@@ -133,21 +163,119 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // R76：选区弹层打开时，1-5 一键创建对应类型批注
+      if (selectionPopup && /^[1-5]$/.test(e.key)) {
+        e.preventDefault();
+        createFromSelection(ANNOTATION_TYPES[Number(e.key) - 1]);
+        return;
+      }
       if (e.key === 'ArrowLeft') goPrev();
       else if (e.key === 'ArrowRight') goNext();
       else if (e.key === '+' || e.key === '=') zoomIn();
       else if (e.key === '-') zoomOut();
-      else if (e.key === 'Escape') { setActiveTool(null); setSelectedAnnotation(null); }
+      else if (e.key === 'Escape') { setActiveTool(null); setSelectedAnnotation(null); setSelectionPopup(null); window.getSelection()?.removeAllRanges(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [goPrev, goNext, zoomIn, zoomOut]);
+  }, [goPrev, goNext, zoomIn, zoomOut, selectionPopup]);
 
   // ===== 批注：当前页的批注 =====
   const pageAnnotations = annotations.filter((a) => a.page === pageNum);
 
+  /**
+   * R76 选区高亮：鼠标抬起时若选中文本则计算逐行归一化 rect 并弹出浮动工具栏。
+   * 对齐 Zotero：选区跨多行 → 多条 rect（每行一条），缩放/翻页后仍精确命中。
+   * 同行多段按 y 中心聚类合并为一条（避免一行内出现破碎高亮）。
+   */
+  const handleSelectionEnd = useCallback(() => {
+    if (activeTool || !viewport || !pageWrapRef.current) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { setSelectionPopup(null); return; }
+    const range = sel.getRangeAt(0);
+    const wrap = pageWrapRef.current;
+    const wrapRect = wrap.getBoundingClientRect();
+    // 仅处理落在页面区内的选区
+    if (!range.intersectsNode(wrap) && !wrap.contains(range.commonAncestorContainer)) {
+      setSelectionPopup(null); return;
+    }
+    const clientRects = Array.from(range.getClientRects());
+    if (clientRects.length === 0) { setSelectionPopup(null); return; }
+
+    // 转归一化并过滤落在页面外的零碎 rect
+    const raw = clientRects
+      .map((r) => ({
+        x1: (r.left - wrapRect.left) / viewport.width,
+        y1: (r.top - wrapRect.top) / viewport.height,
+        x2: (r.right - wrapRect.left) / viewport.width,
+        y2: (r.bottom - wrapRect.top) / viewport.height,
+      }))
+      .filter((r) => r.x2 - r.x1 > 1e-4 && r.y2 - r.y1 > 1e-4)
+      .map((r) => ([
+        Math.max(0, Math.min(1, r.x1)),
+        Math.max(0, Math.min(1, r.y1)),
+        Math.max(0, Math.min(1, r.x2)),
+        Math.max(0, Math.min(1, r.y2)),
+      ]) as [number, number, number, number]);
+
+    if (raw.length === 0) { setSelectionPopup(null); return; }
+
+    // 同行合并：按 y 中心聚类（容差为行高的 40%）
+    const lineTol = Math.max(...raw.map((r) => (r[3] - r[1]))) * 0.4;
+    raw.sort((a, b) => a[1] - b[1]);
+    const merged: [number, number, number, number][] = [];
+    for (const r of raw) {
+      const last = merged[merged.length - 1];
+      if (last && Math.abs((r[1] + r[3]) / 2 - (last[1] + last[3]) / 2) <= lineTol) {
+        last[0] = Math.min(last[0], r[0]);
+        last[2] = Math.max(last[2], r[2]);
+        last[1] = Math.min(last[1], r[1]);
+        last[3] = Math.max(last[3], r[3]);
+      } else {
+        merged.push([...r] as [number, number, number, number]);
+      }
+    }
+
+    // 外接包围盒
+    const bbox: [number, number, number, number] = [
+      Math.min(...merged.map((r) => r[0])),
+      Math.min(...merged.map((r) => r[1])),
+      Math.max(...merged.map((r) => r[2])),
+      Math.max(...merged.map((r) => r[3])),
+    ];
+    const text = sel.toString().replace(/\s+/g, ' ').trim().slice(0, 300);
+    // 弹层定位：选区末行右上方，clamp 进页面内
+    const lastRect = merged[merged.length - 1];
+    const left = Math.min(Math.max(lastRect[2] * viewport.width - 120, 8), viewport.width - 248);
+    const top = Math.max(lastRect[1] * viewport.height - 48, 8);
+
+    setSelectionPopup({ rects: merged, bbox, text, left, top });
+  }, [activeTool, viewport]);
+
+  /** R76：从当前选区创建批注 */
+  const createFromSelection = useCallback((type: AnnotationType) => {
+    if (!selectionPopup) return;
+    const newAnno: Annotation = {
+      id: `anno_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      page: pageNum,
+      type,
+      rect: selectionPopup.bbox,
+      rects: selectionPopup.rects.length > 1 ? selectionPopup.rects : undefined,
+      text: selectionPopup.text,
+      note: '',
+      color: ANNOTATION_COLORS[type].border,
+      createdAt: new Date().toISOString(),
+    };
+    onAnnotationsChange?.([...annotations, newAnno]);
+    setSelectedAnnotation(newAnno.id);
+    setSelectionPopup(null);
+    window.getSelection()?.removeAllRanges();
+  }, [selectionPopup, pageNum, annotations, onAnnotationsChange]);
+
   /** 点击页面空白 → 若当前选了批注工具则在该位置新增批注 */
   const handlePageClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // R76：若刚完成文本选区（非折叠），不触发点选批注，让选区弹层接管
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
     if (!activeTool || !viewport) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / viewport.width;
@@ -256,43 +384,91 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
         )}
         {!loading && !error && (
           <div
+            ref={pageWrapRef}
             className={`pdf-page-wrap ${activeTool ? 'tool-active' : ''}`}
             onClick={handlePageClick}
+            onMouseUp={handleSelectionEnd}
+            onMouseDown={(e) => {
+              // 点空白处清空选区弹层（弹层自身 stopPropagation）
+              if (selectionPopup && !(e.target as HTMLElement).closest('.pdf-selection-popover')) {
+                setSelectionPopup(null);
+              }
+            }}
             style={{ cursor: activeTool ? 'crosshair' : 'default' }}
           >
             <canvas ref={canvasRef} className="pdf-canvas" />
+            {/* ===== 文本层（R76 选区高亮前置）===== */}
+            <div ref={textLayerRef} className="textLayer pdf-text-layer" />
             {/* ===== 批注覆盖层 ===== */}
-            {viewport && pageAnnotations.map((a) => {
-              const [x1, y1, x2, y2] = a.rect;
+            {viewport && pageAnnotations.flatMap((a) => {
               const color = ANNOTATION_COLORS[a.type];
-              const style: React.CSSProperties = {
-                position: 'absolute',
-                left: x1 * viewport.width,
-                top: y1 * viewport.height,
-                width: (x2 - x1) * viewport.width,
-                height: (y2 - y1) * viewport.height,
-                background: color.bg,
-                border: a.type === 'underline' ? 'none' : `1.5px solid ${color.border}`,
-                borderBottom: a.type === 'underline' ? `2px solid ${color.border}` : undefined,
-                textDecoration: a.type === 'strikeout' ? 'line-through' : undefined,
-                borderRadius: 2,
-                cursor: 'pointer',
-                zIndex: selectedAnnotation === a.id ? 10 : 5,
-                boxShadow: selectedAnnotation === a.id ? `0 0 0 2px ${color.border}` : undefined,
-              };
-              return (
-                <div
-                  key={a.id}
-                  className="pdf-annotation"
-                  style={style}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${color.label}批注${a.note ? `：${a.note}` : ''}`}
-                  onClick={(e) => { e.stopPropagation(); setSelectedAnnotation(a.id === selectedAnnotation ? null : a.id); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') setSelectedAnnotation(a.id); }}
-                />
-              );
+              // R76：有 rects 时逐行渲染；否则退回单一 rect（R75 兼容）
+              const rects = a.rects && a.rects.length > 0 ? a.rects : [a.rect];
+              return rects.map((r, idx) => {
+                const [x1, y1, x2, y2] = r;
+                const style: React.CSSProperties = {
+                  position: 'absolute',
+                  left: x1 * viewport.width,
+                  top: y1 * viewport.height,
+                  width: (x2 - x1) * viewport.width,
+                  height: (y2 - y1) * viewport.height,
+                  background: color.bg,
+                  border: a.type === 'underline' ? 'none' : (rects.length > 1 && idx > 0 ? 'none' : `1.5px solid ${color.border}`),
+                  borderBottom: a.type === 'underline' ? `2px solid ${color.border}` : undefined,
+                  textDecoration: a.type === 'strikeout' ? 'line-through' : undefined,
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                  zIndex: selectedAnnotation === a.id ? 10 : 5,
+                  boxShadow: selectedAnnotation === a.id ? `0 0 0 2px ${color.border}` : undefined,
+                };
+                return (
+                  <div
+                    key={`${a.id}-${idx}`}
+                    className="pdf-annotation"
+                    style={style}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${color.label}批注${a.note ? `：${a.note}` : ''}`}
+                    onClick={(e) => { e.stopPropagation(); setSelectedAnnotation(a.id === selectedAnnotation ? null : a.id); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedAnnotation(a.id); }}
+                  />
+                );
+              });
             })}
+
+            {/* ===== R76 选区浮动工具栏 ===== */}
+            {selectionPopup && viewport && (
+              <div
+                className="pdf-selection-popover"
+                role="toolbar"
+                aria-label="选区批注工具栏"
+                style={{ left: selectionPopup.left, top: selectionPopup.top }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+              >
+                <span className="pdf-sel-count">{selectionPopup.rects.length} 行</span>
+                {ANNOTATION_TYPES.map((t, i) => (
+                  <button
+                    key={t}
+                    className="pdf-sel-btn"
+                    title={`${ANNOTATION_COLORS[t].label}（${i + 1}）`}
+                    aria-label={`${ANNOTATION_COLORS[t].label}`}
+                    onClick={() => createFromSelection(t)}
+                  >
+                    <span className="pdf-tool-dot" style={{ background: ANNOTATION_COLORS[t].border }} />
+                    <span className="pdf-sel-label">{ANNOTATION_COLORS[t].label}</span>
+                  </button>
+                ))}
+                <button
+                  className="pdf-sel-cancel"
+                  title="取消（Esc）"
+                  aria-label="取消"
+                  onClick={() => { setSelectionPopup(null); window.getSelection()?.removeAllRanges(); }}
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -322,7 +498,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
       <div className="pdf-statusbar">
         <span>第 {pageNum} / {numPages} 页</span>
         <span>{pageAnnotations.length} 条批注</span>
-        <span className="pdf-hint">←→ 翻页 · +/− 缩放 · Esc 取消工具</span>
+        <span className="pdf-hint">←→ 翻页 · +/− 缩放 · 选中文本直接高亮 · Esc 取消</span>
       </div>
     </div>
   );

@@ -57,8 +57,10 @@ export interface Annotation {
   id: string;
   page: number;
   type: AnnotationType;
-  /** 归一化坐标 [x1, y1, x2, y2]，0-1 范围，缩放不变 */
+  /** 归一化坐标 [x1, y1, x2, y2]，0-1 范围，缩放不变（多行选区时为外接包围盒） */
   rect: [number, number, number, number];
+  /** 选区批注的逐行归一化坐标（对齐 Zotero 多行高亮存储）；缺省时按 rect 渲染 */
+  rects?: [number, number, number, number][];
   text: string;
   note: string;
   color: string;

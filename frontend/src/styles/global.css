@@ -922,6 +922,74 @@ kbd {
 }
 .pdf-hint { color: var(--text-muted); opacity: 0.7; }
 
+/* ===== R76 文本层 + 选区浮动工具栏 ===== */
+/* pdf_viewer.css 的 .textLayer 已覆盖 span 定位/选区色；这里只做容器约束与暗色适配 */
+.pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  line-height: 1;
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* 高亮选中态用 accent 色，与 R72 设计系统呼应 */
+.pdf-text-layer ::selection { background: rgba(79, 195, 247, 0.32); }
+[data-mode="dark"] .pdf-text-layer ::selection { background: rgba(129, 199, 132, 0.30); }
+
+/* 选区浮动工具栏 */
+.pdf-selection-popover {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+}
+.pdf-sel-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px;
+  border-right: 1px solid var(--border);
+  margin-right: 2px;
+  white-space: nowrap;
+}
+.pdf-sel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+}
+.pdf-sel-btn:hover { background: var(--modifier-hover); }
+.pdf-sel-label { white-space: nowrap; }
+.pdf-sel-cancel {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+.pdf-sel-cancel:hover { background: var(--modifier-hover); color: var(--text); }
+[data-mode="dark"] .pdf-selection-popover { box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+
+@media (max-width: 768px) {
+  .pdf-sel-label { display: none; }
+  .pdf-sel-count { display: none; }
+}
+
 /* 图标翻转（上一页箭头） */
 .icon-flip { transform: scaleX(-1); }
 
