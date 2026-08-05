@@ -64,6 +64,8 @@ interface OutlineNode {
   page: number | null; // null = 无可定位目标
   depth: number;
   children: OutlineNode[];
+  /** R78：由 IMRaD 启发式自动识别生成（非 PDF 原生大纲） */
+  auto?: boolean;
 }
 
 /** R77：递归解析 PDF 大纲，dest → 页码（1-based） */
@@ -73,16 +75,20 @@ async function resolveOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNo
   const resolveDest = async (dest: unknown): Promise<number | null> => {
     try {
       let d = dest;
-      if (typeof d === 'string') d = await doc.getDestination(d);
-      if (Array.isArray(d) && d[0]) {
+      if (typeof d === 'string') {
+        d = await doc.getDestination(d);
+        if (!d) return null; // 命名目标失效（审查官 #1）
+      }
+      if (Array.isArray(d) && d.length > 0) {
         const ref = d[0];
-        // 显式目标数组第一项是页引用对象
+        // 显式目标首元素可能是 ref 对象，也可能是页码数字（审查官 #1）
+        if (typeof ref === 'number') return ref + 1;
         if (ref && typeof ref === 'object' && 'num' in ref) {
           return (await doc.getPageIndex(ref as pdfjsLib.Ref)) + 1;
         }
       }
     } catch {
-      /* 忽略单项解析失败 */
+      /* 单项解析失败只影响该条目，不连累整棵树 */
     }
     return null;
   };
@@ -96,6 +102,39 @@ async function resolveOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNo
     return nodes;
   };
   return walk(raw, 0);
+}
+
+/**
+ * R78：无大纲时的 IMRaD 启发式结构识别（结构化学习设计师 P1）。
+ * 护理期刊论文绝大多数无 outline，但结构恰是最规整的 IMRaD——
+ * 扫描前 8 页文本层，匹配中英文常见章节标题独立成行，生成伪大纲（auto: true）。
+ * 只取每个标题的首次出现；按出现顺序（页码+页内序）排列。
+ */
+const IMRAD_HEADING_RE = /^(摘\s*要|摘由|关键词|关键字|前\s*言|引\s*言|背\s*景|目\s*的|对象与方法|资料与方法|材料与方法|方\s*法|结\s*果|讨\s*论|结\s*论|参考文献|致\s*谢|abstract|key\s?words?|introduction|background|objectives?|aims?|methods?|materials|results?|discussion|conclusions?|references|acknowledg\w*)[：:.]?\s*$/i;
+
+async function detectImradOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNode[]> {
+  const found: OutlineNode[] = [];
+  const seen = new Set<string>();
+  const maxScan = Math.min(doc.numPages, 8);
+  for (let p = 1; p <= maxScan; p++) {
+    try {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      for (const item of tc.items) {
+        if (!('str' in item)) continue;
+        const s = (item as { str: string }).str.trim();
+        if (s.length < 2 || s.length > 30) continue;
+        if (!IMRAD_HEADING_RE.test(s)) continue;
+        const key = s.replace(/\s+/g, '').toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        found.push({ title: s, page: p, depth: 0, children: [], auto: true });
+      }
+    } catch {
+      /* 单页文本提取失败不影响其余页 */
+    }
+  }
+  return found;
 }
 
 export function PdfReader({ source, annotations = [], onAnnotationsChange, onClose, title }: PdfReaderProps) {
@@ -124,6 +163,35 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'annotations' | 'outline'>('annotations');
   const [outline, setOutline] = useState<OutlineNode[] | null>(null);
+  // R78：反向联动 + 脉冲定位（快速原型师 ①②）
+  const annoListRef = useRef<HTMLUListElement>(null);
+  const [pulseId, setPulseId] = useState<string | null>(null);
+  const pulseTimerRef = useRef<number | null>(null);
+
+  /** R78：跳转到批注时给目标一个 1.2s 脉冲闪烁，让用户认得出落点 */
+  const triggerPulse = useCallback((id: string) => {
+    setPulseId(id);
+    if (pulseTimerRef.current) window.clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = window.setTimeout(() => setPulseId(null), 1200);
+  }, []);
+
+  /**
+   * R78：侧栏列表双向联动（快速原型师 ①②）。
+   * - 页面上点批注 → 侧栏滚动到对应项（反向）
+   * - 翻页/大纲跳页 → 列表滚动到当前页第一条批注（只滚动、不自动选中）
+   * 用 block:'nearest' 避免连带外层阅读容器滚动。
+   */
+  useEffect(() => {
+    if (!sidebarOpen || sidebarTab !== 'annotations') return;
+    const list = annoListRef.current;
+    if (!list || annotations.length === 0) return;
+    const sorted = annotations.slice().sort((a, b) => a.page - b.page);
+    const targetId = (selectedAnnotation && sorted.some((a) => a.id === selectedAnnotation))
+      ? selectedAnnotation
+      : sorted.find((a) => a.page === pageNum)?.id;
+    if (!targetId) return;
+    list.querySelector(`[data-anno-id="${targetId}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [selectedAnnotation, pageNum, sidebarTab, sidebarOpen, annotations]);
 
   // ===== 加载文档 =====
   useEffect(() => {
@@ -138,9 +206,10 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
         setNumPages(d.numPages);
         setPageNum(1);
         setLoading(false);
-        // R77：解析大纲目录树
+        // R77：解析大纲目录树；R78：无大纲时回退 IMRaD 启发式识别
         try {
-          const ol = await resolveOutline(d);
+          let ol = await resolveOutline(d);
+          if (ol.length === 0) ol = await detectImradOutline(d);
           if (!cancelled) setOutline(ol);
         } catch { setOutline([]); }
       })
@@ -457,7 +526,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
                 annotations.length === 0 ? (
                   <p className="pdf-sidebar-empty">暂无批注。选中文本或选择工具后在页面上添加。</p>
                 ) : (
-                  <ul className="pdf-anno-list">
+                  <ul className="pdf-anno-list" ref={annoListRef}>
                     {annotations
                       .slice()
                       .sort((a, b) => a.page - b.page)
@@ -465,10 +534,10 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
                         const c = ANNOTATION_COLORS[a.type];
                         const isActive = selectedAnnotation === a.id;
                         return (
-                          <li key={a.id}>
+                          <li key={a.id} data-anno-id={a.id}>
                             <button
                               className={`pdf-anno-item ${isActive ? 'active' : ''}`}
-                              onClick={() => { setPageNum(a.page); setSelectedAnnotation(a.id); }}
+                              onClick={() => { setPageNum(a.page); setSelectedAnnotation(a.id); triggerPulse(a.id); }}
                               aria-current={isActive}
                             >
                               <span className="pdf-tool-dot" style={{ background: c.border, flexShrink: 0 }} />
@@ -492,13 +561,18 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
                 outline === null ? (
                   <p className="pdf-sidebar-empty">正在解析大纲…</p>
                 ) : outline.length === 0 ? (
-                  <p className="pdf-sidebar-empty">此 PDF 无目录大纲。</p>
+                  <p className="pdf-sidebar-empty">此 PDF 无目录大纲，且未识别到 IMRaD 章节结构。</p>
                 ) : (
-                  <ul className="pdf-outline-tree" role="tree">
-                    {outline.map((node, i) => (
-                      <OutlineItem key={i} node={node} onJump={goTo} />
-                    ))}
-                  </ul>
+                  <>
+                    {outline[0]?.auto && (
+                      <p className="pdf-outline-auto-badge">自动识别（IMRaD 启发式，非原书目录）</p>
+                    )}
+                    <ul className="pdf-outline-tree" role="tree">
+                      {outline.map((node, i) => (
+                        <OutlineItem key={`${node.title}-${i}`} node={node} onJump={goTo} />
+                      ))}
+                    </ul>
+                  </>
                 )
               )}
             </div>
@@ -561,7 +635,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
                 return (
                   <div
                     key={`${a.id}-${idx}`}
-                    className="pdf-annotation"
+                    className={`pdf-annotation ${pulseId === a.id ? 'pdf-anno-pulse' : ''}`}
                     style={style}
                     role="button"
                     tabIndex={0}
@@ -672,7 +746,7 @@ function OutlineItem({ node, onJump }: { node: OutlineNode; onJump: (n: number) 
       {hasChildren && expanded && (
         <ul role="group" className="pdf-outline-children">
           {node.children.map((child, i) => (
-            <OutlineItem key={i} node={child} onJump={onJump} />
+            <OutlineItem key={`${child.title}-${i}`} node={child} onJump={onJump} />
           ))}
         </ul>
       )}

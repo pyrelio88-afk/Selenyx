@@ -138,4 +138,14 @@
   --status-reading-dot: var(--warning);
   --status-read-dot: var(--accent);
   --status-archived-dot: var(--text-secondary);
+
+  /* R78：组件级通用别名桥接——修正 pdf 阅读器等组件引用未定义 token
+     导致侧栏底色/hover 底色/active 底色失效（UI 设计师 #2 根因）。
+     随主题自动切换（引用的是主题作用域语义 token）。 */
+  --surface: var(--bg-surface);
+  --surface-elevated: var(--bg-elevated);
+  --text: var(--text-primary);
+  --modifier-hover: var(--bg-hover);
+  --modifier-active: var(--accent-light);
+  --border-subtle: var(--border);
 }

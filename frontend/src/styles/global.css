@@ -1096,6 +1096,29 @@ kbd {
 .pdf-outline-link:hover:not(:disabled) { background: var(--modifier-hover); color: var(--accent); }
 .pdf-outline-link:disabled { color: var(--text-muted); cursor: default; }
 
+/* R78：IMRaD 自动识别角标 */
+.pdf-outline-auto-badge {
+  margin: 6px 10px 2px;
+  padding: 4px 8px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--modifier-hover);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+/* R78：批注列表项分隔线（UI 设计师 #2）——条目量上去后保持可扫描性 */
+.pdf-anno-list > li + li { border-top: 1px solid var(--border); }
+/* R78：批注项色点放大到 8px，吃满三重编码（UI 设计师 #3） */
+.pdf-anno-item .pdf-tool-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+/* R78：跳转脉冲定位（快速原型师 #1）——1.2s 高亮闪烁，让用户认得出落点 */
+.pdf-anno-pulse { animation: pdfAnnoPulse 1.2s ease-out; }
+@keyframes pdfAnnoPulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent); }
+  30%  { box-shadow: 0 0 0 4px rgba(0,0,0,0.18); }
+  100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); }
+}
+
 [data-mode="dark"] .pdf-sidebar { background: var(--surface-elevated, var(--surface)); }
 
 /* 侧边栏打开时页面区不再独占；移动端侧边栏收窄为抽屉 */
