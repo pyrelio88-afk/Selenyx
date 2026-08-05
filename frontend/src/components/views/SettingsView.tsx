@@ -4,20 +4,48 @@ import { THEME_OPTIONS } from '@hooks/useTheme';
 import type { LLMProvider } from '@types/index';
 import { Icon } from '@components/ui/Icon';
 import { DensityToggle } from '@components/ui/StatusChip';
+import { testConnection, PROVIDER_DEFAULTS, type TestResult } from '@services/llm';
 
 export function SettingsView() {
   const { theme, setTheme, mode, setMode, density, setDensity, llmConfig, setLLMConfig } = useAppStore();
   const [provider, setProvider] = useState<LLMProvider>(llmConfig?.provider ?? 'openai');
   const [apiKey, setApiKey] = useState(llmConfig?.apiKey ?? '');
-  const [baseUrl, setBaseUrl] = useState(llmConfig?.baseUrl ?? 'https://api.openai.com/v1');
-  const [model, setModel] = useState(llmConfig?.model ?? 'gpt-4o');
+  const [baseUrl, setBaseUrl] = useState(llmConfig?.baseUrl ?? PROVIDER_DEFAULTS[llmConfig?.provider ?? 'openai'].baseUrl);
+  const [model, setModel] = useState(llmConfig?.model ?? PROVIDER_DEFAULTS[llmConfig?.provider ?? 'openai'].model);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [saved, setSaved] = useState(false);
 
-  function saveLLM() {
-    setLLMConfig({
+  function onProviderChange(p: LLMProvider) {
+    setProvider(p);
+    // 切换提供商时自动带出默认 baseUrl 与模型（可被手改覆盖）
+    setBaseUrl(PROVIDER_DEFAULTS[p].baseUrl);
+    setModel(PROVIDER_DEFAULTS[p].model);
+    setTestResult(null);
+  }
+
+  function buildConfig() {
+    return {
       provider, apiKey, baseUrl, model,
       temperature: 0.3, maxTokens: 4096,
-      tokenBudget: 1000000, tokensUsed: 0,
-    });
+      tokenBudget: 1000000, tokensUsed: llmConfig?.tokensUsed ?? 0,
+    };
+  }
+
+  function saveLLM() {
+    setLLMConfig(buildConfig());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveAndTest() {
+    const cfg = buildConfig();
+    setLLMConfig(cfg);
+    setTesting(true);
+    setTestResult(null);
+    const r = await testConnection(cfg);
+    setTestResult(r);
+    setTesting(false);
   }
 
   return (
@@ -58,7 +86,7 @@ export function SettingsView() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>LLM 提供商</label>
-            <select className="input" value={provider} onChange={(e) => setProvider(e.target.value as LLMProvider)}>
+            <select className="input" value={provider} onChange={(e) => onProviderChange(e.target.value as LLMProvider)}>
               <option value="openai">OpenAI</option>
               <option value="openrouter">OpenRouter</option>
               <option value="anthropic">Anthropic</option>
@@ -66,23 +94,42 @@ export function SettingsView() {
               <option value="ollama">Ollama (本地)</option>
               <option value="custom">自定义</option>
             </select>
+            <p style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>{PROVIDER_DEFAULTS[provider].hint}</p>
           </div>
           <div>
             <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>API Key</label>
-            <input className="input" type="password" placeholder="sk-..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <input className="input" type="password" placeholder="sk-..." value={apiKey} onChange={(e) => { setApiKey(e.target.value); setTestResult(null); }} />
           </div>
           <div>
             <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Base URL</label>
-            <input className="input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+            <input className="input" value={baseUrl} onChange={(e) => { setBaseUrl(e.target.value); setTestResult(null); }} />
           </div>
           <div>
             <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>模型</label>
-            <input className="input" value={model} onChange={(e) => setModel(e.target.value)} />
+            <input className="input" value={model} onChange={(e) => { setModel(e.target.value); setTestResult(null); }} />
           </div>
-          <button className="btn btn-primary" onClick={saveLLM} style={{ alignSelf: 'flex-start' }}>保存配置</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-primary" onClick={saveLLM}>保存配置</button>
+            <button className="btn" onClick={saveAndTest} disabled={testing || !apiKey}>
+              {testing ? '测试中…' : '保存并测试连接'}
+            </button>
+            {saved && !testResult && <span style={{ fontSize: 13, color: 'var(--success)' }}><Icon name="check" size={14} /> 已保存</span>}
+          </div>
+          {testResult && (
+            <div style={{
+              padding: '10px 12px', borderRadius: 'var(--radius-md)', fontSize: 13, lineHeight: 1.5,
+              background: testResult.ok ? 'var(--accent-light)' : 'var(--danger-light, var(--bg-surface))',
+              border: `1px solid ${testResult.ok ? 'var(--accent)' : 'var(--danger)'}`,
+              color: 'var(--text-primary)',
+            }}>
+              {testResult.ok
+                ? `连接成功 ✓ 模型 ${testResult.model} 可用，延迟 ${testResult.latencyMs}ms。现在可以去「AI 助手」对话了。`
+                : `连接失败：${testResult.error}`}
+            </div>
+          )}
         </div>
         <p style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-          密钥仅存储在本地（OS keychain / localStorage），不会上传任何服务器。
+          密钥仅存储在本地浏览器（localStorage），请求由浏览器直连 LLM 提供商，不经过任何中转服务器。
         </p>
       </div>
     </div>

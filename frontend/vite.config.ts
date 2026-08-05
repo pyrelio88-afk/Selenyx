@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { viteSingleFile } from 'vite-plugin-singlefile';
 import { resolve } from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), viteSingleFile()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -26,14 +27,11 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    sourcemap: false,
+    assetsInlineLimit: 100000000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'table-vendor': ['@tanstack/react-table'],
-          'markdown-vendor': ['react-markdown', 'remark-math', 'rehype-katex', 'katex'],
-        },
+        inlineDynamicImports: true,
       },
     },
   },

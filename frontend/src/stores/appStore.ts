@@ -7,12 +7,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   Reference, ResearchProject, RefCollection, RefTag,
-  KanbanTask, LLMConfig, MultiDimTable,
+  KanbanTask, LLMConfig, MultiDimTable, PipelineStageKey,
 } from '@types/index';
 
 export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic';
 export type ThemeMode = 'light' | 'dark';
 export type Density = 'compact' | 'comfortable' | 'spacious';
+
+/** R79：流水线单段运行结果 */
+export interface PipelineRun {
+  status: 'idle' | 'running' | 'done' | 'error';
+  output: string;
+  runAt: string | null;
+  passed: boolean; // 是否已标记通过门控
+}
 
 interface AppState {
   // === 主题 ===
@@ -52,6 +60,13 @@ interface AppState {
   // === AI 配置 ===
   llmConfig: LLMConfig | null;
   setLLMConfig: (c: LLMConfig) => void;
+
+  // === R79：八段流水线执行态 ===
+  // key = `${projectId}::${stageKey}`
+  pipelineRuns: Record<string, PipelineRun>;
+  setPipelineRun: (key: string, run: PipelineRun) => void;
+  stageConfigs: Record<string, string>; // 每段自定义指令（同 key）
+  setStageConfig: (key: string, instruction: string) => void;
 
   // === 检索 ===
   searchQuery: string;
@@ -102,6 +117,11 @@ export const useAppStore = create<AppState>()(
 
       llmConfig: null,
       setLLMConfig: (c) => set({ llmConfig: c }),
+
+      pipelineRuns: {},
+      setPipelineRun: (key, run) => set((s) => ({ pipelineRuns: { ...s.pipelineRuns, [key]: run } })),
+      stageConfigs: {},
+      setStageConfig: (key, instruction) => set((s) => ({ stageConfigs: { ...s.stageConfigs, [key]: instruction } })),
 
       searchQuery: '',
       setSearchQuery: (q) => set({ searchQuery: q }),
