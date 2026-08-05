@@ -29,6 +29,7 @@ interface AppState {
   collections: RefCollection[];
   tags: RefTag[];
   addReference: (ref: Reference) => void;
+  addReferences: (refs: Reference[]) => void;
   updateReference: (id: string, patch: Partial<Reference>) => void;
   deleteReference: (id: string) => void;
 
@@ -72,6 +73,7 @@ export const useAppStore = create<AppState>()(
       collections: [],
       tags: [],
       addReference: (ref) => set((s) => ({ references: [...s.references, ref] })),
+      addReferences: (refs) => set((s) => ({ references: [...s.references, ...refs] })),
       updateReference: (id, patch) => set((s) => ({
         references: s.references.map((r) => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r)),
       })),

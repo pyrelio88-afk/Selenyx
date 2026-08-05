@@ -1,14 +1,17 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { FIELD_LABELS } from '@types/index';
 import type { Reference } from '@types/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
+import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
 
 export function ReferencesView() {
-  const { references, searchQuery, setSearchQuery } = useAppStore();
+  const { references, searchQuery, setSearchQuery, addReferences } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
     let result = references;
@@ -30,12 +33,56 @@ export function ReferencesView() {
   const selected = useMemo(() => references.find((r) => r.id === selectedId) ?? null, [references, selectedId]);
   const closePanel = useCallback(() => setSelectedId(null), []);
 
+  const flashToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  /** 导入文件：读取 → 嗅探格式 → 批量入库 */
+  const handleImport = useCallback(async (file: File) => {
+    try {
+      const text = await file.text();
+      const { format, refs } = importReferences(text);
+      if (refs.length === 0) { flashToast('未解析到有效文献，请检查文件格式'); return; }
+      addReferences(refs);
+      flashToast(`成功导入 ${refs.length} 条文献（${format.toUpperCase()} 格式）`);
+    } catch (err) {
+      flashToast(`导入失败：${err instanceof Error ? err.message : '未知错误'}`);
+    }
+  }, [addReferences, flashToast]);
+
+  /** 导出：生成 BibTeX/RIS 文本并下载 */
+  const handleExport = useCallback((format: 'bibtex' | 'ris') => {
+    const target = filtered.length > 0 ? filtered : references;
+    if (target.length === 0) { flashToast('没有可导出的文献'); return; }
+    const content = format === 'bibtex' ? exportBibTeX(target) : exportRIS(target);
+    const ext = format === 'bibtex' ? 'bib' : 'ris';
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `selenyx-references.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    flashToast(`已导出 ${target.length} 条文献为 ${format.toUpperCase()}`);
+  }, [filtered, references, flashToast]);
+
   return (
     <div>
       <div className="view-header">
         <h1 className="view-title">文献库</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" aria-label="导入文献"><Icon name="import" size={16} /> 导入</button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".bib,.ris,.txt"
+            style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
+          />
+          <button className="btn" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
+          <div className="export-group">
+            <button className="btn" aria-label="导出文献" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
+          </div>
+          <button className="btn" aria-label="导出 RIS" onClick={() => handleExport('ris')}>导出 RIS</button>
           <button className="btn" aria-label="在线检索"><Icon name="search" size={16} /> 检索</button>
           <button className="btn btn-primary" aria-label="新建文献"><Icon name="plus" size={16} /> 新建</button>
         </div>
@@ -105,6 +152,11 @@ export function ReferencesView() {
       {/* 详情侧滑面板（ONES/Mobbin 模式：点击行 → 右侧详情，不离开列表上下文） */}
       <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />
       {selected && <RefDetailPanel ref={selected} onClose={closePanel} />}
+
+      {/* 操作反馈 toast */}
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">{toast}</div>
+      )}
     </div>
   );
 }

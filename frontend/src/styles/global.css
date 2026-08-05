@@ -584,3 +584,27 @@ kbd {
   .ref-detail-panel { width: 100vw; max-width: 100vw; }
   .detail-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ===== Toast 操作反馈 ===== */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: var(--bg-canvas);
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  z-index: var(--z-toast);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  animation: toast-slide-up var(--motion-slow) var(--ease-emphasized);
+}
+@keyframes toast-slide-up {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ===== 导出按钮组 ===== */
+.export-group { display: inline-flex; }
