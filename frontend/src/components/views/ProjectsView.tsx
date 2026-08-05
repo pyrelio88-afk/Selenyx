@@ -11,6 +11,18 @@ import { Icon, NAV_ICONS, STAGE_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
 
+const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
+  { label: '全部', match: [] },
+  { label: '医学/护理', match: ['医学', '护理学', '公共卫生', '药学', '康复医学', '流行病学'] },
+  { label: '教育学', match: ['教育学'] },
+  { label: '社科/心理', match: ['社会科学', '社会学', '心理学', '传播学', '新闻传播学', '政治学', '社会工作'] },
+  { label: '经管', match: ['管理学', '经济学', '金融学', '公共管理'] },
+  { label: '法学', match: ['法学'] },
+  { label: '人文', match: ['哲学', '伦理学', '逻辑学', '文学', '历史学'] },
+  { label: '理工农', match: ['理学', '工学', '农学', '材料科学', '化学', '计算机科学'] },
+  { label: '艺术', match: ['艺术学'] },
+];
+
 function genId() {
   return 'proj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
@@ -22,6 +34,11 @@ export function ProjectsView() {
   const [selectedFramework, setSelectedFramework] = useState<ResearchFramework | null>(null);
   const [form, setForm] = useState({ name: '', description: '', frameworkId: '' });
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [disciplineFilter, setDisciplineFilter] = useState(DISCIPLINE_FILTERS[0]);
+
+  const visibleFrameworks = disciplineFilter.match.length === 0
+    ? RESEARCH_FRAMEWORKS
+    : RESEARCH_FRAMEWORKS.filter((fw) => fw.disciplines.some((d) => disciplineFilter.match.includes(d)));
 
   function startCreate() {
     setStep('framework');
@@ -152,11 +169,28 @@ export function ProjectsView() {
             {step === 'framework' && (
               <>
                 <h3 style={{ marginBottom: 8, fontSize: 16 }}>选择研究框架</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-                  Nature/Science 常用研究设计框架，选择后系统将为你生成对应的项目字段
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  覆盖 13 个学科门类的 15 种研究设计框架，选择后系统将为你生成对应的项目字段
                 </p>
+                {/* 学科筛选 */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                  {DISCIPLINE_FILTERS.map((f) => (
+                    <button
+                      key={f.label}
+                      onClick={() => setDisciplineFilter(f)}
+                      style={{
+                        fontSize: 12, padding: '3px 12px', borderRadius: 12, cursor: 'pointer',
+                        border: `1px solid ${disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--border)'}`,
+                        background: disciplineFilter.label === f.label ? 'var(--accent-light)' : 'transparent',
+                        color: disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {RESEARCH_FRAMEWORKS.map((fw) => (
+                  {visibleFrameworks.map((fw) => (
                     <div
                       key={fw.id}
                       className="card"
