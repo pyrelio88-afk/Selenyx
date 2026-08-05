@@ -13,7 +13,7 @@ import type { ReactNode } from 'react';
 export type IconName =
   // 导航
   | 'dashboard' | 'references' | 'pipeline' | 'projects'
-  | 'statTools' | 'clinicalData' | 'aiChat' | 'settings'
+  | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings'
   // 模式切换（手绘日/月，非 emoji）
   | 'sun' | 'moon'
   // 操作
@@ -32,6 +32,7 @@ const PATHS: Record<IconName, ReactNode> = {
   references: (<><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15.5H5.5A1.5 1.5 0 0 1 4 18z" /><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15.5h5.5a1.5 1.5 0 0 0 1.5-1.5z" /><path d="M11 4v15.5" /></>),
   pipeline: (<><path d="M9 9h6" /><path d="M9 15h6" /><rect x="4" y="6" width="5" height="5" rx="1" /><rect x="15" y="6" width="5" height="5" rx="1" /><rect x="4" y="13" width="5" height="5" rx="1" /><rect x="15" y="13" width="5" height="5" rx="1" /></>),
   projects: (<><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5v8A1.5 1.5 0 0 1 19 19H4.5A1.5 1.5 0 0 1 3 17.5z" /><path d="M3 10h18" /></>),
+  tables: (<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /><path d="M9 4v16" /><path d="M15 4v16" /></>),
   statTools: (<><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M3 20h18" /></>),
   clinicalData: (<><path d="M12 4v16" /><path d="M4 12h16" /><path d="M7 7c0 2.5 2.2 5 5 5s5-2.5 5-5" /><path d="M12 4a3 3 0 0 0-3 3" /><path d="M12 4a3 3 0 0 1 3 3" /></>),
   aiChat: (<><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" /><path d="M12 8.5l.9 2 2.1.3-1.5 1.5.4 2.1L12 13.4l-1.9 1 .4-2.1L9 10.8l2.1-.3z" /></>),
@@ -77,10 +78,11 @@ interface IconProps {
   size?: number;
   className?: string;
   strokeWidth?: number;
+  style?: React.CSSProperties;
   'aria-label'?: string;
 }
 
-export function Icon({ name, size = 18, className, strokeWidth, 'aria-label': ariaLabel }: IconProps) {
+export function Icon({ name, size = 18, className, strokeWidth, style, 'aria-label': ariaLabel }: IconProps) {
   const sw = strokeWidth ?? 1.6;
   return (
     <svg
@@ -96,7 +98,7 @@ export function Icon({ name, size = 18, className, strokeWidth, 'aria-label': ar
       role={ariaLabel ? 'img' : 'presentation'}
       aria-label={ariaLabel}
       aria-hidden={ariaLabel ? undefined : true}
-      style={{ flexShrink: 0 }}
+      style={{ flexShrink: 0, ...style }}
     >
       {PATHS[name]}
     </svg>
@@ -121,6 +123,7 @@ export const NAV_ICONS: Record<string, IconName> = {
   references: 'references',
   pipeline: 'pipeline',
   projects: 'projects',
+  tables: 'tables',
   statTools: 'statTools',
   clinicalData: 'clinicalData',
   aiChat: 'aiChat',

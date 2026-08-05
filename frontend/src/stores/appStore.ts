@@ -7,8 +7,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   Reference, ResearchProject, RefCollection, RefTag,
-  KanbanTask, LLMConfig, MultiDimTable, PipelineStageKey,
+  KanbanTask, LLMConfig, MultiDimTable, PipelineStageKey, TableField,
 } from '@types/index';
+
+export type ViewKey =
+  | 'dashboard' | 'projects' | 'references' | 'pipeline'
+  | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings';
 
 export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic';
 export type ThemeMode = 'light' | 'dark';
@@ -23,6 +27,10 @@ export interface PipelineRun {
 }
 
 interface AppState {
+  // === 导航 ===
+  currentView: ViewKey;
+  setView: (v: ViewKey) => void;
+
   // === 主题 ===
   theme: ThemeName;
   mode: ThemeMode;
@@ -56,6 +64,14 @@ interface AppState {
 
   // === 多维表格 ===
   tables: MultiDimTable[];
+  addTable: (t: MultiDimTable) => void;
+  updateTable: (id: string, patch: Partial<MultiDimTable>) => void;
+  deleteTable: (id: string) => void;
+  addTableField: (tableId: string, field: TableField) => void;
+  removeTableField: (tableId: string, fieldId: string) => void;
+  addTableRecord: (tableId: string, record: Record<string, unknown>) => void;
+  updateTableRecord: (tableId: string, recordIdx: number, patch: Record<string, unknown>) => void;
+  deleteTableRecord: (tableId: string, recordIdx: number) => void;
 
   // === AI 配置 ===
   llmConfig: LLMConfig | null;
@@ -76,6 +92,9 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
+      currentView: 'dashboard' as ViewKey,
+      setView: (v) => set({ currentView: v }),
+
       theme: 'paper-green',
       mode: 'light',
       density: 'comfortable',
@@ -114,6 +133,32 @@ export const useAppStore = create<AppState>()(
       })),
 
       tables: [],
+      addTable: (t) => set((s) => ({ tables: [...s.tables, t] })),
+      updateTable: (id, patch) => set((s) => ({
+        tables: s.tables.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t)),
+      })),
+      deleteTable: (id) => set((s) => ({
+        tables: s.tables.filter((t) => t.id !== id),
+      })),
+      addTableField: (tableId, field) => set((s) => ({
+        tables: s.tables.map((t) => (t.id === tableId ? { ...t, fields: [...t.fields, field], updatedAt: new Date().toISOString() } : t)),
+      })),
+      removeTableField: (tableId, fieldId) => set((s) => ({
+        tables: s.tables.map((t) => (t.id === tableId ? { ...t, fields: t.fields.filter((f) => f.id !== fieldId), updatedAt: new Date().toISOString() } : t)),
+      })),
+      addTableRecord: (tableId, record) => set((s) => ({
+        tables: s.tables.map((t) => (t.id === tableId ? { ...t, records: [...t.records, record], updatedAt: new Date().toISOString() } : t)),
+      })),
+      updateTableRecord: (tableId, recordIdx, patch) => set((s) => ({
+        tables: s.tables.map((t) => (t.id === tableId
+          ? { ...t, records: t.records.map((r, i) => (i === recordIdx ? { ...r, ...patch } : r)), updatedAt: new Date().toISOString() }
+          : t)),
+      })),
+      deleteTableRecord: (tableId, recordIdx) => set((s) => ({
+        tables: s.tables.map((t) => (t.id === tableId
+          ? { ...t, records: t.records.filter((_, i) => i !== recordIdx), updatedAt: new Date().toISOString() }
+          : t)),
+      })),
 
       llmConfig: null,
       setLLMConfig: (c) => set({ llmConfig: c }),

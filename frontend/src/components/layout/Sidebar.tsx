@@ -1,47 +1,73 @@
-import type { ViewKey } from '../../App';
-import { useAppStore } from '@stores/appStore';
+import { useAppStore, type ViewKey } from '@stores/appStore';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
 
-interface SidebarProps {
-  current: ViewKey;
-  onNavigate: (v: ViewKey) => void;
+interface NavGroup {
+  label: string;
+  items: { key: ViewKey; label: string }[];
 }
 
-const NAV_ITEMS: { key: ViewKey; label: string }[] = [
-  { key: 'dashboard', label: '总览' },
-  { key: 'references', label: '文献库' },
-  { key: 'pipeline', label: '科研流水线' },
-  { key: 'projects', label: '项目' },
-  { key: 'statTools', label: '统计工具' },
-  { key: 'clinicalData', label: '临床数据' },
-  { key: 'aiChat', label: 'AI 助手' },
-  { key: 'settings', label: '设置' },
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: '',
+    items: [
+      { key: 'dashboard', label: '总览' },
+    ],
+  },
+  {
+    label: '研究',
+    items: [
+      { key: 'projects', label: '项目' },
+      { key: 'references', label: '文献库' },
+      { key: 'pipeline', label: '科研流水线' },
+    ],
+  },
+  {
+    label: '数据',
+    items: [
+      { key: 'tables', label: '多维表格' },
+      { key: 'statTools', label: '统计工具' },
+      { key: 'clinicalData', label: '临床数据' },
+    ],
+  },
+  {
+    label: '工具',
+    items: [
+      { key: 'aiChat', label: 'AI 助手' },
+      { key: 'settings', label: '设置' },
+    ],
+  },
 ];
 
-export function Sidebar({ current, onNavigate }: SidebarProps) {
-  const { mode, toggleMode } = useAppStore();
+export function Sidebar() {
+  const { currentView, setView, mode, toggleMode } = useAppStore();
   const isDark = mode === 'dark';
 
   return (
     <aside className="sidebar">
-      {/* Logo —— 手绘月相符号，非 emoji 方块 */}
       <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Icon name="moon" size={20} strokeWidth={1.8} />
         <span>Selenyx</span>
       </div>
       <nav className="sidebar-nav" aria-label="主导航">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.key}
-            className={`nav-item ${current === item.key ? 'active' : ''}`}
-            onClick={() => onNavigate(item.key)}
-            aria-current={current === item.key ? 'page' : undefined}
-          >
-            <span className="icon">
-              <Icon name={NAV_ICONS[item.key]} size={18} />
-            </span>
-            <span>{item.label}</span>
-          </button>
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={gi} style={{ display: 'contents' }}>
+            {group.label && (
+              <div className="nav-group-label">{group.label}</div>
+            )}
+            {group.items.map((item) => (
+              <button
+                key={item.key}
+                className={`nav-item ${currentView === item.key ? 'active' : ''}`}
+                onClick={() => setView(item.key)}
+                aria-current={currentView === item.key ? 'page' : undefined}
+              >
+                <span className="icon">
+                  <Icon name={NAV_ICONS[item.key]} size={18} />
+                </span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
       <div style={{ marginTop: 'auto', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
