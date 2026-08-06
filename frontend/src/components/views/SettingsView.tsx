@@ -101,6 +101,14 @@ export function SettingsView() {
     setTestResult(null);
   }
 
+  /** 一键配置 Agnes AI（国内可用的 OpenAI 兼容服务，BYOK） */
+  function useAgnesModel() {
+    setProvider('custom');
+    setBaseUrl('https://apihub.agnes-ai.com/v1');
+    setModel('agnes-2.5-flash');
+    setTestResult(null);
+  }
+
   function buildConfig() {
     return {
       provider, apiKey, baseUrl, model,
@@ -297,6 +305,20 @@ export function SettingsView() {
                   </p>
                 </div>
               )}
+
+              {/* Agnes AI 一键配置（国内可用·OpenAI 兼容·推荐） */}
+              <div style={{
+                padding: 14, borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-canvas)', border: '1px solid var(--accent)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>Agnes AI（国内可用 · 推荐）</span>
+                  <button className="btn btn-sm btn-primary" onClick={useAgnesModel}>一键填入</button>
+                </div>
+                <p style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
+                  OpenAI 兼容接口，国内直连无需代理。点击「一键填入」自动配置 Base URL 与模型（agnes-2.5-flash），再在下方 API Key 填入你的 sk- 开头密钥即可。可选模型：agnes-2.0-flash / agnes-2.5-flash / agnes-2.5-pro-alpha。
+                </p>
+              </div>
 
               <div>
                 <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>API Key</label>

@@ -16,7 +16,7 @@ import type { Annotation } from '@apptypes/reference';
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
 
 export function ReferencesView() {
-  const { references, searchQuery, setSearchQuery, addReferences, updateReference } = useAppStore();
+  const { references, searchQuery, setSearchQuery, addReferences, updateReference, deleteReference } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -194,20 +194,25 @@ export function ReferencesView() {
     }
   }, [addReferences, flashToast]);
 
-  /** 导出：生成 BibTeX/RIS 文本并下载 */
+  /** 导出：生成 BibTeX/RIS 文本并下载（含剪贴板兜底，适配内嵌 webview 下载被拦场景） */
   const handleExport = useCallback((format: 'bibtex' | 'ris') => {
-    const target = filtered.length > 0 ? filtered : references;
+    const target = searchQuery ? filtered : references;
     if (target.length === 0) { flashToast('没有可导出的文献'); return; }
     const content = format === 'bibtex' ? exportBibTeX(target) : exportRIS(target);
     const ext = format === 'bibtex' ? 'bib' : 'ris';
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `selenyx-references.${ext}`;
-    a.click();
-    URL.revokeObjectURL(url);
-    flashToast(`已导出 ${target.length} 条文献为 ${format.toUpperCase()}`);
-  }, [filtered, references, flashToast]);
+    // 兜底 1：复制到剪贴板（内嵌 webview 常拦截 a.click 下载）
+    try { navigator.clipboard?.writeText(content); } catch { /* ignore */ }
+    // 兜底 2：触发下载
+    try {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `selenyx-references.${ext}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch { /* ignore */ }
+    flashToast(`已导出 ${target.length} 条文献为 ${format.toUpperCase()}，内容已复制到剪贴板`);
+  }, [searchQuery, filtered, references, flashToast]);
 
   /** 打开 PDF 阅读器：读取文件 → ArrayBuffer → 渲染 */
   const handleOpenPdf = useCallback(async (file: File) => {
@@ -250,10 +255,8 @@ export function ReferencesView() {
               flashToast(`成功导入 ${newRefs.length} 篇精读文献（来自每日精读自动化）`);
             });
           }}><Icon name="references" size={16} /> 导入精读文献</button>
-          <div className="export-group">
-            <button className="btn" aria-label="导出文献" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
-          </div>
-          <button className="btn" aria-label="导出 RIS" onClick={() => handleExport('ris')}>导出 RIS</button>
+          <button className="btn" aria-label="导出 BibTeX" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
+          <button className="btn" aria-label="导出 RIS" onClick={() => handleExport('ris')}><Icon name="download" size={16} /> 导出 RIS</button>
           <button className="btn" aria-label="在线检索"><Icon name="search" size={16} /> 检索</button>
           <button className="btn btn-primary" aria-label="新建文献"><Icon name="plus" size={16} /> 新建</button>
         </div>
@@ -391,7 +394,7 @@ export function ReferencesView() {
 
       {/* 详情侧滑面板（ONES/Mobbin 模式：点击行 → 右侧详情，不离开列表上下文） */}
       <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />
-      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onOpenWeb={(url) => setWebViewerUrl(url)} />}
+      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => { if (confirm('确认删除该文献？此操作不可撤销。')) { deleteReference(id); closePanel(); flashToast('已删除文献'); } }} />}
 
       {/* 隐藏 PDF 文件输入 */}
       <input
@@ -435,6 +438,9 @@ export function ReferencesView() {
               <Icon name="link" size={14} /> 新窗口打开
             </a>
           </div>
+          <div style={{ padding: '6px 16px', fontSize: 11.5, color: 'var(--text-muted)', background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border)' }}>
+            提示：多数期刊网站禁止被嵌入，若下方空白请点「新窗口打开」；本地 PDF 全文请用「获取全文」在阅读器中查看。
+          </div>
           <iframe
             src={webViewerUrl}
             style={{ flex: 1, border: 'none', width: '100%' }}
@@ -453,7 +459,7 @@ export function ReferencesView() {
 }
 
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose, onOpenPdf, onOpenWeb }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onOpenWeb: (url: string) => void }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf, onOpenWeb, onDelete }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void }) {
   const [copied, setCopied] = useState(false);
 
   function generateGBT7714(): string {
@@ -612,6 +618,7 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onOpenWeb }: { ref: Refere
             <button className="btn" style={{ flex: 1 }} onClick={() => onOpenWeb(`https://doi.org/${r.doi}`)}><Icon name="link" size={15} /> 在线阅读</button>
           )}
           <button className="btn" style={{ flex: 1 }}><Icon name="tag" size={15} /> 编辑标签</button>
+          <button className="btn" style={{ flex: '0 0 auto', color: 'var(--danger, #c3272b)' }} onClick={() => onDelete(r.id)} title="删除此文献"><Icon name="close" size={15} /> 删除</button>
         </div>
       </div>
     </aside>

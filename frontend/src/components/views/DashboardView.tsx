@@ -206,8 +206,10 @@ function ClockWidget() {
     return () => clearInterval(timer);
   }, []);
 
-  const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dateStr = now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  // 锁定北京时间（UTC+8），不跟随系统时区——倒数日按北京日历计算
+  const nowBJ = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
 
   // 倒数日 — 从 store 读取用户自定义，空态显示引导
   const countdowns = useAppStore((s) => s.customCountdowns);
@@ -219,17 +221,17 @@ function ClockWidget() {
 
   function daysLeft(dateStr: string): number {
     const target = new Date(dateStr);
-    const diff = target.getTime() - now.getTime();
+    const diff = target.getTime() - nowBJ.getTime();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
 
   return (
-    <div className="card" style={{ padding: 16, marginBottom: 24 }}>
+    <div className="card" style={{ padding: 16, height: '100%' }}>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-primary)', lineHeight: 1.2 }}>
           {timeStr}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{dateStr}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{dateStr} · 北京时间</div>
       </div>
 
       {/* 倒数日 */}

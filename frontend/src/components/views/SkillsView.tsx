@@ -121,6 +121,7 @@ export function SkillsView() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name={skill.category === 'research' ? 'stageLiterature' : skill.category === 'writing' ? 'stageWriting' : skill.category === 'review' ? 'stageReading' : skill.category === 'analysis' ? 'statTools' : 'settings'} size={16} style={{ color: CATEGORY_COLORS[skill.category] }} />
                   {skill.name}
                   <span style={{
                     fontSize: 10, padding: '1px 8px', borderRadius: 10,

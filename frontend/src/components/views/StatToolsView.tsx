@@ -43,7 +43,7 @@ export function StatToolsView() {
   );
 }
 
-type CalcKey = 'pvalue' | 'ttest' | 'pairedt' | 'onesamplet' | 'anova' | 'chi' | 'orrr' | 'diagtest' | 'correlation' | 'effectsize' | 'samplesize' | 'ci';
+type CalcKey = 'pvalue' | 'ttest' | 'pairedt' | 'onesamplet' | 'anova' | 'chi' | 'orrr' | 'diagtest' | 'correlation' | 'effectsize' | 'samplesize' | 'ci' | 'cronbach' | 'regression' | 'mannwhitney';
 
 const CALC_LIST: { key: CalcKey; label: string }[] = [
   { key: 'pvalue', label: 'Z→p值' },
@@ -58,6 +58,9 @@ const CALC_LIST: { key: CalcKey; label: string }[] = [
   { key: 'effectsize', label: '效应量' },
   { key: 'samplesize', label: '样本量' },
   { key: 'ci', label: '置信区间' },
+  { key: 'cronbach', label: 'Cronbach α' },
+  { key: 'regression', label: '线性回归' },
+  { key: 'mannwhitney', label: 'Mann-Whitney U' },
 ];
 
 function Calculators() {
@@ -84,6 +87,9 @@ function Calculators() {
       {calc === 'effectsize' && <EffectSizeCalc />}
       {calc === 'samplesize' && <SampleSizeCalc />}
       {calc === 'ci' && <CICalc />}
+      {calc === 'cronbach' && <CronbachCalc />}
+      {calc === 'regression' && <RegressionCalc />}
+      {calc === 'mannwhitney' && <MannWhitneyCalc />}
     </>
   );
 }
@@ -693,6 +699,155 @@ function MethodsGuide() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+
+// ===== R105 新增计算器：Cronbach α / 线性回归 / Mann-Whitney U（全学科覆盖扩展）=====
+
+/** 解析数字矩阵：每行一组受试者，列=题项，支持空格/制表/逗号分隔 */
+function parseMatrix(text: string): number[][] {
+  return text.trim().split(/\n+/).map((line) =>
+    line.trim().split(/[\s,，\t]+/).map(Number).filter((n) => !isNaN(n))
+  ).filter((row) => row.length > 0);
+}
+
+function mean(arr: number[]): number { return arr.reduce((a, b) => a + b, 0) / arr.length; }
+function variance(arr: number[]): number {
+  const m = mean(arr);
+  return arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1 || 1);
+}
+
+/** Cronbach α 信度系数（心理测量/教育测评/量表开发） */
+function CronbachCalc() {
+  const [data, setData] = useState('3 4 5 3 2\n4 5 4 5 3\n5 5 5 4 4\n2 3 4 2 3\n4 4 5 3 4');
+  const [result, setResult] = useState('');
+
+  function calc() {
+    const m = parseMatrix(data);
+    if (m.length < 2) { setResult('至少需要 2 行（受试者）'); return; }
+    const k = m[0].length;
+    if (k < 2) { setResult('至少需要 2 列（题项）'); return; }
+    if (!m.every((r) => r.length === k)) { setResult('每行列数须一致'); return; }
+    // 各题项方差
+    const itemVars: number[] = [];
+    for (let j = 0; j < k; j++) itemVars.push(variance(m.map((r) => r[j])));
+    // 总分方差
+    const totals = m.map((r) => r.reduce((a, b) => a + b, 0));
+    const varTotal = variance(totals);
+    if (varTotal === 0) { setResult('总分方差为 0，无法计算（数据无变异）'); return; }
+    const alpha = (k / (k - 1)) * (1 - itemVars.reduce((a, b) => a + b, 0) / varTotal);
+    const verdict = alpha >= 0.9 ? '优秀 (≥0.9)' : alpha >= 0.8 ? '良好 (≥0.8)' : alpha >= 0.7 ? '可接受 (≥0.7)' : alpha >= 0.6 ? '勉强 (≥0.6)' : '偏低 (<0.6，需修订题项)';
+    setResult(alpha.toFixed(4));
+    setResult(alpha.toFixed(4) + ' ｜ ' + verdict);
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 520 }}>
+      <h3 style={{ marginBottom: 12, fontSize: 16 }}>Cronbach α 信度系数</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>每行一个受试者，列为各题项得分，用空格/逗号分隔。适用：量表内部一致性信度。</p>
+      <textarea className="input" value={data} onChange={(e) => setData(e.target.value)} rows={5} style={{ width: '100%', fontFamily: 'var(--font-mono)', marginBottom: 8 }} />
+      <button className="btn btn-primary" onClick={calc}>计算 α</button>
+      {result && <ResultBox label="Cronbach α" value={result.split('｜')[0].trim()} note={result.split('｜')[1]?.trim() || ''} />}
+      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
+        判断标准：≥0.9 优秀 / ≥0.8 良好 / ≥0.7 可接受 / &lt;0.6 需修订。样本量建议 n≥100。
+      </div>
+    </div>
+  );
+}
+
+/** 简单线性回归（社科/经济/理工通用） */
+function RegressionCalc() {
+  const [data, setData] = useState('1,2\n2,3.1\n3,4.2\n4,4.8\n5,6.1');
+  const [result, setResult] = useState('');
+
+  function calc() {
+    const pairs = data.trim().split(/\n+/).map((l) => l.trim().split(/[\s,，]+/).map(Number)).filter((p) => p.length === 2 && p.every((v) => !isNaN(v)));
+    const n = pairs.length;
+    if (n < 3) { setResult('至少需要 3 组 (x,y) 数据'); return; }
+    const xs = pairs.map((p) => p[0]);
+    const ys = pairs.map((p) => p[1]);
+    const mx = mean(xs), my = mean(ys);
+    let sxx = 0, sxy = 0, syy = 0;
+    for (let i = 0; i < n; i++) { sxx += (xs[i] - mx) ** 2; sxy += (xs[i] - mx) * (ys[i] - my); syy += (ys[i] - my) ** 2; }
+    if (sxx === 0) { setResult('x 无变异，无法拟合'); return; }
+    const b = sxy / sxx;        // 斜率
+    const a = my - b * mx;      // 截距
+    const r = sxy / Math.sqrt(sxx * syy);
+    const r2 = r * r;
+    const se = Math.sqrt((syy - b * sxy) / (n - 2));
+    const t = b / (se / Math.sqrt(sxx));
+    const p = 2 * (1 - normalCDF(Math.abs(t)));
+    setResult(`${a.toFixed(3)} ｜ 斜率 b=${b.toFixed(4)} ｜ r=${r.toFixed(4)} ｜ r²=${r2.toFixed(4)} ｜ t=${t.toFixed(3)} ｜ p=${p < 0.0001 ? p.toExponential(2) : p.toFixed(4)}`);
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 520 }}>
+      <h3 style={{ marginBottom: 12, fontSize: 16 }}>简单线性回归</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>每行一组 x,y（逗号或空格分隔）。输出：截距 a、斜率 b、相关 r、决定系数 r²、斜率显著性 t/p。</p>
+      <textarea className="input" value={data} onChange={(e) => setData(e.target.value)} rows={5} style={{ width: '100%', fontFamily: 'var(--font-mono)', marginBottom: 8 }} />
+      <button className="btn btn-primary" onClick={calc}>拟合回归</button>
+      {result && <ResultBox label="回归方程 ŷ = a + bx" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
+    </div>
+  );
+}
+
+/** Mann-Whitney U 检验（非参数·两组独立样本比较，不要求正态分布） */
+function MannWhitneyCalc() {
+  const [g1, setG1] = useState('7 8 6 9 10 8');
+  const [g2, setG2] = useState('4 5 3 6 5 4 5');
+  const [result, setResult] = useState('');
+
+  function calc() {
+    const a = g1.trim().split(/[\s,，]+/).map(Number).filter((v) => !isNaN(v));
+    const b = g2.trim().split(/[\s,，]+/).map(Number).filter((v) => !isNaN(v));
+    if (a.length < 1 || b.length < 1) { setResult('两组均需至少 1 个数据'); return; }
+    const n1 = a.length, n2 = b.length;
+    // 合并排序编秩（平均秩处理相同值）
+    const all = [...a.map((v) => ({ v, g: 1 })), ...b.map((v) => ({ v, g: 2 }))]
+      .sort((x, y) => x.v - y.v);
+    const ranks: number[] = new Array(all.length).fill(0);
+    let i = 0;
+    while (i < all.length) {
+      let j = i;
+      while (j + 1 < all.length && all[j + 1].v === all[i].v) j++;
+      const avgRank = (i + 1 + j + 1) / 2; // 1-indexed 平均
+      for (let k = i; k <= j; k++) ranks[k] = avgRank;
+      i = j + 1;
+    }
+    const R1 = all.reduce((s, o, idx) => s + (o.g === 1 ? ranks[idx] : 0), 0);
+    const U1 = R1 - (n1 * (n1 + 1)) / 2;
+    const U2 = n1 * n2 - U1;
+    const U = Math.min(U1, U2);
+    const muU = (n1 * n2) / 2;
+    // 标准差（含相同值校正项）
+    const N = n1 + n2;
+    let tieTerm = 0;
+    // 统计相同值组
+    const vCounts: Record<number, number> = {};
+    all.forEach((o) => { vCounts[o.v] = (vCounts[o.v] || 0) + 1; });
+    Object.values(vCounts).forEach((t) => { tieTerm += (t ** 3 - t); });
+    const sigmaU = Math.sqrt((n1 * n2 / 12) * ((N + 1) - tieTerm / (N * (N - 1))));
+    let p = '—';
+    if (sigmaU > 0) {
+      const z = (U - muU) / sigmaU;
+      const twoP = 2 * Math.min(normalCDF(z), 1 - normalCDF(z));
+      p = twoP < 0.0001 ? twoP.toExponential(2) : twoP.toFixed(4);
+    }
+    setResult(`U=${U.toFixed(1)} ｜ z=${sigmaU > 0 ? ((U - muU) / sigmaU).toFixed(3) : '—'} ｜ p=${p}`);
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 520 }}>
+      <h3 style={{ marginBottom: 12, fontSize: 16 }}>Mann-Whitney U 检验</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>两组独立样本，不要求正态分布。输出 U、z（正态近似）、双尾 p。适用：等级数据/小样本/偏态分布。</p>
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 1</label>
+      <input className="input" value={g1} onChange={(e) => setG1(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 2</label>
+      <input className="input" value={g2} onChange={(e) => setG2(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
+      <button className="btn btn-primary" onClick={calc}>计算 U</button>
+      {result && <ResultBox label="Mann-Whitney U" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
     </div>
   );
 }
