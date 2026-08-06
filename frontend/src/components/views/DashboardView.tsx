@@ -30,7 +30,8 @@ function loadPomodoroEvents(): PomodoroEvent[] {
   try {
     const raw = localStorage.getItem(POMODORO_KEY);
     if (!raw) return DEFAULT_EVENTS;
-    const customs = JSON.parse(raw) as PomodoroEvent[];
+    const customs = JSON.parse(raw);
+    if (!Array.isArray(customs)) return DEFAULT_EVENTS;
     return [...DEFAULT_EVENTS, ...customs.filter((c) => c && c.id && c.name && c.minutes > 0)];
   } catch {
     return DEFAULT_EVENTS;

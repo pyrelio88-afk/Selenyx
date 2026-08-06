@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   Reference, ResearchProject, RefCollection, RefTag,
   KanbanTask, LLMConfig, MultiDimTable, TableField,
@@ -174,6 +174,20 @@ export const useAppStore = create<AppState>()(
     {
       name: 'selenyx-v2',
       version: 2,
+      // C1 修复：自定义 storage 预校验 JSON，脏数据降级为初始状态而非白屏崩溃
+      storage: createJSONStorage(() => ({
+        getItem: (name) => {
+          const raw = localStorage.getItem(name);
+          if (!raw) return null;
+          try { JSON.parse(raw); return raw; } catch { return null; }
+        },
+        setItem: (name, value) => {
+          try { localStorage.setItem(name, value); } catch { /* quota exceeded */ }
+        },
+        removeItem: (name) => {
+          try { localStorage.removeItem(name); } catch { /* storage disabled */ }
+        },
+      })),
     },
   ),
 );

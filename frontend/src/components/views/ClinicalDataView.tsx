@@ -36,7 +36,9 @@ const PAGE_SIZE = 50;
 function loadCustomEntries(): CustomEntry[] {
   try {
     const raw = localStorage.getItem(CUSTOM_KEY);
-    return raw ? (JSON.parse(raw) as CustomEntry[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CustomEntry[]) : [];
   } catch {
     return [];
   }
