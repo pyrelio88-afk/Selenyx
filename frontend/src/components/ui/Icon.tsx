@@ -28,7 +28,10 @@ export type IconName =
   // 状态/类型
   | 'dot' | 'empty' | 'link' | 'tag' | 'calendar'
   // 工具箱专用
-  | 'globe' | 'quote' | 'grant' | 'count' | 'shield' | 'target' | 'blueprint' | 'chip';
+  | 'globe' | 'quote' | 'grant' | 'count' | 'shield' | 'target' | 'blueprint' | 'chip'
+  // R109 AI 助手动作图标
+  | 'copy' | 'pencil' | 'retry' | 'branch' | 'pin' | 'trash' | 'send' | 'stop'
+  | 'sparkles' | 'chevronDown' | 'chevronLeft' | 'clock' | 'editIn' | 'list';
 
 const PATHS: Record<IconName, ReactNode> = {
   // 导航 —— 视觉重量统一，区分度高
@@ -88,6 +91,22 @@ const PATHS: Record<IconName, ReactNode> = {
   target: (<><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></>),
   blueprint: (<><rect x="3" y="4" width="18" height="16" rx="1.5" /><path d="M3 9h18M9 9v11M15 9v11M3 14h18" /></>),
   chip: (<><rect x="6" y="6" width="12" height="12" rx="1.5" /><path d="M9 3v3M12 3v3M15 3v3M9 18v3M12 18v3M15 18v3M3 9h3M3 12h3M3 15h3M18 9h3M18 12h3M18 15h3" /></>),
+
+  // R109 AI 助手动作 —— 线性、1.6 描边、currentColor，与既有图标视觉重量一致
+  copy: (<><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" /></>),
+  pencil: (<><path d="M4 20l4-1L19 8a2 2 0 0 0-2.8-2.8L5 16z" /><path d="M14 6l4 4" /></>),
+  retry: (<><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 4v4h-4" /></>),
+  branch: (<><circle cx="6" cy="6" r="2.2" /><circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="8" r="2.2" /><path d="M6 8.2v7.6" /><path d="M18 10.2c0 4-4 3.8-6 5.8" /></>),
+  pin: (<><path d="M9 3h6l-1 5 3 3v2H7v-2l3-3z" /><path d="M12 13v8" /></>),
+  trash: (<><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" /><path d="M10 11v6M14 11v6" /></>),
+  send: (<><path d="M4 12l16-7-7 16-2.5-6.5z" /><path d="M10.5 14.5L20 5" /></>),
+  stop: (<><rect x="6" y="6" width="12" height="12" rx="2.5" /></>),
+  sparkles: (<><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z" /><path d="M18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z" /></>),
+  chevronDown: (<><path d="M5 9l7 7 7-7" /></>),
+  chevronLeft: (<><path d="M15 5l-7 7 7 7" /></>),
+  clock: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></>),
+  editIn: (<><path d="M4 20h4L19 9a2 2 0 0 0-2.8-2.8L5 16z" /><path d="M14 6l4 4" /><path d="M4 20l1-4" /></>),
+  list: (<><path d="M8 6h12M8 12h12M8 18h12" /><circle cx="4" cy="6" r="1.3" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1.3" fill="currentColor" stroke="none" /></>),
 };
 
 interface IconProps {
