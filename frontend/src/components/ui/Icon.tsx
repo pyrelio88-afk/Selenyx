@@ -24,7 +24,9 @@ export type IconName =
   | 'stageProblem' | 'stageLiterature' | 'stageFulltext' | 'stageScreening'
   | 'stageReading' | 'stageEvidence' | 'stageSynthesis' | 'stageWriting'
   // 状态/类型
-  | 'dot' | 'empty' | 'link' | 'tag' | 'calendar';
+  | 'dot' | 'empty' | 'link' | 'tag' | 'calendar'
+  // 工具箱专用
+  | 'globe' | 'quote' | 'grant' | 'count' | 'shield' | 'target' | 'blueprint' | 'chip';
 
 const PATHS: Record<IconName, ReactNode> = {
   // 导航 —— 视觉重量统一，区分度高
@@ -72,6 +74,15 @@ const PATHS: Record<IconName, ReactNode> = {
   link: (<><path d="M9 15l6-6" /><path d="M10.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-1 1" /><path d="M13.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l1-1" /></>),
   tag: (<><path d="M4 4h7l9 9-7 7-9-9z" /><circle cx="8" cy="8" r="1.4" /></>),
   calendar: (<><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M4 9h16M8 3v4M16 3v4" /></>),
+  // 工具箱专用图标
+  globe: (<><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.5 2.5 2.5 14 0 17M12 3.5c-2.5 2.5-2.5 14 0 17" /></>),
+  quote: (<><path d="M7 7c-1.5 1-2 3-2 5v5h4v-5H7c0-1.5.5-2.5 1.5-3z" /><path d="M15 7c-1.5 1-2 3-2 5v5h4v-5h-2c0-1.5.5-2.5 1.5-3z" /></>),
+  grant: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7v10M9.5 9.5h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4" /></>),
+  count: (<><path d="M4 6h16M4 12h16M4 18h10" /><path d="M18 16v4M16 18h4" /></>),
+  shield: (<><path d="M12 3l8 3v5c0 4.5-3.2 7.5-8 9-4.8-1.5-8-4.5-8-9V6z" /><path d="M9 12l2 2 4-4" /></>),
+  target: (<><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></>),
+  blueprint: (<><rect x="3" y="4" width="18" height="16" rx="1.5" /><path d="M3 9h18M9 9v11M15 9v11M3 14h18" /></>),
+  chip: (<><rect x="6" y="6" width="12" height="12" rx="1.5" /><path d="M9 3v3M12 3v3M15 3v3M9 18v3M12 18v3M15 18v3M3 9h3M3 12h3M3 15h3M18 9h3M18 12h3M18 15h3" /></>),
 };
 
 interface IconProps {

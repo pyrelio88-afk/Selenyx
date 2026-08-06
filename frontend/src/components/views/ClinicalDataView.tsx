@@ -603,6 +603,7 @@ function FormulaDetail({ f, color, discipline }: { f: DisciplineFormula; color: 
 }
 
 function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color: string; discipline: string }) {
+  const [showFullText, setShowFullText] = useState(false);
   return (
     <div>
       <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
@@ -611,13 +612,39 @@ function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color
           background: color, color: '#fff', fontWeight: 700, marginBottom: 8,
         }}>{s.code}</div>
         <div style={{ fontSize: 20, fontWeight: 700 }}>{s.name}</div>
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
           {s.issuer && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.issuer}</span>}
           {s.year && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.year}</span>}
         </div>
       </div>
       <DetailRow label="内容说明">{s.description}</DetailRow>
+      {/* R108: 嵌入原文条文 — 点击展开查看 */}
+      {s.fullText && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            onClick={() => setShowFullText(!showFullText)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'var(--accent-light)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--accent)', width: '100%', textAlign: 'left' }}
+          >
+            <Icon name="chevronRight" size={14} style={{ transform: showFullText ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+            {showFullText ? '收起原文条文' : '查看原文条文'}
+          </button>
+          {showFullText && (
+            <div style={{ marginTop: 8, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 400, overflow: 'auto' }}>
+              {s.fullText}
+            </div>
+          )}
+        </div>
+      )}
+      {/* R108: 官方原文链接 */}
+      {s.docUrl && (
+        <div style={{ marginTop: 12 }}>
+          <a href={s.docUrl} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent)' }}>
+            <Icon name="link" size={14} /> 查看官方原文
+          </a>
+        </div>
+      )}
     </div>
   );
 }

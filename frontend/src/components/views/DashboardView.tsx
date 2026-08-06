@@ -225,6 +225,28 @@ function ClockWidget() {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
 
+  function hoursLeft(dateStr: string): number {
+    const target = new Date(dateStr);
+    const diff = target.getTime() - nowBJ.getTime();
+    return Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  }
+
+  function getUrgencyColor(days: number, baseColor: string): string {
+    if (days < 0) return '#9e9e9e'; // 已过期
+    if (days <= 7) return '#c62828'; // 紧急
+    if (days <= 30) return '#ef6c00'; // 临近
+    if (days <= 90) return '#1565c0'; // 中期
+    return baseColor; // 远期
+  }
+
+  // 快速预设
+  const QUICK_PRESETS = [
+    { label: '考研初试', date: '2027-12-25', color: '#c62828' },
+    { label: '科研基金截止', date: '', color: '#1565c0' },
+    { label: '期末考试', date: '', color: '#2e7d32' },
+    { label: '论文提交', date: '', color: '#f57f17' },
+  ];
+
   return (
     <div className="card" style={{ padding: 16, height: '100%' }}>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -247,12 +269,15 @@ function ClockWidget() {
         )}
         {countdowns.map((c, idx) => {
           const days = daysLeft(c.date);
+          const hours = hoursLeft(c.date);
+          const urgencyColor = getUrgencyColor(days, c.color);
           return (
             <div key={idx} style={{
-              flex: '1 1 0', minWidth: 80, textAlign: 'center', padding: '8px 4px',
-              borderRadius: 8, background: c.color + '0d',
-              border: `1px solid ${c.color}20`,
+              flex: '1 1 0', minWidth: 85, textAlign: 'center', padding: '10px 6px',
+              borderRadius: 8, background: urgencyColor + '0d',
+              border: `1px solid ${urgencyColor}30`,
               position: 'relative',
+              transition: 'all .2s',
             }}>
               <button
                 onClick={() => removeCountdown(idx)}
@@ -263,11 +288,18 @@ function ClockWidget() {
                 }}
                 title="删除"
               >×</button>
-              <div style={{ fontSize: 20, fontWeight: 700, color: c.color, fontFamily: 'monospace' }}>
-                {days > 0 ? days : 0}
+              <div style={{ fontSize: 24, fontWeight: 700, color: urgencyColor, fontFamily: 'monospace', lineHeight: 1.2 }}>
+                {days > 0 ? days : days === 0 ? '今天' : '已过'}
               </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.label}</div>
-              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>天后</div>
+              {days > 0 && (
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {days}天 {hours}时
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2, fontWeight: 500 }}>{c.label}</div>
+              {days > 0 && days <= 7 && (
+                <div style={{ fontSize: 9, color: '#c62828', marginTop: 2, fontWeight: 600 }}>紧急</div>
+              )}
             </div>
           );
         })}
@@ -277,6 +309,17 @@ function ClockWidget() {
             border: '1px solid var(--border)',
             background: 'var(--bg-surface)',
           }}>
+            {/* 快速预设 */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {QUICK_PRESETS.filter(p => p.date).map((p) => (
+                <button
+                  key={p.label}
+                  onClick={() => { setNewCountdownLabel(p.label); setNewCountdownDate(p.date); }}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 10, cursor: 'pointer',
+                    border: `1px solid ${p.color}40`, background: p.color + '0d', color: p.color }}
+                >{p.label}</button>
+              ))}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <input
                 type="text" placeholder="事件名" value={newCountdownLabel}

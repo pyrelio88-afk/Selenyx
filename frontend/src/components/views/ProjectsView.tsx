@@ -30,7 +30,7 @@ function genId() {
 export function ProjectsView() {
   const { projects, tasks, setCurrentProject, addProject, setView } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
-  const [step, setStep] = useState<'framework' | 'details'>('framework');
+  const [showFrameworks, setShowFrameworks] = useState(false);
   const [selectedFramework, setSelectedFramework] = useState<ResearchFramework | null>(null);
   const [form, setForm] = useState({ name: '', description: '', frameworkId: '' });
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
@@ -41,7 +41,7 @@ export function ProjectsView() {
     : RESEARCH_FRAMEWORKS.filter((fw) => fw.disciplines.some((d) => disciplineFilter.match.includes(d)));
 
   function startCreate() {
-    setStep('framework');
+    setShowFrameworks(false);
     setSelectedFramework(null);
     setForm({ name: '', description: '', frameworkId: '' });
     setFieldValues({});
@@ -52,7 +52,12 @@ export function ProjectsView() {
     setSelectedFramework(fw);
     setForm({ ...form, frameworkId: fw.id });
     setFieldValues({});
-    setStep('details');
+  }
+
+  function clearFramework() {
+    setSelectedFramework(null);
+    setForm({ ...form, frameworkId: '' });
+    setFieldValues({});
   }
 
   function loadExample() {
@@ -62,20 +67,20 @@ export function ProjectsView() {
   }
 
   function handleCreate() {
-    if (!form.name.trim() || !selectedFramework) return;
+    if (!form.name.trim()) return;
     const now = new Date().toISOString();
     const proj: ResearchProject = {
       id: genId(),
       name: form.name.trim(),
-      description: form.description.trim() || selectedFramework.description,
+      description: form.description.trim() || selectedFramework?.description || '',
       currentStage: 'problem' as PipelineStageKey,
-      pico: selectedFramework.id === 'pico' ? {
+      pico: selectedFramework?.id === 'pico' ? {
         population: fieldValues['population'] || '',
         intervention: fieldValues['intervention'] || '',
         comparison: fieldValues['comparison'] || '',
         outcome: fieldValues['outcome'] || '',
       } : undefined,
-      tags: [selectedFramework.name],
+      tags: selectedFramework ? [selectedFramework.name] : [],
       referenceIds: [],
       taskIds: [],
       status: 'planning',
@@ -85,7 +90,7 @@ export function ProjectsView() {
       updatedAt: now,
     };
     // 将框架字段存入 description 或自定义属性
-    if (selectedFramework.id !== 'pico' && Object.keys(fieldValues).length > 0) {
+    if (selectedFramework && selectedFramework.id !== 'pico' && Object.keys(fieldValues).length > 0) {
       const fwText = selectedFramework.fields
         .map((f) => `${f.label}: ${fieldValues[f.key] || '—'}`)
         .join('\n');
@@ -165,13 +170,51 @@ export function ProjectsView() {
       {showCreate && (
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, maxHeight: '85vh', overflow: 'auto' }}>
-            {/* 步骤1: 选择框架 */}
-            {step === 'framework' && (
-              <>
-                <h3 style={{ marginBottom: 8, fontSize: 16 }}>选择研究框架</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-                  覆盖 13 个学科门类的 15 种研究设计框架，选择后系统将为你生成对应的项目字段
-                </p>
+                <h3 style={{ marginBottom: 16, fontSize: 16 }}>新建项目</h3>
+
+                {/* 项目名称 - 必填，优先 */}
+                <div style={{ marginBottom: 12 }}>
+                  <label className="form-label">项目名称 *</label>
+                  <input className="input" placeholder="如：AI辅助SBAR护理交接训练研究" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label className="form-label">项目描述</label>
+                  <textarea className="input" placeholder="简述研究背景和目标..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
+                </div>
+
+                {/* 框架选择 - 可选可折叠 */}
+                <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setShowFrameworks(!showFrameworks)}
+                    style={{ width: '100%', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: 'var(--bg-surface)', border: 'none', fontSize: 14, fontWeight: 500 }}
+                  >
+                    <span>{selectedFramework ? `已选框架：${selectedFramework.name}` : '选择研究框架（可选）'}</span>
+                    <Icon name="chevronRight" size={16} style={{ transform: showFrameworks ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+                  </button>
+
+                  {showFrameworks && (
+                    <div style={{ padding: '0 14px 14px' }}>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                        覆盖 13 个学科门类的研究设计框架，不一定都按框架走——选了帮你生成字段，不选也可以直接创建项目
+                      </p>
+                      {/* 学科筛选 */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                        {DISCIPLINE_FILTERS.map((f) => (
+                          <button
+                            key={f.label}
+                            onClick={() => setDisciplineFilter(f)}
+                            style={{
+                              fontSize: 11, padding: '3px 10px', borderRadius: 10, cursor: 'pointer',
+                              border: `1px solid ${disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--border)'}`,
+                              background: disciplineFilter.label === f.label ? 'var(--accent-light)' : 'transparent',
+                              color: disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--text-muted)',
+                            }}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto' }}>
                 {/* 学科筛选 */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
                   {DISCIPLINE_FILTERS.map((f) => (
@@ -189,90 +232,64 @@ export function ProjectsView() {
                     </button>
                   ))}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {visibleFrameworks.map((fw) => (
-                    <div
-                      key={fw.id}
-                      className="card"
-                      style={{
-                        padding: 14, cursor: 'pointer',
-                        border: `2px solid ${selectedFramework?.id === fw.id ? 'var(--accent)' : 'var(--border)'}`,
-                        transition: 'all .15s',
-                      }}
-                      onClick={() => selectFramework(fw)}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <span style={{ fontSize: 15, fontWeight: 600 }}>{fw.name}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fw.fields.length} 个字段</span>
-                      </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 6 }}>{fw.description}</p>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 11, padding: '1px 8px', borderRadius: 8, background: 'var(--accent-light)', color: 'var(--accent)' }}>{fw.bestFor}</span>
-                        {fw.disciplines.slice(0, 3).map((d) => (
-                          <span key={d} style={{ fontSize: 11, padding: '1px 8px', borderRadius: 8, background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{d}</span>
+                        {visibleFrameworks.map((fw) => (
+                          <div
+                            key={fw.id}
+                            className="card"
+                            style={{
+                              padding: 12, cursor: 'pointer',
+                              border: `2px solid ${selectedFramework?.id === fw.id ? 'var(--accent)' : 'var(--border)'}`,
+                              transition: 'all .15s',
+                            }}
+                            onClick={() => selectFramework(fw)}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                              <span style={{ fontSize: 14, fontWeight: 600 }}>{fw.name}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fw.fields.length} 字段</span>
+                            </div>
+                            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>{fw.description.slice(0, 80)}...</p>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: 'var(--accent-light)', color: 'var(--accent)' }}>{fw.bestFor}</span>
+                              {fw.disciplines.slice(0, 2).map((d) => (
+                                <span key={d} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{d}</span>
+                              ))}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-                  <button className="btn" onClick={() => setShowCreate(false)}>取消</button>
-                </div>
-              </>
-            )}
+                  )}
 
-            {/* 步骤2: 填写详情 */}
-            {step === 'details' && selectedFramework && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <button className="btn btn-sm" onClick={() => setStep('framework')} style={{ padding: '4px 10px' }}>
-                    <Icon name="chevronRight" size={14} style={{ transform: 'rotate(180deg)' }} /> 返回
-                  </button>
-                  <h3 style={{ fontSize: 16 }}>{selectedFramework.name}</h3>
-                </div>
-
-                <div style={{ marginBottom: 12 }}>
-                  <label className="form-label">项目名称 *</label>
-                  <input className="input" placeholder="如：AI辅助SBAR护理交接训练研究" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <label className="form-label">项目描述</label>
-                  <textarea className="input" placeholder="简述研究背景和目标..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
-                </div>
-
-                <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>{selectedFramework.nameEn}</span>
-                  <button className="btn btn-sm" onClick={loadExample} style={{ fontSize: 12, padding: '3px 10px' }}>
-                    填入示例
-                  </button>
-                </div>
-                <div style={{ marginBottom: 16 }}>
-                  {selectedFramework.fields.map((f) => (
-                    <div key={f.key} style={{ marginBottom: 10 }}>
-                      <label className="form-label">{f.label}</label>
-                      <input
-                        className="input"
-                        placeholder={f.placeholder}
-                        value={fieldValues[f.key] || ''}
-                        onChange={(e) => setFieldValues({ ...fieldValues, [f.key]: e.target.value })}
-                      />
-                      {f.hint && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>{f.hint}</span>}
+                  {/* 已选框架的字段填写区 */}
+                  {selectedFramework && (
+                    <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>{selectedFramework.nameEn}</span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn btn-sm" onClick={loadExample} style={{ fontSize: 12, padding: '3px 10px' }}>填入示例</button>
+                          <button className="btn btn-sm" onClick={clearFramework} style={{ fontSize: 12, padding: '3px 10px' }}>移除框架</button>
+                        </div>
+                      </div>
+                      {selectedFramework.fields.map((f) => (
+                        <div key={f.key} style={{ marginBottom: 8 }}>
+                          <label className="form-label" style={{ fontSize: 12 }}>{f.label}</label>
+                          <input
+                            className="input"
+                            placeholder={f.placeholder}
+                            value={fieldValues[f.key] || ''}
+                            onChange={(e) => setFieldValues({ ...fieldValues, [f.key]: e.target.value })}
+                          />
+                          {f.hint && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>{f.hint}</span>}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-
-                {/* 示例参考 */}
-                <div className="card" style={{ padding: 10, marginBottom: 16, background: 'var(--bg-surface)', fontSize: 12 }}>
-                  <div style={{ fontWeight: 500, marginBottom: 4, color: 'var(--text-secondary)' }}>参考示例（{selectedFramework.example.discipline}）</div>
-                  <div style={{ color: 'var(--text-muted)' }}>{selectedFramework.example.title}</div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                  <button className="btn" onClick={() => setStep('framework')}>上一步</button>
+                  <button className="btn" onClick={() => setShowCreate(false)}>取消</button>
                   <button className="btn btn-primary" onClick={handleCreate} disabled={!form.name.trim()}>创建项目</button>
                 </div>
-              </>
-            )}
           </div>
         </div>
       )}

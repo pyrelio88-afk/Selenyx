@@ -10,16 +10,16 @@ import { fetchByDOI, searchArXiv, type FetchedReference } from '@services/metada
 type ToolTab = 'doi' | 'cite' | 'count' | 'models' | 'browser' | 'pico' | 'design' | 'ethics' | 'matrix' | 'grant';
 
 const TABS: { key: ToolTab; label: string; icon: IconName }[] = [
-  { key: 'browser', label: '网页浏览', icon: 'search' },
-  { key: 'doi', label: 'DOI 查询', icon: 'search' },
-  { key: 'cite', label: '引用格式化', icon: 'tag' },
-  { key: 'pico', label: 'PICO 构建', icon: 'pipeline' },
-  { key: 'design', label: '研究设计', icon: 'statTools' },
-  { key: 'ethics', label: '伦理审查', icon: 'clinicalData' },
+  { key: 'browser', label: '网页浏览', icon: 'globe' },
+  { key: 'doi', label: 'DOI 查询', icon: 'tag' },
+  { key: 'cite', label: '引用格式化', icon: 'quote' },
+  { key: 'pico', label: 'PICO 构建', icon: 'target' },
+  { key: 'design', label: '研究设计', icon: 'blueprint' },
+  { key: 'ethics', label: '伦理审查', icon: 'shield' },
   { key: 'matrix', label: '文献矩阵', icon: 'tables' },
-  { key: 'grant', label: '基金申请', icon: 'projects' },
-  { key: 'count', label: '字数统计', icon: 'references' },
-  { key: 'models', label: '本地模型', icon: 'aiChat' },
+  { key: 'grant', label: '基金申请', icon: 'grant' },
+  { key: 'count', label: '字数统计', icon: 'count' },
+  { key: 'models', label: '本地模型', icon: 'chip' },
 ];
 
 export function ToolsView() {
@@ -31,18 +31,33 @@ export function ToolsView() {
         <h1 className="view-title">工具箱</h1>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 2, marginBottom: 16, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
         {TABS.map((t) => (
           <button
             key={t.key}
             className={`btn ${tab === t.key ? 'btn-primary' : ''}`}
             onClick={() => setTab(t.key)}
-            style={{ borderRadius: '0 0 0 0', borderBottom: tab === t.key ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: '-1px' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: '0', borderBottom: tab === t.key ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: '-1px', padding: '8px 14px', fontSize: 13 }}
           >
-            <Icon name={t.icon} size={14} /> {t.label}
+            <Icon name={t.icon} size={16} strokeWidth={1.8} /> {t.label}
           </button>
         ))}
       </div>
+      {/* 活动工具标题栏 */}
+      {(() => {
+        const active = TABS.find((t) => t.key === tab)!;
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '10px 14px', background: 'var(--accent-light)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent)', borderRadius: 10, color: '#fff', flexShrink: 0 }}>
+              <Icon name={active.icon} size={22} strokeWidth={1.8} />
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{active.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Selenyx 科研工具箱</div>
+            </div>
+          </div>
+        );
+      })()}
 
       {tab === 'browser' && <WebBrowser />}
       {tab === 'doi' && <DOILookup />}

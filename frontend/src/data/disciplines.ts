@@ -42,7 +42,9 @@ export interface DisciplineStandard {
   description: string;
   issuer?: string;       // R86: 发布机构
   year?: string;         // R86: 发布/现行年份
-  source?: string;       // R96: 出处（编号本身即出处，通常不额外标注）
+  source?: string;       // R96: 出处
+  fullText?: string;     // R108: 嵌入原文条文（点击可展开查看）
+  docUrl?: string;       // R108: 官方原文链接
 }
 
 export interface Discipline {
