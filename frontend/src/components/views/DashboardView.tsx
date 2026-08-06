@@ -565,8 +565,8 @@ export function DashboardView() {
       <div className="grid grid-4" style={{ marginBottom: 24 }}>
         {stats.map((s) => (
           <div className="stat-card clickable" key={s.label} onClick={() => setView(s.view)} style={{ cursor: 'pointer', transition: 'all .15s' }}>
-            <span className="label" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
-              <Icon name={s.icon} size={15} strokeWidth={1.5} /> {s.label}
+            <span className="label" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <span style={{ color: 'var(--accent)', display: 'inline-flex' }}><Icon name={s.icon} size={18} strokeWidth={1.8} /></span> {s.label}
             </span>
             <span className="value">{s.value}</span>
             <span className="delta" style={{ color: 'var(--text-muted)' }}>{s.delta}</span>
