@@ -1,0 +1,80 @@
+name: Release Tauri Desktop
+
+# 产出桌面三平台真实安装包：
+#   ubuntu-22.04 → .deb / .AppImage / .rpm
+#   windows-latest → .msi (WiX) / .exe (NSIS)
+#   macos-latest   → .dmg / .app
+# 触发：推送 v* 标签（如 v2.0.0-alpha）手动发版；或在 Actions 页手动运行。
+# 产物：上传为 workflow artifact + 附到 GitHub Release（草稿）。
+#
+# 前置：仓库需已推到 GitHub（用户解锁发布后）；GITHUB_TOKEN 自动可用。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.14.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop -> target
+
+      - name: Install Linux system deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+
+      - name: Build & release (tauri-action)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Selenyx ${{ github.ref_name }}'
+          releaseBody: 'Selenyx 桌面端安装包。详见 BUILD.md。'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.platform == 'windows-latest' && '--bundles msi,nsis' || matrix.platform == 'macos-latest' && '--bundles dmg,app' || '--bundles deb,appimage,rpm' }}
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenyx-desktop-${{ matrix.platform }}
+          path: |
+            desktop/target/release/bundle/**/*.deb
+            desktop/target/release/bundle/**/*.AppImage
+            desktop/target/release/bundle/**/*.rpm
+            desktop/target/release/bundle/**/*.msi
+            desktop/target/release/bundle/**/nsis/*.exe
+            desktop/target/release/bundle/**/*.dmg
