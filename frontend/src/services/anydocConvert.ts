@@ -9,7 +9,9 @@
  *
  * WASM 加载策略：wasm 二进制放 public/ 目录（不参与 singlefile 内联），
  * 运行时 fetch 按需加载——首次使用「文档转MD」时才下载 6.2MB wasm，
- * 避免首屏 bundle 膨胀（gzip 从 6.27MB 回落至 ~1.3MB）。
+ * 避免首屏 bundle 膨胀（gzip 6.27MB → 2.55MB）。
+ * 加载源按序回退：相对路径 anydoc.wasm（本地/Tauri/APK/妙搭若服务仓库文件）
+ * → jsDelivr CDN（妙搭线上兜底）；魔数校验防 HTML 兜底页误判。
  *
  * 转换是同步阻塞调用（wasm 单线程），大文件会短暂卡 UI，故在调用前让出主线程一帧
  * 以确保 loading 状态渲染出来。
@@ -51,11 +53,45 @@ const EXT_TO_FORMAT: Record<string, Format> = {
 let wasmReady = false;
 let initPromise: Promise<void> | null = null;
 
-/** 运行时 fetch wasm 二进制（public/ 目录，不参与 singlefile 内联） */
+/** wasm 魔数（\0asm）——用于识别「200 但返回 HTML 兜底页」的假成功 */
+const WASM_MAGIC = [0x00, 0x61, 0x73, 0x6d];
+
+function isWasmBytes(buf: ArrayBuffer): boolean {
+  const b = new Uint8Array(buf, 0, 4);
+  return WASM_MAGIC.every((m, i) => b[i] === m);
+}
+
+/**
+ * 候选加载源，按序尝试：
+ * 1. 相对路径 anydoc.wasm——file:// 本地包 / Tauri / APK 内置资源，及妙搭若服务仓库文件
+ * 2. jsDelivr CDN——妙搭线上兜底（已验证 200 + application/wasm）
+ */
+const WASM_SOURCES = [
+  'anydoc.wasm',
+  'https://cdn.jsdelivr.net/npm/@firecrawl/anydoc-wasm@0.1.6/anydoc_wasm_bg.wasm',
+];
+
+/** 运行时 fetch wasm 二进制（多源回退 + 魔数校验，防 HTML 兜底页误判） */
 async function loadWasmBytes(): Promise<ArrayBuffer> {
-  const res = await fetch('anydoc.wasm');
-  if (!res.ok) throw new Error(`anydoc.wasm 加载失败: HTTP ${res.status}`);
-  return res.arrayBuffer();
+  const errors: string[] = [];
+  for (const src of WASM_SOURCES) {
+    try {
+      const res = await fetch(src);
+      if (!res.ok) {
+        errors.push(`${src}: HTTP ${res.status}`);
+        continue;
+      }
+      const buf = await res.arrayBuffer();
+      if (!isWasmBytes(buf)) {
+        errors.push(`${src}: 非 wasm 内容（可能是 HTML 兜底页）`);
+        continue;
+      }
+      return buf;
+    } catch (e) {
+      errors.push(`${src}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  throw new Error(`anydoc wasm 加载失败——${errors.join('；')}`);
 }
 
 /** 惰性初始化 wasm（仅首次调用时 fetch 并实例化，约 6.2MB） */
