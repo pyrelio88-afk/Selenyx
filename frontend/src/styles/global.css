@@ -115,9 +115,9 @@
 }
 [data-theme="minimal-white"][data-mode="dark"] {
   --bg-canvas: #0a1929;
-  --bg-surface: #122335;
-  --bg-elevated: #1a2f45;
-  --bg-hover: #233956;
+  --bg-surface: #182a3e;
+  --bg-elevated: #20364d;
+  --bg-hover: #273f5c;
   --text-primary: #e8eef5;
   --text-secondary: #8aa4bc;
   --text-muted: #4a6379;
@@ -271,9 +271,9 @@
 }
 [data-theme="ink-classic"][data-mode="dark"] {
   --bg-canvas: #0f0e0a;
-  --bg-surface: #1a1814;
-  --bg-elevated: #242018;
-  --bg-hover: #2e2a20;
+  --bg-surface: #221f1b;
+  --bg-elevated: #2f2a20;
+  --bg-hover: #383328;
   --text-primary: #f0e8d8;
   --text-secondary: #a89e88;
   --text-muted: #6b6354;
