@@ -7,6 +7,8 @@
 import { useState, useMemo } from 'react';
 import { Icon } from '@components/ui/Icon';
 import { versionedLoad, versionedSave } from '@lib/storage';
+import { useIsMobile } from '@lib/useIsMobile';
+import { BottomSheet } from '@components/layout/BottomSheet';
 import {
   DISCIPLINES,
   type Discipline,
@@ -87,6 +89,8 @@ export function ClinicalDataView() {
   const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(0);
 
+  const isMobile = useIsMobile();
+
   const selected = useMemo(() => DISCIPLINES.find((d) => d.id === selectedId), [selectedId]);
 
   const filteredDisciplines = useMemo(() => {
@@ -136,7 +140,7 @@ export function ClinicalDataView() {
             <Icon name="search" size={16} />
           </span>
         </div>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div className="grid discipline-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
           {filteredDisciplines.map((d) => (
             <button
               key={d.id}
@@ -153,7 +157,7 @@ export function ClinicalDataView() {
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{d.name}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{d.nameEn}</div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{d.description}</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 10, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+              <div className="discipline-card-counts" style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 10, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                 <span>{d.glossary.length} 名词</span>
                 <span>{paramCount(d)} 数值</span>
                 <span>{d.formulas.length} 公式</span>
@@ -234,7 +238,11 @@ export function ClinicalDataView() {
   // 当前 tab 的分页数据
   const currentList = tab === 'glossary' ? filteredGlossary : tab === 'parameters' ? filteredParams : tab === 'formulas' ? filteredFormulas : tab === 'officialDocs' ? filteredOfficialDocs : filteredStandards;
   const pageCount = Math.ceil(currentList.length / PAGE_SIZE);
-  const pagedList = currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // 移动端: 累积加载(加载更多); 桌面端: 分页切片
+  const pagedList = isMobile
+    ? currentList.slice(0, (page + 1) * PAGE_SIZE)
+    : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const hasMore = isMobile && currentList.length > pagedList.length;
 
   const tabMeta: { key: Tab; label: string; count: number }[] = [
     { key: 'glossary', label: '名词', count: mergedGlossary.length },
@@ -274,7 +282,7 @@ export function ClinicalDataView() {
       </div>
 
       {/* 标签页 */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid var(--border)', flexWrap: 'wrap' }}>
+      <div className="cd-tabbar" style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid var(--border)', flexWrap: 'wrap' }}>
         {tabMeta.map((t) => (
           <button
             key={t.key}
@@ -294,7 +302,7 @@ export function ClinicalDataView() {
 
       {/* 名词分类筛选 */}
       {tab === 'glossary' && glossaryCats.length > 1 && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div className="cd-cat-chips" style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
           <button
             onClick={() => { setGlossaryCategory(''); setPage(0); }}
             className={`btn ${!glossaryCategory ? 'btn-primary' : ''}`}
@@ -320,7 +328,7 @@ export function ClinicalDataView() {
           {(pagedList as typeof filteredGlossary).map((g, i) => (
             <button
               key={`${g.term}-${i}`}
-              className="card"
+              className="card cd-entry-row"
               onClick={() => setDetail({ kind: 'glossary', data: g, customIndex: g.__customIdx })}
               style={{ padding: '10px 14px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             >
@@ -336,7 +344,7 @@ export function ClinicalDataView() {
                 )}
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>查看详情 →</span>
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{g.definition}</div>
+              <div className="cd-entry-summary" style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{g.definition}</div>
             </button>
           ))}
         </div>
@@ -353,7 +361,7 @@ export function ClinicalDataView() {
           {(pagedList as typeof filteredParams).map((p, i) => (
             <button
               key={`${p.name}-${i}`}
-              className="card"
+              className="card cd-entry-row"
               onClick={() => setDetail({ kind: 'parameters', data: p, customIndex: p.__customIdx })}
               style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             >
@@ -370,7 +378,7 @@ export function ClinicalDataView() {
                 )}
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>详情 →</span>
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.description}</div>
+              <div className="cd-entry-summary" style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.description}</div>
             </button>
           ))}
         </div>
@@ -382,7 +390,7 @@ export function ClinicalDataView() {
           {(pagedList as typeof filteredFormulas).map((f, i) => (
             <button
               key={`${f.name}-${i}`}
-              className="card"
+              className="card cd-entry-row"
               onClick={() => setDetail({ kind: 'formulas', data: f, customIndex: f.__customIdx })}
               style={{ padding: '14px 16px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             >
@@ -405,7 +413,7 @@ export function ClinicalDataView() {
                 background: 'var(--bg-canvas)', padding: '10px 14px', borderRadius: 'var(--radius-sm)',
                 color: 'var(--text-primary)', marginBottom: 6, overflowX: 'auto',
               }}>{f.formula}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{f.description}</div>
+              <div className="cd-entry-summary" style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{f.description}</div>
             </button>
           ))}
         </div>
@@ -417,7 +425,7 @@ export function ClinicalDataView() {
           {(pagedList as typeof filteredStandards).map((s, i) => (
             <button
               key={`${s.code}-${i}`}
-              className="card"
+              className="card cd-entry-row"
               onClick={() => setDetail({ kind: 'standards', data: s, customIndex: s.__customIdx })}
               style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             >
@@ -445,7 +453,7 @@ export function ClinicalDataView() {
           {(pagedList as typeof filteredOfficialDocs).map((s, i) => (
             <button
               key={`doc-${s.code}-${i}`}
-              className="card"
+              className="card cd-entry-row"
               onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}
               style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', borderLeft: '4px solid #c3272b', background: 'var(--bg-surface)' }}
             >
@@ -474,18 +482,23 @@ export function ClinicalDataView() {
         </div>
       )}
 
-      {/* 分页 */}
+      {/* 分页(桌面) / 加载更多(移动) */}
       {pageCount > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+        <div className="cd-pager" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
           <button className="btn btn-sm" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{page + 1} / {pageCount} 页 · 共 {currentList.length} 条</span>
           <button className="btn btn-sm" disabled={page >= pageCount - 1} onClick={() => setPage(page + 1)}>下一页</button>
         </div>
       )}
+      {hasMore && (
+        <button className="btn cd-loadmore" onClick={() => setPage(page + 1)}>
+          加载更多 · 还有 {currentList.length - pagedList.length} 条
+        </button>
+      )}
 
       {/* ===== 词典级详情弹窗 ===== */}
       {detail && (
-        <div className="modal-overlay" onClick={() => setDetail(null)}>
+        <div className="modal-overlay cd-detail-modal" onClick={() => setDetail(null)}>
           <div
             className="modal-card"
             onClick={(e) => e.stopPropagation()}
@@ -507,6 +520,26 @@ export function ClinicalDataView() {
             </div>
           </div>
         </div>
+      )}
+      {/* 移动端: 详情走 BottomSheet */}
+      {detail && isMobile && (
+        <BottomSheet open onClose={() => setDetail(null)} title="条目详情">
+          {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
+          {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
+          {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
+          {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} />}
+          {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} />}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+            {detail.customIndex !== undefined && (
+              <button
+                className="btn"
+                style={{ height: 48, color: 'var(--danger, #c3272b)', borderColor: 'var(--danger, #c3272b)' }}
+                onClick={() => { if (confirm('删除这条自定义条目？')) deleteCustom(detail.customIndex!); }}
+              >删除此自定义条目</button>
+            )}
+            <button className="btn btn-primary" style={{ height: 48 }} onClick={() => setDetail(null)}>关闭</button>
+          </div>
+        </BottomSheet>
       )}
 
       {/* ===== 自定义添加弹窗 ===== */}
@@ -623,7 +656,7 @@ function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color
       {/* R108: 官方原文链接 */}
       {s.docUrl && (
         <div style={{ marginTop: 12 }}>
-          <a href={s.docUrl} target="_blank" rel="noopener noreferrer"
+          <a href={s.docUrl} target="_blank" rel="noopener noreferrer" className="cd-official-link"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent)' }}>
             <Icon name="link" size={14} /> 查看官方原文 ↗
           </a>
@@ -677,7 +710,7 @@ function OfficialDocDetail({ doc, discipline }: { doc: DisciplineStandard; disci
       )}
       {doc.docUrl && (
         <div style={{ marginTop: 12 }}>
-          <a href={doc.docUrl} target="_blank" rel="noopener noreferrer"
+          <a href={doc.docUrl} target="_blank" rel="noopener noreferrer" className="cd-official-link"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#c3272b', fontWeight: 500 }}>
             <Icon name="link" size={14} /> 查看官方原文 ↗
           </a>

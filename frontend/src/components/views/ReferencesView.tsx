@@ -11,6 +11,8 @@ import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
 import { GalleryView } from '@components/datagrid/GalleryView';
 import { CalendarView } from '@components/datagrid/CalendarView';
 import type { Annotation } from '@apptypes/reference';
+import { useIsMobile } from '@lib/useIsMobile';
+import { BottomSheet } from '@components/layout/BottomSheet';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
@@ -40,6 +42,10 @@ export function ReferencesView() {
   // A3 开放获取 PDF 链接（Unpaywall 查询结果）
   const [oaPdfUrl, setOaPdfUrl] = useState<string | null>(null);
   const [oaLoading, setOaLoading] = useState(false);
+  // 移动端: 更多操作菜单 / 筛选面板
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const isMobile = useIsMobile();
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -269,9 +275,9 @@ export function ReferencesView() {
             style={{ display: 'none' }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
           />
-          <button className="btn" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
-          <button className="btn" aria-label="文档转 Markdown" onClick={() => { setAnydocRefId(selectedId); setAnydocOpen(true); }} title="上传 PDF/Word/Excel 等文档，本地转为 Markdown 进入精读"><Icon name="download" size={16} /> 文档转MD</button>
-          <button className="btn" onClick={() => {
+          <button className="btn ref-desktop-only" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
+          <button className="btn ref-desktop-only" aria-label="文档转 Markdown" onClick={() => { setAnydocRefId(selectedId); setAnydocOpen(true); }} title="上传 PDF/Word/Excel 等文档，本地转为 Markdown 进入精读"><Icon name="download" size={16} /> 文档转MD</button>
+          <button className="btn ref-desktop-only" onClick={() => {
             import('@data/seedReferences').then(({ getSeedReferences }) => {
               const refs = getSeedReferences();
               const existingDois = new Set(references.map((r) => r.doi).filter(Boolean));
@@ -281,14 +287,16 @@ export function ReferencesView() {
               flashToast(`成功导入 ${newRefs.length} 篇精读文献（来自每日精读自动化）`);
             });
           }}><Icon name="references" size={16} /> 导入精读文献</button>
-          <button className="btn" aria-label="导出 BibTeX" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
-          <button className="btn" aria-label="导出 RIS" onClick={() => handleExport('ris')}><Icon name="download" size={16} /> 导出 RIS</button>
-          <button className="btn" aria-label="在线检索"><Icon name="search" size={16} /> 检索</button>
+          <button className="btn ref-desktop-only" aria-label="导出 BibTeX" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
+          <button className="btn ref-desktop-only" aria-label="导出 RIS" onClick={() => handleExport('ris')}><Icon name="download" size={16} /> 导出 RIS</button>
+          <button className="btn ref-desktop-only" aria-label="在线检索"><Icon name="search" size={16} /> 检索</button>
+          {/* 移动端: 更多操作(桌面隐藏) */}
+          <button className="btn ref-more-btn" aria-label="更多操作" onClick={() => setShowMoreMenu(true)}><Icon name="more" size={16} /> 更多</button>
           <button className="btn btn-primary" aria-label="新建文献"><Icon name="plus" size={16} /> 新建</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="ref-search-row" style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
           placeholder="搜索标题、作者、DOI..."
@@ -297,21 +305,23 @@ export function ReferencesView() {
           style={{ flex: 1, minWidth: 200 }}
           aria-label="搜索文献"
         />
-        <select className="input" style={{ width: 140 }} value={filterType} onChange={(e) => setFilterType(e.target.value)} aria-label="按类型筛选">
+        <select className="input ref-desktop-only" style={{ width: 140 }} value={filterType} onChange={(e) => setFilterType(e.target.value)} aria-label="按类型筛选">
           <option value="all">全部类型</option>
           <option value="journalArticle">期刊论文</option>
           <option value="book">书籍</option>
           <option value="preprint">预印本</option>
           <option value="webpage">网页</option>
         </select>
-        <ViewSwitcher mode={viewMode} onChange={setViewMode} />
+        <span className="ref-desktop-only"><ViewSwitcher mode={viewMode} onChange={setViewMode} /></span>
         {viewMode === 'kanban' && (
-          <select className="input" style={{ width: 120 }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupField)} aria-label="看板分组字段">
+          <select className="input ref-desktop-only" style={{ width: 120 }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupField)} aria-label="看板分组字段">
             <option value="readStatus">按状态</option>
             <option value="type">按类型</option>
             <option value="importance">按重要度</option>
           </select>
         )}
+        {/* 移动端: 筛选按钮(桌面隐藏) */}
+        <button className="btn ref-filter-btn" onClick={() => setShowFilterMenu(true)}><Icon name="filter" size={15} /> 筛选</button>
       </div>
 
       {/* DOI 自动抓取元数据 */}
@@ -360,6 +370,37 @@ export function ReferencesView() {
         <div className="empty-state">
           <div className="icon" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="references" size={48} strokeWidth={1.2} /></div>
           <p>暂无文献。点击「检索」从 OpenAlex/Crossref/arXiv 检索，或「导入」BibTeX/RIS。</p>
+        </div>
+      ) : isMobile ? (
+        <div className="ref-mobile-list">
+          {filtered.map((r) => (
+            <div
+              key={r.id}
+              className="card"
+              onClick={() => setSelectedId(r.id)}
+              style={{ padding: 14, cursor: 'pointer', border: '1px solid var(--border)' }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.4, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{r.title}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                {r.creators.slice(0, 2).map((c) => `${c.lastName}${c.firstName}`).join(', ')}{r.creators.length > 2 && ' et al.'}
+                {r.year && ` · ${r.year}`}{r.publication && ` · ${r.publication}`}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span><StatusChip status={r.readStatus} /></span>
+                {r.tags.length > 0 && (
+                  <div className="scroll-x" style={{ display: 'flex', gap: 4, flex: 1, marginLeft: 8 }}>
+                    {r.tags.slice(0, 4).map((t) => (
+                      <span key={t} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{t}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+                <button className="btn ref-card-act" style={{ fontSize: 12 }} onClick={() => setExportPreview({ format: 'BibTeX', content: exportBibTeX([r]) })} title="导出此条"><Icon name="download" size={15} /> 导出</button>
+                <button className="btn ref-card-act" style={{ fontSize: 12, color: 'var(--danger, #c3272b)' }} onClick={() => setConfirmDeleteId(r.id)} title="删除"><Icon name="close" size={15} /> 删除</button>
+              </div>
+            </div>
+          ))}
         </div>
       ) : viewMode === 'kanban' ? (
         <KanbanView
@@ -418,9 +459,9 @@ export function ReferencesView() {
         </div>
       )}
 
-      {/* 详情侧滑面板（ONES/Mobbin 模式：点击行 → 右侧详情，不离开列表上下文） */}
-      <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />
-      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onConvertMd={(id) => { setAnydocRefId(id); setAnydocOpen(true); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => setConfirmDeleteId(id)} oaPdfUrl={oaPdfUrl} oaLoading={oaLoading} onLookupOa={async (doi) => { if (!doi) return; setOaLoading(true); setOaPdfUrl(null); try { const res = await fetch(`https://api.unpaywall.org/v2/${doi}?email=selenyx@research.local`); if (res.ok) { const d = await res.json(); const loc = d.best_oa_location; if (loc?.url_for_pdf || loc?.url) { setOaPdfUrl(loc.url_for_pdf || loc.url); flashToast('找到开放获取 PDF 链接'); } else { flashToast('未找到开放获取版本'); } } else { flashToast('Unpaywall 查询失败'); } } catch { flashToast('网络请求失败（可能被 CORS 限制）'); } finally { setOaLoading(false); } }} />}
+      {/* 详情面板: 桌面侧滑 / 移动端 BottomSheet */}
+      {!isMobile && <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />}
+      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onConvertMd={(id) => { setAnydocRefId(id); setAnydocOpen(true); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => setConfirmDeleteId(id)} oaPdfUrl={oaPdfUrl} oaLoading={oaLoading} onLookupOa={async (doi) => { if (!doi) return; setOaLoading(true); setOaPdfUrl(null); try { const res = await fetch(`https://api.unpaywall.org/v2/${doi}?email=selenyx@research.local`); if (res.ok) { const d = await res.json(); const loc = d.best_oa_location; if (loc?.url_for_pdf || loc?.url) { setOaPdfUrl(loc.url_for_pdf || loc.url); flashToast('找到开放获取 PDF 链接'); } else { flashToast('未找到开放获取版本'); } } else { flashToast('Unpaywall 查询失败'); } } catch { flashToast('网络请求失败（可能被 CORS 限制）'); } finally { setOaLoading(false); } }} asSheet={isMobile} />}
 
       {/* 隐藏 PDF 文件输入 */}
       <input
@@ -483,6 +524,85 @@ export function ReferencesView() {
         onSaveToNotes={anydocRefId ? handleSaveMdToNotes : undefined}
       />
 
+      {/* 移动端: 更多操作菜单 */}
+      {isMobile && showMoreMenu && (
+        <BottomSheet open onClose={() => setShowMoreMenu(false)} title="更多操作">
+          <button className="mobile-drawer-item" onClick={() => { setShowMoreMenu(false); fileInputRef.current?.click(); }}><Icon name="import" size={18} /> 导入文献</button>
+          <button className="mobile-drawer-item" onClick={() => { setShowMoreMenu(false); setAnydocRefId(selectedId); setAnydocOpen(true); }}><Icon name="download" size={18} /> 文档转MD</button>
+          <button className="mobile-drawer-item" onClick={() => {
+            setShowMoreMenu(false);
+            import('@data/seedReferences').then(({ getSeedReferences }) => {
+              const refs = getSeedReferences();
+              const existingDois = new Set(references.map((r) => r.doi).filter(Boolean));
+              const newRefs = refs.filter((r) => !r.doi || !existingDois.has(r.doi));
+              if (newRefs.length === 0) { flashToast('精读文献已全部导入，无新增'); return; }
+              addReferences(newRefs);
+              flashToast(`成功导入 ${newRefs.length} 篇精读文献`);
+            });
+          }}><Icon name="references" size={18} /> 导入精读文献</button>
+          <button className="mobile-drawer-item" onClick={() => { setShowMoreMenu(false); handleExport('bibtex'); }}><Icon name="download" size={18} /> 导出 BibTeX</button>
+          <button className="mobile-drawer-item" onClick={() => { setShowMoreMenu(false); handleExport('ris'); }}><Icon name="download" size={18} /> 导出 RIS</button>
+        </BottomSheet>
+      )}
+
+      {/* 移动端: 筛选面板 */}
+      {isMobile && showFilterMenu && (
+        <BottomSheet open onClose={() => setShowFilterMenu(false)} title="筛选与视图">
+          <div style={{ marginBottom: 16 }}>
+            <span className="field-label" style={{ display: 'block', marginBottom: 8 }}>类型</span>
+            <select className="input" style={{ width: '100%' }} value={filterType} onChange={(e) => setFilterType(e.target.value)} aria-label="按类型筛选">
+              <option value="all">全部类型</option>
+              <option value="journalArticle">期刊论文</option>
+              <option value="book">书籍</option>
+              <option value="preprint">预印本</option>
+              <option value="webpage">网页</option>
+            </select>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <span className="field-label" style={{ display: 'block', marginBottom: 8 }}>视图模式</span>
+            <ViewSwitcher mode={viewMode} onChange={setViewMode} />
+          </div>
+          {viewMode === 'kanban' && (
+            <div style={{ marginBottom: 16 }}>
+              <span className="field-label" style={{ display: 'block', marginBottom: 8 }}>看板分组</span>
+              <select className="input" style={{ width: '100%' }} value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupField)} aria-label="看板分组字段">
+                <option value="readStatus">按状态</option>
+                <option value="type">按类型</option>
+                <option value="importance">按重要度</option>
+              </select>
+            </div>
+          )}
+          <button className="btn btn-primary" style={{ width: '100%', height: 48 }} onClick={() => setShowFilterMenu(false)}>完成</button>
+        </BottomSheet>
+      )}
+
+      {/* 移动端: 导出预览 BottomSheet */}
+      {isMobile && exportPreview && (
+        <BottomSheet open onClose={() => setExportPreview(null)} title={`导出 ${exportPreview.format}`}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>{exportPreview.content.split('\n').filter((l) => l.trim()).length} 条文献</p>
+          <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ width: '100%', height: 280, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.6, resize: 'none' }} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button className="btn btn-primary" style={{ flex: 1, height: 48 }} onClick={handleExportCopy}><Icon name="import" size={18} /> 复制全部</button>
+            <button className="btn" style={{ height: 48 }} onClick={() => setExportPreview(null)}>关闭</button>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* 移动端: 删除确认 BottomSheet */}
+      {isMobile && confirmDeleteId && (
+        <BottomSheet open onClose={() => setConfirmDeleteId(null)} title="确认删除">
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>确认删除此文献？</p>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>此操作不可撤销，文献及其笔记/批注将永久删除。</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" style={{ flex: 1, height: 48 }} onClick={() => setConfirmDeleteId(null)}>取消</button>
+            <button className="btn" style={{ flex: 1, height: 48, background: 'var(--danger, #c3272b)', color: '#fff', borderColor: 'var(--danger, #c3272b)' }} onClick={() => { deleteReference(confirmDeleteId); setConfirmDeleteId(null); closePanel(); flashToast('已删除文献'); }}>确认删除</button>
+          </div>
+        </BottomSheet>
+      )}
+
       {/* 操作反馈 toast */}
       {toast && (
         <div className="toast" role="status" aria-live="polite">{toast}</div>
@@ -490,7 +610,7 @@ export function ReferencesView() {
 
       {/* A1 导出预览弹窗（飞书 webview 拦截下载 → 应用内展示+复制） */}
       {exportPreview && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setExportPreview(null)}>
+        <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setExportPreview(null)}>
           <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 640, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
               <h3 style={{ fontSize: 16, fontWeight: 600 }}>导出 {exportPreview.format} · {exportPreview.content.split('\n').filter(l=>l.trim()).length} 条</h3>
@@ -507,7 +627,7 @@ export function ReferencesView() {
 
       {/* A2 删除二次确认弹窗（飞书 webview 拦截 window.confirm → 应用内确认） */}
       {confirmDeleteId && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setConfirmDeleteId(null)}>
+        <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setConfirmDeleteId(null)}>
           <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 360, width: '100%', padding: 24, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
             <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>确认删除此文献？</h3>
@@ -524,7 +644,7 @@ export function ReferencesView() {
 }
 
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _onOpenWeb, onDelete, oaPdfUrl, oaLoading, onLookupOa }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void; oaPdfUrl: string | null; oaLoading: boolean; onLookupOa: (doi: string) => void }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _onOpenWeb, onDelete, oaPdfUrl, oaLoading, onLookupOa, asSheet }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void; oaPdfUrl: string | null; oaLoading: boolean; onLookupOa: (doi: string) => void; asSheet?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   function generateGBT7714(): string {
@@ -556,6 +676,104 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _o
     });
   }
 
+  // --- 移动端 BottomSheet 详情 (asSheet=true) ---
+  if (asSheet) {
+    return (
+      <BottomSheet open onClose={onClose} title="文献详情">
+        <div className="ref-detail-field">
+          <span className="field-label">标题</span>
+          <span className="field-value" style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.4 }}>{r.title}</span>
+        </div>
+        <div className="ref-detail-field">
+          <span className="field-label">作者</span>
+          <span className="field-value">{r.creators.map((c) => `${c.lastName}${c.firstName}`).join('; ') || '—'}</span>
+        </div>
+        <div className="detail-grid">
+          <div className="ref-detail-field">
+            <span className="field-label">期刊</span>
+            <span className="field-value">{r.publication || '—'}</span>
+          </div>
+          <div className="ref-detail-field">
+            <span className="field-label">年份</span>
+            <span className="field-value">{r.year || '—'}</span>
+          </div>
+          <div className="ref-detail-field">
+            <span className="field-label">DOI</span>
+            <span className="field-value" style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}>{r.doi || '—'}</span>
+          </div>
+          <div className="ref-detail-field">
+            <span className="field-label">阅读状态</span>
+            <span><StatusChip status={r.readStatus} /></span>
+          </div>
+        </div>
+        <div className="detail-grid">
+          <div className="ref-detail-field">
+            <span className="field-label">影响因子</span>
+            <span className="field-value">{r.impactFactor != null ? r.impactFactor.toFixed(1) : '—'}</span>
+          </div>
+          <div className="ref-detail-field">
+            <span className="field-label">JCR 分区</span>
+            <span className="field-value">{r.jcrQuartile ?? '—'}</span>
+          </div>
+          <div className="ref-detail-field">
+            <span className="field-label">开放获取</span>
+            <span className="field-value">{r.openAccess ? '是' : '否'}</span>
+          </div>
+          <div className="ref-detail-field">
+            <span className="field-label">重要度</span>
+            <span className="field-value">{'★'.repeat(r.importance)}{'☆'.repeat(5 - r.importance)}</span>
+          </div>
+        </div>
+        {r.abstract && (
+          <div className="ref-detail-field">
+            <span className="field-label">摘要</span>
+            <span className="field-value" style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>{r.abstract}</span>
+          </div>
+        )}
+        {r.tags.length > 0 && (
+          <div className="ref-detail-field">
+            <span className="field-label">标签</span>
+            <span className="field-value" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {r.tags.map((t) => (<span key={t} className="status-chip chip-unread chip-xs"><span className="chip-mark chip-mark-dash" />{t}</span>))}
+            </span>
+          </div>
+        )}
+        {r.doi && (
+          <div className="ref-detail-field">
+            <span className="field-label">链接</span>
+            <a className="field-value" href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Icon name="link" size={14} /> doi.org/{r.doi}
+            </a>
+          </div>
+        )}
+        {/* GB/T 7714 引用 */}
+        <div className="ref-detail-field" style={{ marginTop: 4 }}>
+          <span className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            GB/T 7714 引用
+            <button className="btn btn-xs" onClick={copyCitation} style={{ padding: '2px 10px', fontSize: 11 }} aria-label="复制引用文本">{copied ? '✓ 已复制' : '复制'}</button>
+          </span>
+          <div style={{ marginTop: 6, padding: '10px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 12.5, lineHeight: 1.7, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+            {generateGBT7714()}
+          </div>
+        </div>
+        {/* 移动端操作: 2 列网格 + 删除单列置底 */}
+        <div className="ref-detail-actions-mobile" style={{ marginTop: 16 }}>
+          <button className="btn btn-primary" onClick={() => onOpenPdf(r.id)}><Icon name="download" size={18} /> 上传PDF阅读</button>
+          <button className="btn" onClick={() => onConvertMd(r.id)}><Icon name="import" size={18} /> 转Markdown</button>
+          {r.doi && (
+            <button className="btn" onClick={() => onLookupOa(r.doi)} disabled={oaLoading}><Icon name="link" size={18} /> {oaLoading ? '查询中…' : '查找OA全文'}</button>
+          )}
+          {r.doi && (
+            <a className="btn" href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="link" size={18} /> 在线阅读</a>
+          )}
+          <button className="btn"><Icon name="tag" size={18} /> 编辑标签</button>
+          <button className="btn ref-act-delete" style={{ color: 'var(--danger, #c3272b)' }} onClick={() => onDelete(r.id)}><Icon name="close" size={18} /> 删除</button>
+        </div>
+      </BottomSheet>
+    );
+  }
+
+  // --- 桌面侧滑面板 (asSheet=false) ---
   return (
     <aside className="ref-detail-panel open" role="dialog" aria-label={`文献详情：${r.title}`}>
       <div className="ref-detail-header">
