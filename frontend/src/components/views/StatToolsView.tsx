@@ -43,7 +43,7 @@ export function StatToolsView() {
   );
 }
 
-type CalcKey = 'pvalue' | 'ttest' | 'pairedt' | 'onesamplet' | 'anova' | 'chi' | 'orrr' | 'diagtest' | 'correlation' | 'effectsize' | 'samplesize' | 'ci' | 'cronbach' | 'regression' | 'mannwhitney';
+type CalcKey = 'pvalue' | 'ttest' | 'pairedt' | 'onesamplet' | 'anova' | 'chi' | 'orrr' | 'diagtest' | 'correlation' | 'effectsize' | 'samplesize' | 'ci' | 'cronbach' | 'regression' | 'mannwhitney' | 'logistic' | 'roc' | 'survival';
 
 const CALC_LIST: { key: CalcKey; label: string }[] = [
   { key: 'pvalue', label: 'Z→p值' },
@@ -61,6 +61,9 @@ const CALC_LIST: { key: CalcKey; label: string }[] = [
   { key: 'cronbach', label: 'Cronbach α' },
   { key: 'regression', label: '线性回归' },
   { key: 'mannwhitney', label: 'Mann-Whitney U' },
+  { key: 'logistic', label: 'Logistic回归' },
+  { key: 'roc', label: 'ROC曲线' },
+  { key: 'survival', label: '生存分析' },
 ];
 
 function Calculators() {
@@ -90,6 +93,9 @@ function Calculators() {
       {calc === 'cronbach' && <CronbachCalc />}
       {calc === 'regression' && <RegressionCalc />}
       {calc === 'mannwhitney' && <MannWhitneyCalc />}
+      {calc === 'logistic' && <LogisticRegCalc />}
+      {calc === 'roc' && <ROCCalc />}
+      {calc === 'survival' && <SurvivalCalc />}
     </>
   );
 }
@@ -850,4 +856,212 @@ function MannWhitneyCalc() {
       {result && <ResultBox label="Mann-Whitney U" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
     </div>
   );
+}
+
+
+// ===== R107: P0 全学科统计工具 =====
+
+function LogisticRegCalc() {
+  const [a, setA] = useState('40');
+  const [b, setB] = useState('60');
+  const [c, setC] = useState('20');
+  const [d, setD] = useState('80');
+  const [result, setResult] = useState('');
+
+  function calc() {
+    const av = parseFloat(a), bv = parseFloat(b), cv = parseFloat(c), dv = parseFloat(d);
+    if ([av, bv, cv, dv].some(isNaN) || av < 0 || bv < 0 || cv < 0 || dv < 0) {
+      setResult('请输入非负数值'); return;
+    }
+    if (av === 0 || bv === 0 || cv === 0 || dv === 0) {
+      setResult('四格表不允许有 0 值（如需处理请使用连续性校正）'); return;
+    }
+    const or = (av * dv) / (bv * cv);
+    const logOR = Math.log(or);
+    const se = Math.sqrt(1 / av + 1 / bv + 1 / cv + 1 / dv);
+    const z = logOR / se;
+    const twoP = 2 * Math.min(normalCDF(z), 1 - normalCDF(z));
+    const ciLow = Math.exp(logOR - 1.96 * se);
+    const ciHigh = Math.exp(logOR + 1.96 * se);
+    const p1 = av / (av + bv);
+    const p0 = cv / (cv + dv);
+    setResult(
+      `OR=${or.toFixed(3)} ｜ β₁=ln(OR)=${logOR.toFixed(3)} ｜ SE=${se.toFixed(3)} ｜ Wald z=${z.toFixed(3)} ｜ p=${twoP < 0.0001 ? twoP.toExponential(2) : twoP.toFixed(4)} ｜ 95%CI [${ciLow.toFixed(3)}, ${ciHigh.toFixed(3)}] ｜ 暴露组风险=${(p1 * 100).toFixed(1)}% vs 对照组=${(p0 * 100).toFixed(1)}%`
+    );
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 560 }}>
+      <h3 style={{ marginBottom: 12, fontSize: 16 }}>Logistic 回归（2×2 表）</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+        二分类结局的核心方法。输入 2×2 列联表（暴露/非暴露 × 事件/无事件），输出 OR、β₁ 系数、Wald z 检验、p 值与 95% CI。
+        适用：流行病学、护理研究、社会科学中的风险因素分析。
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+        <div />
+        <div style={{ fontSize: 12, fontWeight: 600, textAlign: 'center' }}>事件(+)</div>
+        <div style={{ fontSize: 12, fontWeight: 600, textAlign: 'center' }}>无事件(−)</div>
+        <div style={{ fontSize: 12, fontWeight: 600 }}>暴露(+)</div>
+        <input className="input" value={a} onChange={(e) => setA(e.target.value)} style={{ textAlign: 'center' }} />
+        <input className="input" value={b} onChange={(e) => setB(e.target.value)} style={{ textAlign: 'center' }} />
+        <div style={{ fontSize: 12, fontWeight: 600 }}>非暴露(−)</div>
+        <input className="input" value={c} onChange={(e) => setC(e.target.value)} style={{ textAlign: 'center' }} />
+        <input className="input" value={d} onChange={(e) => setD(e.target.value)} style={{ textAlign: 'center' }} />
+      </div>
+      <button className="btn btn-primary" onClick={calc}>计算 Logistic 回归</button>
+      {result && <ResultBox label="Logistic 回归" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
+    </div>
+  );
+}
+
+function ROCCalc() {
+  const [sens, setSens] = useState('0.85');
+  const [spec, setSpec] = useState('0.80');
+  const [result, setResult] = useState('');
+
+  function calc() {
+    const se = parseFloat(sens), sp = parseFloat(spec);
+    if (isNaN(se) || isNaN(sp) || se < 0 || se > 1 || sp < 0 || sp > 1) {
+      setResult('灵敏度和特异度须在 0–1 之间'); return;
+    }
+    // Binormal AUC approximation
+    const a = Math.sqrt(2) * inverseNormalCDF(se);
+    const b = Math.sqrt(2) * inverseNormalCDF(sp);
+    const auc = normalCDF((a + b) / Math.sqrt(2));
+    const youdenJ = se + sp - 1;
+    const ppv = se / (se + (1 - sp)); // assuming prevalence-adjusted would need prevalence input
+    const npv = sp / (sp + (1 - se));
+    const lrPos = se / (1 - sp);
+    const lrNeg = (1 - se) / sp;
+    setResult(
+      `AUC≈${auc.toFixed(3)} ｜ Youden J=${youdenJ.toFixed(3)} ｜ LR+=${lrPos.toFixed(2)} ｜ LR−=${lrNeg.toFixed(2)} ｜ 灵敏度=${(se * 100).toFixed(1)}% ｜ 特异度=${(sp * 100).toFixed(1)}% ｜ PPV≈${(ppv * 100).toFixed(1)}% ｜ NPV≈${(npv * 100).toFixed(1)}%（50%患病率假设）`
+    );
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 520 }}>
+      <h3 style={{ marginBottom: 12, fontSize: 16 }}>ROC 曲线分析</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+        输入灵敏度和特异度，估算 AUC（曲线下面积）、Youden's J 指数、似然比。
+        AUC 是诊断试验准确性的金标准：0.5=无判别力，0.7–0.8=可接受，0.8–0.9=优秀，&gt;0.9=极好。
+        适用：诊断试验评价、预测模型验证、护理评估工具效能分析。
+      </p>
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>灵敏度 (Sensitivity)</label>
+      <input className="input" value={sens} onChange={(e) => setSens(e.target.value)} style={{ width: '100%', marginBottom: 8 }} placeholder="0.00–1.00" />
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>特异度 (Specificity)</label>
+      <input className="input" value={spec} onChange={(e) => setSpec(e.target.value)} style={{ width: '100%', marginBottom: 8 }} placeholder="0.00–1.00" />
+      <button className="btn btn-primary" onClick={calc}>计算 ROC 指标</button>
+      {result && <ResultBox label="ROC 分析" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
+    </div>
+  );
+}
+
+function SurvivalCalc() {
+  const [g1times, setG1times] = useState('6 8 10 12 15 18 22 25 30 35');
+  const [g1events, setG1events] = useState('1 1 1 0 1 1 0 1 1 0');
+  const [g2times, setG2times] = useState('4 6 8 10 12 14 16 20 24 28');
+  const [g2events, setG2events] = useState('1 1 1 1 1 1 0 1 0 1');
+  const [result, setResult] = useState('');
+
+  function calc() {
+    const t1 = g1times.trim().split(/[\s,，]+/).map(Number).filter((v) => !isNaN(v));
+    const e1 = g1events.trim().split(/[\s,，]+/).map(Number).filter((v) => !isNaN(v));
+    const t2 = g2times.trim().split(/[\s,，]+/).map(Number).filter((v) => !isNaN(v));
+    const e2 = g2events.trim().split(/[\s,，]+/).map(Number).filter((v) => !isNaN(v));
+    if (t1.length !== e1.length || t2.length !== e2.length || t1.length < 2 || t2.length < 2) {
+      setResult('时间与事件数须一一对应，且每组至少 2 个观测'); return;
+    }
+    // Log-rank test
+    const allTimes = [...new Set([...t1, ...t2])].sort((a, b) => a - b);
+    let O1 = 0, E1 = 0, V = 0;
+    for (const t of allTimes) {
+      const n1 = t1.filter((x) => x >= t).length;
+      const n2 = t2.filter((x) => x >= t).length;
+      const d1 = t1.reduce((s, x, i) => s + (x === t && e1[i] === 1 ? 1 : 0), 0);
+      const d2 = t2.reduce((s, x, i) => s + (x === t && e2[i] === 1 ? 1 : 0), 0);
+      const d = d1 + d2;
+      const n = n1 + n2;
+      if (n < 2 || d === 0) continue;
+      O1 += d1;
+      E1 += (n1 / n) * d;
+      V += (n1 * n2 * d * (n - d)) / (n * n * (n - 1));
+    }
+    if (V <= 0) { setResult('方差为 0，无法计算'); return; }
+    const chiSq = ((O1 - E1) ** 2) / V;
+    const p = 1 - chiSquareCDF(chiSq, 1);
+    // Median survival (simple interpolation)
+    function medianSurvival(times: number[], events: number[]): string {
+      let cumSurv = 1.0;
+      const sorted = times.map((t, i) => ({ t, e: events[i] })).sort((a, b) => a.t - b.t);
+      const uniqueTimes = [...new Set(sorted.map((x) => x.t))].sort((a, b) => a - b);
+      for (const t of uniqueTimes) {
+        const atRisk = sorted.filter((x) => x.t >= t).length;
+        const events = sorted.filter((x) => x.t === t && x.e === 1).length;
+        if (atRisk > 0) cumSurv *= (1 - events / atRisk);
+        if (cumSurv <= 0.5) return t.toString();
+      }
+      return '未达到';
+    }
+    const med1 = medianSurvival(t1, e1);
+    const med2 = medianSurvival(t2, e2);
+    setResult(
+      `Log-rank χ²=${chiSq.toFixed(3)} ｜ p=${p < 0.0001 ? p.toExponential(2) : p.toFixed(4)} ｜ 组1中位生存=${med1} ｜ 组2中位生存=${med2} ｜ O₁-E₁=${(O1 - E1).toFixed(2)}`
+    );
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 560 }}>
+      <h3 style={{ marginBottom: 12, fontSize: 16 }}>Kaplan-Meier 生存分析</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+        输入两组生存时间和事件指示（1=事件发生，0=删失），执行 Log-rank 检验比较两组生存曲线。
+        输出 χ² 统计量、p 值和各组中位生存时间。
+        适用：肿瘤学、慢性病管理、护理结局随访研究。
+      </p>
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 1 生存时间（空格/逗号分隔）</label>
+      <input className="input" value={g1times} onChange={(e) => setG1times(e.target.value)} style={{ width: '100%', marginBottom: 4 }} />
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 1 事件指示（1=事件 0=删失）</label>
+      <input className="input" value={g1events} onChange={(e) => setG1events(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 2 生存时间</label>
+      <input className="input" value={g2times} onChange={(e) => setG2times(e.target.value)} style={{ width: '100%', marginBottom: 4 }} />
+      <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 2 事件指示</label>
+      <input className="input" value={g2events} onChange={(e) => setG2events(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
+      <button className="btn btn-primary" onClick={calc}>执行 Log-rank 检验</button>
+      {result && <ResultBox label="生存分析" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
+    </div>
+  );
+}
+
+/** 逆正态分布 CDF（Beasley-Springer-Moro 近似） */
+function inverseNormalCDF(p: number): number {
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  if (p === 0.5) return 0;
+  const a = [2.50662823884, -18.61500062529, 41.39119773534, -25.44106049637];
+  const b = [-8.47351093090, 23.08336743743, -21.06224101826, 3.13082909833];
+  const c = [0.3374754822726147, 0.9761690190917186, 0.1607979714918209, 0.0276438810333863, 0.0038405729373609, 0.0003951896511919, 0.0000321767881768, 0.0000002888167364, 0.0000003960315187];
+  const q = p - 0.5;
+  if (Math.abs(q) <= 0.425) {
+    const r = 0.180625 - q * q;
+    return q * (((a[3] * r + a[2]) * r + a[1]) * r + a[0]) / ((((b[3] * r + b[2]) * r + b[1]) * r + b[0]) * r + 1);
+  }
+  let r = q < 0 ? p : 1 - p;
+  r = Math.sqrt(-Math.log(r));
+  let val: number;
+  if (r <= 5) {
+    const rr = r - 1.6;
+    val = (((((((c[8] * rr + c[7]) * rr + c[6]) * rr + c[5]) * rr + c[4]) * rr + c[3]) * rr + c[2]) * rr + c[1]) * rr + c[0];
+  } else {
+    const rr = r - 5;
+    val = (((((((c[8] * rr + c[7]) * rr + c[6]) * rr + c[5]) * rr + c[4]) * rr + c[3]) * rr + c[2]) * rr + c[1]) * rr + c[0];
+  }
+  return q < 0 ? -val : val;
+}
+
+/** 卡方分布 CDF（ Wilson-Hilferty 近似） */
+function chiSquareCDF(x: number, df: number): number {
+  if (x <= 0) return 0;
+  // Wilson-Hilferty transformation to normal
+  const z = Math.pow(x / df, 1 / 3) - (1 - 2 / (9 * df));
+  const zNorm = z / Math.sqrt(2 / (9 * df));
+  return normalCDF(zNorm);
 }
