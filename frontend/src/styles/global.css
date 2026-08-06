@@ -1880,3 +1880,35 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   .calc-row { grid-template-columns: 1fr; }
   .modal-card { width: 95%; padding: 16px; }
 }
+
+/* ===== 界面密度响应（R108 R4：修复切换无效——原 :root 默认值特异性压过 [data-density]） ===== */
+/* .app-main / .card / .stat-card / .grid 已消费 --space-* 语义变量，随密度自动变化； */
+/* 以下补齐使用硬编码间距的组件，让三档密度切换效果全面可感。 */
+
+:root[data-density="compact"] .nav-item { padding: 6px 10px; font-size: 13px; gap: 8px; }
+:root[data-density="compact"] .stat-card { padding: 12px 14px; }
+:root[data-density="compact"] .stat-card .stat-value { font-size: 22px; }
+:root[data-density="compact"] .kanban-card { padding: 8px 10px; }
+:root[data-density="compact"] .gallery-item,
+:root[data-density="compact"] .ref-row { padding: 8px 10px; }
+:root[data-density="compact"] .view-header { margin-bottom: 12px; }
+:root[data-density="compact"] .view-header h1,
+:root[data-density="compact"] .view-header h2 { font-size: 18px; }
+:root[data-density="compact"] .modal-card { padding: 16px; }
+:root[data-density="compact"] .app-main h3 { font-size: 14px; }
+:root[data-density="compact"] .app-main p,
+:root[data-density="compact"] .app-main li { font-size: 13px; line-height: 1.45; }
+
+:root[data-density="spacious"] .nav-item { padding: 12px 14px; font-size: 15px; gap: 12px; }
+:root[data-density="spacious"] .stat-card { padding: 20px 24px; }
+:root[data-density="spacious"] .stat-card .stat-value { font-size: 30px; }
+:root[data-density="spacious"] .kanban-card { padding: 14px 16px; }
+:root[data-density="spacious"] .gallery-item,
+:root[data-density="spacious"] .ref-row { padding: 14px 16px; }
+:root[data-density="spacious"] .view-header { margin-bottom: 24px; }
+:root[data-density="spacious"] .view-header h1,
+:root[data-density="spacious"] .view-header h2 { font-size: 24px; }
+:root[data-density="spacious"] .modal-card { padding: 28px; }
+:root[data-density="spacious"] .app-main h3 { font-size: 18px; }
+:root[data-density="spacious"] .app-main p,
+:root[data-density="spacious"] .app-main li { font-size: 15px; line-height: 1.65; }

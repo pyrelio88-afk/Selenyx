@@ -79,30 +79,34 @@
 /* 已在 global.css 主题块中定义：--bg-canvas / --text-primary / --accent / --border 等 */
 /* 此处补充密度语义 token（随 data-density 切换） */
 
-[data-density="comfortable"] {
+/* 特异性 :root[data-density] (0,2,0) > :root (0,1,0)，保证压过下方默认值 */
+:root[data-density="comfortable"] {
   --space-card-pad: var(--space-5);
   --space-row-pad: 10px;
   --space-section-gap: var(--space-6);
   --space-view-pad: 24px 32px;
   --sidebar-width: 220px;
+  --density-font-scale: 1;
 }
-[data-density="compact"] {
+:root[data-density="compact"] {
   --space-card-pad: var(--space-3);
   --space-row-pad: 6px;
   --space-section-gap: var(--space-4);
   --space-view-pad: 16px 20px;
-  --sidebar-width: 200px;
+  --sidebar-width: 196px;
+  --density-font-scale: 0.93;
 }
-[data-density="spacious"] {
+:root[data-density="spacious"] {
   --space-card-pad: var(--space-6);
   --space-row-pad: 14px;
   --space-section-gap: var(--space-8);
   --space-view-pad: 32px 40px;
-  --sidebar-width: 240px;
+  --sidebar-width: 244px;
+  --density-font-scale: 1.06;
 }
 
-/* 默认 comfortable */
-:root { --space-card-pad: var(--space-5); --space-row-pad: 10px; --space-section-gap: var(--space-6); --space-view-pad: 24px 32px; --sidebar-width: 220px; }
+/* 默认 comfortable（放最后但特异性低于 :root[data-density]，仅作未设置时的兜底） */
+:root { --space-card-pad: var(--space-5); --space-row-pad: 10px; --space-section-gap: var(--space-6); --space-view-pad: 24px 32px; --sidebar-width: 220px; --density-font-scale: 1; }
 
 /* ===== 动效规范（功能性，≤300ms，可被 prefers-reduced-motion 全局关闭） ===== */
 :root {
