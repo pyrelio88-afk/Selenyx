@@ -2,18 +2,18 @@ import { useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { THEME_OPTIONS } from '@hooks/useTheme';
 import type { LLMProvider } from '@apptypes/index';
-import { Icon } from '@components/ui/Icon';
+import { Icon, type IconName } from '@components/ui/Icon';
 import { DensityToggle } from '@components/ui/StatusChip';
 import { testConnection, PROVIDER_DEFAULTS, type TestResult } from '@services/llm';
 
 type SettingsTab = 'appearance' | 'llm' | 'data' | 'shortcuts' | 'about';
 
-const TABS: { key: SettingsTab; label: string; icon: string }[] = [
-  { key: 'appearance', label: '外观', icon: '🎨' },
-  { key: 'llm', label: 'AI 配置', icon: '🤖' },
-  { key: 'data', label: '数据管理', icon: '💾' },
-  { key: 'shortcuts', label: '快捷键', icon: '⌨️' },
-  { key: 'about', label: '关于', icon: 'ℹ️' },
+const TABS: { key: SettingsTab; label: string; icon: IconName }[] = [
+  { key: 'appearance', label: '外观', icon: 'settings' },
+  { key: 'llm', label: 'AI 配置', icon: 'aiChat' },
+  { key: 'data', label: '数据管理', icon: 'references' },
+  { key: 'shortcuts', label: '快捷键', icon: 'pipeline' },
+  { key: 'about', label: '关于', icon: 'dashboard' },
 ];
 
 /** HuggingFace 检索到的适配科研工作台的本地小模型（用户长期需求：去 huggingface 搜索 <1B 开源模型） */
@@ -190,7 +190,7 @@ export function SettingsView() {
             onClick={() => setTab(t.key)}
             style={{ width: '100%', marginBottom: 2 }}
           >
-            <span style={{ fontSize: 15, marginRight: 4 }}>{t.icon}</span>
+            <Icon name={t.icon} size={15} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
             <span>{t.label}</span>
           </button>
         ))}
@@ -412,11 +412,12 @@ export function SettingsView() {
             <div className="card">
               <h3 style={{ marginBottom: 12, fontSize: 16 }}>数据源</h3>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                <p>📚 文献检索：OpenAlex + PubMed</p>
-                <p>🏥 护理诊断：NANDA-I 2024-2026</p>
-                <p>🧪 检验参考值：临床检验标准参考范围</p>
-                <p>📊 统计分布：Z / t / 卡方 / F 精确临界值</p>
-                <p>🤖 LLM：BYOK（OpenAI / OpenRouter / Anthropic / Google / Ollama）</p>
+                <p>文献检索：OpenAlex + PubMed + Crossref + arXiv</p>
+                <p>护理诊断：NANDA-I 2024-2026（39 条全量内置）</p>
+                <p>检验参考值：临床检验标准参考范围（40+ 项）</p>
+                <p>统计分布：Z / t / 卡方 / F 精确临界值 + 12 个计算器</p>
+                <p>LLM：BYOK（OpenAI / OpenRouter / Anthropic / Google / Ollama）</p>
+                <p>学科数据：13 学科门类 2900+ 术语（持续扩充中）</p>
               </div>
             </div>
           </div>

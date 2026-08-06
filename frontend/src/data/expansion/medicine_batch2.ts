@@ -82,5 +82,13 @@ export const MEDICINE_BATCH2: DisciplineExpansion = {
     { term: '伤口护理', termEn: 'Wound Care', definition: '按伤口分期和类型选择处理方法。急性伤口（手术切口、外伤）：一期愈合目标，保持清洁干燥。慢性伤口（压疮、糖尿病足、静脉溃疡）：TIME 原则（Tissue 坏死组织清创→Infection 感染控制→Moisture 湿润平衡→Edge 伤口边缘推进）。敷料选择：纱布/泡沫/水胶体/藻酸盐/银离子按渗出量和感染情况选。', category: '护理操作', source: 'TIME 原则 (Schultz et al.)' },
     { term: '鼻饲法', termEn: 'Nasogastric Tube Feeding', definition: '经鼻腔插入胃管进行管饲营养或胃肠减压的技术。插管长度：发际到剑突（约45-55cm）或耳垂-鼻尖-剑突。确认位置：听气过水声/抽吸胃液/pH试纸检测（pH<5.5为胃液）。喂养前评估胃潴留量，喂养时抬高床头30-45°，喂养后保持体位30min防误吸。', category: '护理操作' },
     { term: '皮下注射', termEn: 'Subcutaneous Injection', definition: '将药液注入皮下组织的方法。注射部位：上臂三角肌下缘、腹部（脐周2cm以外，胰岛素首选）、大腿外侧。针头角度：45°（消瘦者）/90°（肥胖者）。常用药物：胰岛素、低分子肝素、吗啡。低分子肝素腹部注射捏起皮肤、注射后不抽回血不按揉，减少皮下出血。', category: '护理操作' },
+
+// ===== R93 gap-fill: 医学伦理补全2条 =====
+    { term: '护理伦理四原则', termEn: 'Four Principles of Biomedical Ethics', definition: 'Beauchamp 和 Childress 提出的生物医学伦理四原则：尊重自主（respect for autonomy——尊重患者的知情同意权和自主决策权）、不伤害（nonmaleficence——避免造成伤害）、有利（beneficence——促进患者利益）、公正（justice——公平分配医疗资源）。是护理伦理决策的基础框架。', category: '护理理论', source: 'Beauchamp TL & Childress JF《Principles of Biomedical Ethics》(1979)' },
+    { term: '知情同意', termEn: 'Informed Consent', definition: '患者在充分理解病情、治疗方案、风险、替代方案和后果的基础上自主做出同意决定的过程。三要素：信息披露（医生提供充分信息）、理解能力（患者能理解）、自愿决定（无胁迫）。护士在知情同意中角色：见证签署、确认理解、保护患者权利。紧急情况下（生命垂危且无法表达意愿）适用例外。', category: '护理理论', source: '《医疗机构管理条例》；Beauchamp (2009)' },
+
+// ===== R93 gap-fill: 医学伦理补全2条 =====
+    { term: '护理伦理四原则', termEn: 'Four Principles of Biomedical Ethics', definition: 'Beauchamp 和 Childress 提出的生物医学伦理四原则：尊重自主（尊重患者的知情同意权和自主决策权）、不伤害（避免造成伤害）、有利（促进患者利益）、公正（公平分配医疗资源）。是护理伦理决策的基础框架。', category: '护理理论', source: 'Beauchamp TL & Childress JF《Principles of Biomedical Ethics》(1979)' },
+    { term: '知情同意', termEn: 'Informed Consent', definition: '患者在充分理解病情、治疗方案、风险、替代方案和后果的基础上自主做出同意决定的过程。三要素：信息披露、理解能力、自愿决定。护士在知情同意中角色：见证签署、确认理解、保护患者权利。', category: '护理理论', source: '《医疗机构管理条例》；Beauchamp (2009)' },
   ],
 };

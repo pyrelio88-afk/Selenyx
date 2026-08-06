@@ -37,5 +37,19 @@ export const MANAGEMENT_EXTRA: DisciplineExpansion = {
     { term: '供应链管理', termEn: 'Supply Chain Management (SCM)', definition: '从原材料到最终消费者的全链条计划与协调。牛鞭效应：需求信息沿供应链向上传递时波动放大（零售商小波动→批发商→制造商大波动）。缓解策略：信息共享（EDI/区块链）、VMI供应商管理库存、延迟策略Postponement。', category: '运营管理', source: 'Lee HL et al. (1997) 牛鞭效应' },
     { term: '服务利润链', termEn: 'Service Profit Chain', definition: '内部服务质量→员工满意→员工保留与生产力→外部服务价值→客户满意→客户忠诚→利润与增长。管理启示：服务企业的利润始于员工而非客户——投资于员工发展和服务支持系统是盈利的起点。', category: '服务管理', source: 'Heskett JL et al. (1997)' },
     { term: 'OKR', termEn: 'Objectives and Key Results', definition: '目标管理框架：O（Objective，鼓舞人心的方向性目标）+ KR（Key Results，可量化的关键结果，2-5个）。特征：公开透明、季度周期、不与薪酬直接挂钩、鼓励挑战（\'勇敢目标\'moonshot）。Intel首创、Google推广。', category: '绩效管理', source: 'Doerr J《Measure What Matters》(2018)' },
+
+// ===== R93 gap-fill: 管理学补全12条 =====
+    { term: '矩阵组织', termEn: 'Matrix Organization', definition: '员工同时向职能部门经理和项目/产品经理汇报的组织结构。优势：资源灵活配置、跨部门协作。劣势：双重指挥冲突、权责不清。PMO是缓解矩阵冲突的常见机制。', category: '组织设计' },
+    { term: '扁平化组织', termEn: 'Flat Organization', definition: '减少管理层级、扩大管理幅度的组织结构。优势：决策快速、沟通顺畅。适用条件：员工素质高、创新导向。劣势：晋升通道有限、管理幅度过大。', category: '组织设计' },
+    { term: '管理幅度', termEn: 'Span of Control', definition: '一名管理者直接有效管理的下属人数。影响因素：下属能力、任务复杂度、标准化程度。管理幅度与管理层级呈反比——幅度大则层级少（扁平化）。', category: '组织设计', source: 'Graicunas公式' },
+    { term: '组织文化', termEn: 'Organizational Culture', definition: '组织成员共享的价值观、信念、规范和行为模式。Schein三层次：人工制品、标榜的价值观、基本假设。文化变革需从深层假设入手。', category: '组织行为', source: 'Schein E《Organizational Culture and Leadership》' },
+    { term: '领导风格', termEn: 'Leadership Styles', definition: 'Blake-Mouton管理方格：横轴关心生产、纵轴关心人，5种风格（团队型9,9为最优）。变革型领导vs交易型领导。情境领导：根据下属成熟度调整风格。', category: '组织行为', source: 'Blake & Mouton (1964); Hersey & Blanchard' },
+    { term: '团队发展阶段', termEn: 'Team Development Stages', definition: 'Tuckman五阶段：Forming形成期→Storming风暴期→Norming规范期→Performing执行期→Adjourning解散期。管理者应在不同阶段采用不同策略。', category: '组织行为', source: 'Tuckman BW (1965; 1977)' },
+    { term: '冲突管理', termEn: 'Conflict Management', definition: 'Thomas-Kilmann五策略：竞争/回避/迁就/妥协/合作。建设性冲突（任务相关）可促进创新，破坏性冲突（人际情绪化）损害团队。', category: '组织行为', source: 'Thomas KW & Kilmann RH (1974)' },
+    { term: '跨文化管理', termEn: 'Cross-Cultural Management', definition: 'Hofstede文化维度：权力距离/个人主义集体主义/不确定性规避/长期导向等。文化智力（CQ）是在多元文化情境中有效工作的能力。', category: '组织行为', source: 'Hofstede G (1980); Earley & Ang' },
+    { term: '变革型领导', termEn: 'Transformational Leadership', definition: '通过激发追随者内在动机使其超越自利追求更高目标的领导方式。四要素（4I）：理想化影响、鼓舞性激励、智力激发、个性化关怀。', category: '组织行为', source: 'Bass BM (1985)' },
+    { term: '学习型组织', termEn: 'Learning Organization', definition: '持续促进组织学习和变革能力的组织。Senge五项修炼：自我超越/改善心智模式/建立共同愿景/团队学习/系统思考。特征：扁平化结构、授权、信息共享、容忍失败。', category: '组织学习', source: 'Senge PM《The Fifth Discipline》(1990)' },
+    { term: '流程再造', termEn: 'Business Process Reengineering', definition: '对企业业务流程进行根本性重新思考和彻底性重新设计。区别于持续改善：BPR是激进重构而非渐进改进。80-90%的BPR项目失败——主因：忽视人的因素。', category: '运营管理', source: 'Hammer M & Champy J《Reengineering the Corporation》(1993)' },
+    { term: 'ERP系统', termEn: 'Enterprise Resource Planning', definition: '整合企业各业务流程的统一信息系统。核心特征：单一数据库、模块化、实时数据、流程标准化。SAP/Oracle是主要厂商。', category: '信息系统' },
   ],
 };

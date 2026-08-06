@@ -3231,16 +3231,31 @@ export const DISCIPLINES: Discipline[] = [
 
 ];
 
-// ── R86: 扩展数据合并 ────────────────────────────────────────────────
-// 分学科增量文件在 ./expansion/ 下按轮次持续扩充，此处合并进主数据集。
-// 目标（每学科）：名词 ≥500 · 数值参数 ≥200 · 公式 ≥300 · 标准规范 ≥20
+// ── R86: 扩展数据合并（R92: 加去重，同名词条优先保留扩展版富数据） ─────
 import { DISCIPLINE_EXPANSIONS } from './expansion';
 
 for (const d of DISCIPLINES) {
   const ext = DISCIPLINE_EXPANSIONS[d.id];
   if (!ext) continue;
-  if (ext.glossary) d.glossary.push(...ext.glossary);
-  if (ext.parameters) d.parameters = [...(d.parameters || []), ...ext.parameters];
-  if (ext.formulas) d.formulas.push(...ext.formulas);
-  if (ext.standards) d.standards.push(...ext.standards);
+  if (ext.glossary) {
+    // 去重：扩展数据优先（释义更完整），同 term 的基础词条被替换
+    const extTerms = new Set(ext.glossary.map((g) => g.term));
+    d.glossary = d.glossary.filter((g) => !extTerms.has(g.term));
+    d.glossary.push(...ext.glossary);
+  }
+  if (ext.parameters) {
+    const extNames = new Set(ext.parameters.map((p) => p.name));
+    d.parameters = [...(d.parameters || [])].filter((p) => !extNames.has(p.name));
+    d.parameters.push(...ext.parameters);
+  }
+  if (ext.formulas) {
+    const extNames = new Set(ext.formulas.map((f) => f.name));
+    d.formulas = d.formulas.filter((f) => !extNames.has(f.name));
+    d.formulas.push(...ext.formulas);
+  }
+  if (ext.standards) {
+    const extCodes = new Set(ext.standards.map((s) => s.code));
+    d.standards = d.standards.filter((s) => !extCodes.has(s.code));
+    d.standards.push(...ext.standards);
+  }
 }

@@ -4,15 +4,20 @@
  */
 
 import { useState } from 'react';
-import { Icon } from '@components/ui/Icon';
+import { Icon, type IconName } from '@components/ui/Icon';
 import { fetchByDOI, searchArXiv, type FetchedReference } from '@services/metadataFetch';
 
-type ToolTab = 'doi' | 'cite' | 'count' | 'models' | 'browser';
+type ToolTab = 'doi' | 'cite' | 'count' | 'models' | 'browser' | 'pico' | 'design' | 'ethics' | 'matrix' | 'grant';
 
-const TABS: { key: ToolTab; label: string; icon: string }[] = [
+const TABS: { key: ToolTab; label: string; icon: IconName }[] = [
   { key: 'browser', label: '网页浏览', icon: 'search' },
   { key: 'doi', label: 'DOI 查询', icon: 'search' },
   { key: 'cite', label: '引用格式化', icon: 'tag' },
+  { key: 'pico', label: 'PICO 构建', icon: 'pipeline' },
+  { key: 'design', label: '研究设计', icon: 'statTools' },
+  { key: 'ethics', label: '伦理审查', icon: 'clinicalData' },
+  { key: 'matrix', label: '文献矩阵', icon: 'tables' },
+  { key: 'grant', label: '基金申请', icon: 'projects' },
   { key: 'count', label: '字数统计', icon: 'references' },
   { key: 'models', label: '本地模型', icon: 'aiChat' },
 ];
@@ -42,6 +47,11 @@ export function ToolsView() {
       {tab === 'browser' && <WebBrowser />}
       {tab === 'doi' && <DOILookup />}
       {tab === 'cite' && <CiteFormatter />}
+      {tab === 'pico' && <PICOBuilder />}
+      {tab === 'design' && <DesignChecker />}
+      {tab === 'ethics' && <EthicsChecklist />}
+      {tab === 'matrix' && <LiteratureMatrix />}
+      {tab === 'grant' && <GrantOutline />}
       {tab === 'count' && <WordCounter />}
       {tab === 'models' && <LocalModels />}
     </div>
@@ -409,6 +419,221 @@ function WebBrowser() {
       <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
         注意：部分网站可能因安全策略限制嵌入显示，如遇空白请直接在新标签页打开。
       </div>
+    </div>
+  );
+}
+
+
+// ===== PICO 问题构建器 =====
+function PICOBuilder() {
+  const [p, setP] = useState(''); // Population
+  const [i, setI] = useState(''); // Intervention
+  const [c, setC] = useState(''); // Comparison
+  const [o, setO] = useState(''); // Outcome
+  const [copied, setCopied] = useState(false);
+  const question = `在${p || '［人群］'}中，${i || '［干预］'}${c ? '与' + c + '相比' : ''}，是否能改善${o || '［结局］'}？`;
+  const searchable = `${p} ${i} ${c} ${o}`.trim();
+
+  return (
+    <div className="card" style={{ maxWidth: 640 }}>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+        PICO 框架是循证医学/循证护理构建临床问题的标准工具，帮助你将模糊的研究想法转化为可检索、可回答的问题。
+      </p>
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>P — Population / 人群</label>
+          <input className="input" value={p} onChange={(e) => setP(e.target.value)} placeholder="如：护理本科生、心内科患者、脑卒中照顾者" style={{ width: '100%', marginTop: 4 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>I — Intervention / 干预</label>
+          <input className="input" value={i} onChange={(e) => setI(e.target.value)} placeholder="如：AI 辅助 SBAR 交接训练" style={{ width: '100%', marginTop: 4 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>C — Comparison / 对照</label>
+          <input className="input" value={c} onChange={(e) => setC(e.target.value)} placeholder="如：传统口头交接（可留空）" style={{ width: '100%', marginTop: 4 }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>O — Outcome / 结局</label>
+          <input className="input" value={o} onChange={(e) => setO(e.target.value)} placeholder="如：临床推理能力评分" style={{ width: '100%', marginTop: 4 }} />
+        </div>
+      </div>
+      <div style={{ marginTop: 16, padding: 14, background: 'var(--bg-canvas)', borderRadius: 'var(--radius-sm)', fontSize: 14, lineHeight: 1.6 }}>
+        <strong>研究问题：</strong>{question}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button className="btn btn-primary" onClick={() => { navigator.clipboard.writeText(question); setCopied(true); setTimeout(() => setCopied(false), 2000); }}>
+          {copied ? '已复制' : '复制问题'}
+        </button>
+        <a className="btn" href={`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(searchable)}`} target="_blank" rel="noreferrer">
+          PubMed 检索
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ===== 研究设计检查器 =====
+function DesignChecker() {
+  const checks = [
+    { id: 'rq', label: '研究问题明确（PICO 或类似框架）', hint: '能一句话说清"在谁中，做什么，与什么比，看什么结局"' },
+    { id: 'design', label: '研究设计类型已确定', hint: 'RCT / 类实验性 / 队列 / 病例对照 / 横断面 / 质性 / 系统综述' },
+    { id: 'sample', label: '样本量有依据（功效分析或经验估算）', hint: 'G*Power 计算 or 文献最小样本量' },
+    { id: 'sampling', label: '抽样方法明确', hint: '便利抽样 / 分层 / 随机 / 目的抽样（质性）' },
+    { id: 'bias', label: '已识别主要偏倚来源并制定控制措施', hint: '选择偏倚/信息偏倚/混杂因素' },
+    { id: 'outcome', label: '结局变量有明确测量工具', hint: '量表名称 + 信效度证据 + 评分标准' },
+    { id: 'analysis', label: '统计分析计划已预设', hint: '描述统计 + 推断统计方法 + 使用的软件' },
+    { id: 'ethics', label: '伦理审查申请已规划', hint: 'IRB/伦理委员会申请时间线' },
+    { id: 'timeline', label: '研究时间线（甘特图）已制定', hint: '准备期/实施期/数据分析/撰写' },
+    { id: 'registration', label: '研究注册（如适用）', hint: '临床试验注册 ChiCTR / PROSPERO 综述注册' },
+  ];
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => {
+    const next = new Set(checked);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setChecked(next);
+  };
+  const pct = Math.round((checked.size / checks.length) * 100);
+
+  return (
+    <div className="card" style={{ maxWidth: 640 }}>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+        研究设计自检清单——在开题/基金申请前逐项核对，确保设计严谨性。当前完成度：<strong style={{ color: pct === 100 ? 'var(--success, #21a675)' : 'var(--accent)' }}>{pct}%</strong>
+      </p>
+      <div style={{ height: 6, background: 'var(--bg-canvas)', borderRadius: 3, marginBottom: 16, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#21a675' : 'var(--accent)', transition: 'width 0.3s' }} />
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {checks.map((c) => (
+          <label key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', background: checked.has(c.id) ? 'var(--accent-light)' : 'var(--bg-canvas)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={checked.has(c.id)} onChange={() => toggle(c.id)} style={{ marginTop: 3 }} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{c.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{c.hint}</div>
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ===== 伦理审查清单 =====
+function EthicsChecklist() {
+  const items = [
+    { cat: '申请材料', text: '知情同意书（含研究目的、风险、自愿性、保密承诺、退出权利）' },
+    { cat: '申请材料', text: '研究方案（含纳入/排除标准、干预流程、数据采集计划）' },
+    { cat: '申请材料', text: '招募广告/招募词（不得使用诱导性语言）' },
+    { cat: '申请材料', text: '调查问卷/量表（版权授权证明）' },
+    { cat: '受试者保护', text: '弱势群体额外保护（学生→避免师生权力关系施压；认知障碍→法定代理人同意）' },
+    { cat: '受试者保护', text: '隐私保护方案（数据脱敏、编码代替姓名、加密存储）' },
+    { cat: '受试者保护', text: '不良事件处理预案与应急联系' },
+    { cat: '数据管理', text: '数据保存期限（通常 ≥5 年）与销毁计划' },
+    { cat: '数据管理', text: '数据使用范围声明（仅限本研究，不用于其他目的）' },
+    { cat: '利益冲突', text: '利益冲突声明（研究者与资助方关系）' },
+    { cat: '注册与报告', text: '临床试验注册（ChiCTR / ClinicalTrials.gov，入组前完成）' },
+    { cat: '注册与报告', text: '研究方案预注册（如适用，OSF / PROSPERO）' },
+  ];
+  return (
+    <div className="card" style={{ maxWidth: 640 }}>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+        伦理审查准备清单——大学生科研基金申请通常需要伦理审查批件或在申请材料中说明伦理考量。
+      </p>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {items.map((item, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', background: 'var(--bg-canvas)', borderRadius: 'var(--radius-sm)' }}>
+            <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600, flexShrink: 0, marginTop: 2 }}>{item.cat}</span>
+            <span style={{ fontSize: 13, lineHeight: 1.5 }}>{item.text}</span>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12 }}>
+        参考依据：《涉及人的生命科学和医学研究伦理审查办法》（2023）；《赫尔辛基宣言》
+      </p>
+    </div>
+  );
+}
+
+// ===== 文献矩阵模板 =====
+function LiteratureMatrix() {
+  const [rows, setRows] = useState([
+    { author: '', year: '', design: '', sample: '', intervention: '', outcome: '', keyFinding: '', quality: '' },
+  ]);
+  const addRow = () => setRows([...rows, { author: '', year: '', design: '', sample: '', intervention: '', outcome: '', keyFinding: '', quality: '' }]);
+  const update = (i: number, field: string, val: string) => {
+    const next = [...rows]; (next[i] as Record<string, string>)[field] = val; setRows(next);
+  };
+  const exportCsv = () => {
+    const headers = ['作者', '年份', '研究设计', '样本量', '干预/暴露', '结局指标', '主要发现', '质量评价'];
+    const lines = [headers.join(',')];
+    rows.forEach((r) => lines.push([r.author, r.year, r.design, r.sample, r.intervention, r.outcome, r.keyFinding, r.quality].map((v) => `"${v}"`).join(',')));
+    const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'literature_matrix.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const fields = ['author', 'year', 'design', 'sample', 'intervention', 'outcome', 'keyFinding', 'quality'] as const;
+  const labels = ['作者', '年份', '设计', '样本', '干预', '结局', '发现', '质量'];
+
+  return (
+    <div className="card" style={{ maxWidth: 900 }}>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+        文献提取矩阵——系统综述/Meta 分析的基础工具。逐篇文献提取关键信息，便于横向比较与证据综合。支持导出 CSV。
+      </p>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>{labels.map((l) => <th key={l} style={{ padding: '6px 8px', textAlign: 'left', borderBottom: '2px solid var(--border)', fontWeight: 600, fontSize: 11 }}>{l}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                {fields.map((f) => (
+                  <td key={f} style={{ padding: 0, borderBottom: '1px solid var(--border)' }}>
+                    <input value={(r as Record<string, string>)[f]} onChange={(e) => update(i, f, e.target.value)}
+                      style={{ width: '100%', border: 'none', padding: '6px 8px', background: 'transparent', fontSize: 12 }} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button className="btn" onClick={addRow}>+ 添加行</button>
+        <button className="btn btn-primary" onClick={exportCsv}>导出 CSV</button>
+      </div>
+    </div>
+  );
+}
+
+// ===== 基金申请书大纲 =====
+function GrantOutline() {
+  const sections = [
+    { title: '一、项目名称', content: '简洁明确，体现研究对象+干预+结局。例：AI辅助SBAR结构化护理交接训练对护理本科生临床推理能力的影响研究', tips: '≤25 字，避免"基于…的研究"套话' },
+    { title: '二、立项依据', content: '1. 研究背景（国内外现状+数据支撑）\n2. 科学问题/临床痛点（具体到场景）\n3. 文献综述（已有证据+gap）\n4. 理论框架（如 Tanner 临床推理模型）\n5. 研究意义（理论+实践）', tips: '用数据说话，引用近 5 年文献' },
+    { title: '三、研究目标与内容', content: '1. 总目标（一句话）\n2. 具体目标（2-3 个，可测量）\n3. 研究内容（与目标对应）\n4. 拟解决的关键问题', tips: '目标要 SMART：具体、可测、可达成' },
+    { title: '四、研究方案', content: '1. 研究设计类型\n2. 研究对象（纳入/排除标准）\n3. 样本量估算（功效分析）\n4. 抽样与分组方法\n5. 干预方案（详细到操作步骤）\n6. 测量工具（信效度证据）\n7. 数据收集流程\n8. 统计分析方法\n9. 质量控制措施\n10. 技术路线图', tips: '让别人看了能复现你的研究' },
+    { title: '五、创新点', content: '1. 方法创新（如 AI 辅助训练）\n2. 理论创新（如新框架应用）\n3. 实践创新（如可推广的培训方案）', tips: '1-3 点，不要泛泛而谈' },
+    { title: '六、研究基础与条件', content: '1. 申请人前期工作\n2. 团队成员分工\n3. 指导教师支持\n4. 研究场所与设备\n5. 经费预算', tips: '展示可行性' },
+    { title: '七、进度安排', content: '按月/季度列出：准备期→伦理审查→预实验→正式实验→数据分析→撰写发表', tips: '留足缓冲时间' },
+    { title: '八、预期成果', content: '1. 学术论文（目标期刊级别）\n2. 实践方案/指南\n3. 人才培养\n4. 其他（专利/软件著作权/会议报告）', tips: '具体、可考核' },
+  ];
+  return (
+    <div style={{ display: 'grid', gap: 12, maxWidth: 720 }}>
+      <div className="card">
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          大学生科研基金申请书大纲——参考信阳师范大学大学生科研基金申报书模板。点击各章节展开详细内容。
+        </p>
+      </div>
+      {sections.map((s, i) => (
+        <details key={i} className="card" style={{ padding: 0 }}>
+          <summary style={{ padding: '12px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{s.title}</summary>
+          <div style={{ padding: '0 16px 12px' }}>
+            <pre style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: 'var(--text-secondary)', margin: '8px 0' }}>{s.content}</pre>
+            <p style={{ fontSize: 12, color: 'var(--accent)', marginTop: 8 }}>💡 {s.tips}</p>
+          </div>
+        </details>
+      ))}
     </div>
   );
 }
