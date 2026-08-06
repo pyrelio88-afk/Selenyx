@@ -16,17 +16,27 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
+// R102 D3: pdfjs-dist 改为动态加载（~1MB 模块延迟到首次打开 PDF 时才解析执行）
+import type * as PdfjsLibType from 'pdfjs-dist';
 // 引入官方 textLayer 样式（含 .textLayer span 定位/选区色，保证文本与画布像素级对齐）
 import 'pdfjs-dist/web/pdf_viewer.css';
 import type { Annotation, AnnotationType } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
 
-// Worker 配置：pdfjs-dist 4.x 用 .mjs worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+// 动态加载器：模块级单例缓存，多次打开 PDF 不重复下载
+let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null;
+function loadPdfjs(): Promise<typeof import('pdfjs-dist')> {
+  if (!pdfjsPromise) {
+    pdfjsPromise = import('pdfjs-dist').then((mod) => {
+      mod.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url,
+      ).toString();
+      return mod;
+    });
+  }
+  return pdfjsPromise;
+}
 
 /** 五色批注配色（对齐 R72 设计系统 accent/warning 语义） */
 const ANNOTATION_COLORS: Record<AnnotationType, { bg: string; border: string; label: string }> = {
@@ -69,7 +79,7 @@ interface OutlineNode {
 }
 
 /** R77：递归解析 PDF 大纲，dest → 页码（1-based） */
-async function resolveOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNode[]> {
+async function resolveOutline(doc: PdfjsLibType.PDFDocumentProxy): Promise<OutlineNode[]> {
   const raw = await doc.getOutline();
   if (!raw || raw.length === 0) return [];
   const resolveDest = async (dest: unknown): Promise<number | null> => {
@@ -112,7 +122,7 @@ async function resolveOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNo
  */
 const IMRAD_HEADING_RE = /^(摘\s*要|摘由|关键词|关键字|前\s*言|引\s*言|背\s*景|目\s*的|对象与方法|资料与方法|材料与方法|方\s*法|结\s*果|讨\s*论|结\s*论|参考文献|致\s*谢|abstract|key\s?words?|introduction|background|objectives?|aims?|methods?|materials|results?|discussion|conclusions?|references|acknowledg\w*)[：:.]?\s*$/i;
 
-async function detectImradOutline(doc: pdfjsLib.PDFDocumentProxy): Promise<OutlineNode[]> {
+async function detectImradOutline(doc: PdfjsLibType.PDFDocumentProxy): Promise<OutlineNode[]> {
   const found: OutlineNode[] = [];
   const seen = new Set<string>();
   const maxScan = Math.min(doc.numPages, 8);
@@ -142,7 +152,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
   const textLayerRef = useRef<HTMLDivElement>(null);
   const pageWrapRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [doc, setDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [doc, setDoc] = useState<PdfjsLibType.PDFDocumentProxy | null>(null);
   const [pageNum, setPageNum] = useState(1);
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.0);
@@ -158,7 +168,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
     text: string;
     left: number; top: number;                   // 弹层定位（px，相对 page-wrap）
   } | null>(null);
-  const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null);
+  const renderTaskRef = useRef<PdfjsLibType.RenderTask | null>(null);
   // R77：左侧栏
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'annotations' | 'outline'>('annotations');
@@ -198,7 +208,10 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
     let cancelled = false;
     setLoading(true);
     setError(null);
+    (async () => {
     const params = typeof source === 'string' ? { url: source } : { data: source };
+    const pdfjsLib = await loadPdfjs();
+    if (cancelled) return;
     pdfjsLib.getDocument(params).promise
       .then(async (d) => {
         if (cancelled) return;
@@ -218,6 +231,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
         setError(err instanceof Error ? err.message : 'PDF 加载失败');
         setLoading(false);
       });
+    })(); // end async IIFE
     return () => { cancelled = true; };
   }, [source]);
 
@@ -256,6 +270,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
         // 官方 textLayer span 字号依赖 --scale-factor；设到容器即可
         textLayerDiv.style.setProperty('--scale-factor', String(vp.scale));
         try {
+          const pdfjsLib = await loadPdfjs();
           const textLayer = new pdfjsLib.TextLayer({
             textContentSource: page.streamTextContent(),
             container: textLayerDiv,

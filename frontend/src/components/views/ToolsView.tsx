@@ -397,7 +397,7 @@ function WebBrowser() {
           borderRadius: 'var(--radius-md)',
           overflow: 'hidden',
           height: '70vh',
-          background: '#fff',
+          background: 'var(--bg-elevated)',
         }}>
           <iframe
             src={currentUrl}

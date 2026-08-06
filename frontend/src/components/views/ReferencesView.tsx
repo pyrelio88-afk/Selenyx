@@ -320,7 +320,7 @@ export function ReferencesView() {
             期刊 {references.filter((r) => r.type === 'journalArticle').length}
           </span>
           {references.filter((r) => r.openAccess).length > 0 && (
-            <span className="status-chip" style={{ background: '#e8f5e9', color: '#2e7d32' }}>
+            <span className="status-chip" style={{ background: 'var(--accent-light)', color: 'var(--success)' }}>
               OA {references.filter((r) => r.openAccess).length}
             </span>
           )}

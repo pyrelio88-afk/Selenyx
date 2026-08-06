@@ -25,7 +25,8 @@
       "@apptypes/*": ["src/types/*"],
       "@utils/*": ["src/utils/*"],
       "@hooks/*": ["src/hooks/*"],
-      "@data/*": ["src/data/*"]
+      "@data/*": ["src/data/*"],
+      "@lib/*": ["src/lib/*"]
     }
   },
   "include": ["src"]

@@ -6,6 +6,7 @@
 
 import { useState, useMemo } from 'react';
 import { Icon } from '@components/ui/Icon';
+import { versionedLoad, versionedSave } from '@lib/storage';
 import {
   DISCIPLINES,
   type Discipline,
@@ -30,18 +31,13 @@ interface CustomEntry {
   source?: string;
 }
 
-const CUSTOM_KEY = 'selenyx-custom-entries-v1';
+const CUSTOM_KEY = 'selenyx-custom-entries';
 const PAGE_SIZE = 50;
 
 function loadCustomEntries(): CustomEntry[] {
-  try {
-    const raw = localStorage.getItem(CUSTOM_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as CustomEntry[]) : [];
-  } catch {
-    return [];
-  }
+  // D6：走 versionedLoad，自动迁移旧 -v1 裸数组格式 + 损坏回退空数组
+  const { items } = versionedLoad<{ items: CustomEntry[] }>(CUSTOM_KEY, { items: [] });
+  return Array.isArray(items) ? items : [];
 }
 
 /** 学科 SVG 图标映射 —— 替代 emoji */
@@ -106,7 +102,7 @@ export function ClinicalDataView() {
 
   function saveCustom(next: CustomEntry[]) {
     setCustomEntries(next);
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(next));
+    versionedSave(CUSTOM_KEY, { items: next });
   }
 
   function deleteCustom(index: number) {

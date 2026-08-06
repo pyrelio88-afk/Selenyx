@@ -163,7 +163,13 @@ export function SettingsView() {
 
   function clearData() {
     if (window.confirm('确定要清除所有本地数据吗？此操作不可恢复。')) {
-      localStorage.removeItem('selenyx-v2');
+      // D6：清所有 selenyx-* 前缀 key（主 store + 番茄钟/学科自定义/onboarding 等）
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('selenyx-')) keys.push(k);
+      }
+      keys.forEach((k) => localStorage.removeItem(k));
       window.location.reload();
     }
   }

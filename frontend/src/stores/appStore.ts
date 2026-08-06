@@ -73,6 +73,11 @@ interface AppState {
   updateTableRecord: (tableId: string, recordIdx: number, patch: Record<string, unknown>) => void;
   deleteTableRecord: (tableId: string, recordIdx: number) => void;
 
+  // === 自定义倒数日 ===
+  customCountdowns: { label: string; date: string; color: string }[];
+  addCountdown: (c: { label: string; date: string; color: string }) => void;
+  removeCountdown: (idx: number) => void;
+
   // === AI 配置 ===
   llmConfig: LLMConfig | null;
   setLLMConfig: (c: LLMConfig) => void;
@@ -163,6 +168,11 @@ export const useAppStore = create<AppState>()(
       llmConfig: null,
       setLLMConfig: (c) => set({ llmConfig: c }),
 
+      // 自定义倒数日
+      customCountdowns: [],
+      addCountdown: (c) => set((s) => ({ customCountdowns: [...s.customCountdowns, c] })),
+      removeCountdown: (idx) => set((s) => ({ customCountdowns: s.customCountdowns.filter((_, i) => i !== idx) })),
+
       pipelineRuns: {},
       setPipelineRun: (key, run) => set((s) => ({ pipelineRuns: { ...s.pipelineRuns, [key]: run } })),
       stageConfigs: {},
@@ -173,7 +183,16 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'selenyx-v2',
-      version: 2,
+      version: 3,
+      // D6：版本化迁移链（R102）。migrate 只做"补默认值 + 结构调整"，绝不整个 reset
+      // ——reset 留给下方 storage.getItem 的 JSON 预校验兜底（数据真损坏读不出时才回退）。
+      // 新增持久化字段时在此补默认（state.xxx ??= defaultValue），保持链路完整可追踪。
+      migrate: (persistedState: unknown, _version: number) => {
+        const state = (persistedState as Record<string, unknown>) ?? {};
+        // v<2 → v2：R91.1 时代字段补默认（历史布局/配置缺字段类崩溃的正式迁移占位）
+        // v2 → v3：本轮起占位，后续新增持久化字段在此补默认
+        return state;
+      },
       // C1 修复：自定义 storage 预校验 JSON，脏数据降级为初始状态而非白屏崩溃
       storage: createJSONStorage(() => ({
         getItem: (name) => {

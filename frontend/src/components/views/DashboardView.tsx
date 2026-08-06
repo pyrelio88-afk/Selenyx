@@ -8,6 +8,7 @@ import { useAppStore, type ViewKey } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/index';
 import { Icon, NAV_ICONS, STAGE_ICONS, type IconName } from '@components/ui/Icon';
 import { StatusChip, ProjectStatusChip } from '@components/ui/StatusChip';
+import { versionedLoad, versionedSave, getOnboardingState, setOnboardingState } from '@lib/storage';
 
 // === 番茄钟组件（R86: 自定义事件） ===
 interface PomodoroEvent {
@@ -18,7 +19,7 @@ interface PomodoroEvent {
   builtin?: boolean;
 }
 
-const POMODORO_KEY = 'selenyx-pomodoro-events-v1';
+const POMODORO_KEY = 'selenyx-pomodoro-events';
 const DEFAULT_EVENTS: PomodoroEvent[] = [
   { id: 'focus-25', name: '专注', minutes: 25, kind: 'focus', builtin: true },
   { id: 'rest-5', name: '短休息', minutes: 5, kind: 'rest', builtin: true },
@@ -27,15 +28,10 @@ const DEFAULT_EVENTS: PomodoroEvent[] = [
 ];
 
 function loadPomodoroEvents(): PomodoroEvent[] {
-  try {
-    const raw = localStorage.getItem(POMODORO_KEY);
-    if (!raw) return DEFAULT_EVENTS;
-    const customs = JSON.parse(raw);
-    if (!Array.isArray(customs)) return DEFAULT_EVENTS;
-    return [...DEFAULT_EVENTS, ...customs.filter((c) => c && c.id && c.name && c.minutes > 0)];
-  } catch {
-    return DEFAULT_EVENTS;
-  }
+  // D6：走 versionedLoad，自动迁移旧 -v1 裸数组格式 + 损坏回退默认
+  const { items } = versionedLoad<{ items: PomodoroEvent[] }>(POMODORO_KEY, { items: [] });
+  if (!Array.isArray(items)) return DEFAULT_EVENTS;
+  return [...DEFAULT_EVENTS, ...items.filter((c) => c && c.id && c.name && c.minutes > 0)];
 }
 
 function PomodoroTimer() {
@@ -91,7 +87,7 @@ function PomodoroTimer() {
     };
     const next = [...events, ev];
     setEvents(next);
-    localStorage.setItem(POMODORO_KEY, JSON.stringify(next.filter((e) => !e.builtin)));
+    versionedSave(POMODORO_KEY, { items: next.filter((e) => !e.builtin) });
     setNewName('');
     setShowAdd(false);
     selectEvent(ev.id);
@@ -100,7 +96,7 @@ function PomodoroTimer() {
   function removeEvent(id: string) {
     const next = events.filter((e) => e.id !== id);
     setEvents(next);
-    localStorage.setItem(POMODORO_KEY, JSON.stringify(next.filter((e) => !e.builtin)));
+    versionedSave(POMODORO_KEY, { items: next.filter((e) => !e.builtin) });
     if (activeId === id) selectEvent('focus-25');
   }
 
@@ -169,7 +165,7 @@ function PomodoroTimer() {
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
         <div style={{
           fontSize: 42, fontWeight: 700, fontFamily: 'monospace',
-          color: isFocus ? 'var(--accent)' : '#2e7d32',
+          color: isFocus ? 'var(--accent)' : 'var(--success)',
           lineHeight: 1,
         }}>
           {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
@@ -184,7 +180,7 @@ function PomodoroTimer() {
         <div style={{
           height: '100%',
           width: `${progress}%`,
-          background: isFocus ? 'var(--accent)' : '#2e7d32',
+          background: isFocus ? 'var(--accent)' : 'var(--success)',
           transition: 'width 1s linear',
           borderRadius: 2,
         }} />
@@ -213,12 +209,13 @@ function ClockWidget() {
   const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
-  // 倒数日
-  const countdowns = [
-    { label: '考研初试', date: '2027-12-25', color: '#c62828' },
-    { label: '复试', date: '2028-03-15', color: '#1565c0' },
-    { label: '入学', date: '2028-09-01', color: '#2e7d32' },
-  ];
+  // 倒数日 — 从 store 读取用户自定义，空态显示引导
+  const countdowns = useAppStore((s) => s.customCountdowns);
+  const addCountdown = useAppStore((s) => s.addCountdown);
+  const removeCountdown = useAppStore((s) => s.removeCountdown);
+  const [showAddCountdown, setShowAddCountdown] = useState(false);
+  const [newCountdownLabel, setNewCountdownLabel] = useState('');
+  const [newCountdownDate, setNewCountdownDate] = useState('');
 
   function daysLeft(dateStr: string): number {
     const target = new Date(dateStr);
@@ -236,15 +233,34 @@ function ClockWidget() {
       </div>
 
       {/* 倒数日 */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        {countdowns.map((c) => {
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {countdowns.length === 0 && !showAddCountdown && (
+          <div style={{
+            flex: 1, textAlign: 'center', padding: '12px 8px',
+            borderRadius: 8, border: '1px dashed var(--border)',
+            color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
+          }} onClick={() => setShowAddCountdown(true)}>
+            + 添加你的第一个倒数日（如：科研基金申报截止）
+          </div>
+        )}
+        {countdowns.map((c, idx) => {
           const days = daysLeft(c.date);
           return (
-            <div key={c.label} style={{
-              flex: 1, textAlign: 'center', padding: '8px 4px',
+            <div key={idx} style={{
+              flex: '1 1 0', minWidth: 80, textAlign: 'center', padding: '8px 4px',
               borderRadius: 8, background: c.color + '0d',
               border: `1px solid ${c.color}20`,
+              position: 'relative',
             }}>
+              <button
+                onClick={() => removeCountdown(idx)}
+                style={{
+                  position: 'absolute', top: 2, right: 4, border: 'none',
+                  background: 'transparent', cursor: 'pointer', fontSize: 12,
+                  color: 'var(--text-muted)', lineHeight: 1, padding: 0,
+                }}
+                title="删除"
+              >×</button>
               <div style={{ fontSize: 20, fontWeight: 700, color: c.color, fontFamily: 'monospace' }}>
                 {days > 0 ? days : 0}
               </div>
@@ -253,6 +269,56 @@ function ClockWidget() {
             </div>
           );
         })}
+        {showAddCountdown && (
+          <div style={{
+            flex: 1, padding: 12, borderRadius: 8,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-surface)',
+          }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text" placeholder="事件名" value={newCountdownLabel}
+                onChange={(e) => setNewCountdownLabel(e.target.value)}
+                style={{ flex: '1 1 100px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', fontSize: 13 }}
+              />
+              <input
+                type="date" value={newCountdownDate}
+                onChange={(e) => setNewCountdownDate(e.target.value)}
+                style={{ flex: '0 1 auto', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', fontSize: 13 }}
+              />
+              <button
+                onClick={() => {
+                  if (newCountdownLabel.trim() && newCountdownDate) {
+                    const colors = ['#c62828', '#1565c0', '#2e7d32', '#f57f17', '#6a1b9a'];
+                    addCountdown({
+                      label: newCountdownLabel.trim(),
+                      date: newCountdownDate,
+                      color: colors[countdowns.length % colors.length],
+                    });
+                    setNewCountdownLabel('');
+                    setNewCountdownDate('');
+                    setShowAddCountdown(false);
+                  }
+                }}
+                style={{ padding: '4px 12px', borderRadius: 4, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 13 }}
+              >添加</button>
+              <button
+                onClick={() => { setShowAddCountdown(false); setNewCountdownLabel(''); setNewCountdownDate(''); }}
+                style={{ padding: '4px 12px', borderRadius: 4, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', fontSize: 13 }}
+              >取消</button>
+            </div>
+          </div>
+        )}
+        {countdowns.length > 0 && !showAddCountdown && (
+          <button
+            onClick={() => setShowAddCountdown(true)}
+            style={{
+              flex: '0 0 auto', padding: '8px 12px', borderRadius: 8,
+              border: '1px dashed var(--border)', background: 'transparent',
+              cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)',
+            }}
+          >+ 添加</button>
+        )}
       </div>
     </div>
   );
@@ -337,6 +403,73 @@ function TimelineWidget() {
   );
 }
 
+// === P0-6 新手引导 Checklist ===
+// D6：onboarding 状态走 storage.ts 统一收口（含旧 selenyx-onboarding-done 兼容）
+
+function OnboardingChecklist() {
+  const { projects, references, llmConfig, setView } = useAppStore();
+  const [dismissed, setDismissed] = useState(() => !!getOnboardingState());
+
+  const visitedPipeline = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('visited-pipeline') === 'true';
+
+  const steps: { label: string; done: boolean; view: ViewKey; tip: string }[] = [
+    { label: '创建项目', done: projects.length > 0, view: 'projects', tip: '选择适合你研究类型的设计框架（如 PICO 适合临床试验、PRISMA 适合系统综述），系统会自动生成对应项目字段' },
+    { label: '导入文献', done: references.length > 0, view: 'references', tip: '输入论文 DOI 自动抓取标题、作者、期刊等元数据，也可上传 PDF' },
+    { label: '配置 AI', done: !!(llmConfig?.apiKey), view: 'settings', tip: '接入你自己的大模型 API（支持 DeepSeek / 智谱 / OpenAI 等），让 AI 帮你精读文献、起草报告' },
+    { label: '进入流水线', done: visitedPipeline, view: 'pipeline', tip: '八段流水线（问题→文献→全文→筛选→精读→证据→综合→写作）帮你管理从选题到成稿的全流程' },
+  ];
+  const completed = steps.filter((s) => s.done).length;
+
+  useEffect(() => {
+    if (completed === 4 && !dismissed) {
+      setOnboardingState('true');
+      setDismissed(true);
+    }
+  }, [completed, dismissed]);
+
+  if (dismissed) return null;
+
+  function skip() {
+    setOnboardingState('skipped');
+    setDismissed(true);
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 24, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600 }}>
+          🚀 新手指南 · {completed}/4 完成
+        </h3>
+        <button className="btn btn-sm" onClick={skip} style={{ fontSize: 12 }}>跳过引导</button>
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {steps.map((step, i) => (
+          <div
+            key={i}
+            onClick={() => { if (!step.done) setView(step.view); }}
+            style={{
+              flex: '1 1 0', minWidth: 120, cursor: step.done ? 'default' : 'pointer',
+              padding: '8px 12px', borderRadius: 8,
+              background: step.done ? 'var(--accent-light)' : 'var(--bg-hover)',
+              border: `1px solid ${step.done ? 'var(--accent)' : 'var(--border)'}`,
+              transition: 'all .2s',
+            }}
+            title={step.tip}
+          >
+            <div style={{
+              fontSize: 13, fontWeight: 500,
+              color: step.done ? 'var(--accent)' : 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              {step.done ? '✅' : `${i + 1}.`} {step.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function DashboardView() {
   const { references, projects, tasks, tables, setView, currentProjectId } = useAppStore();
 
@@ -366,6 +499,9 @@ export function DashboardView() {
       <div className="view-header">
         <h1 className="view-title">总览</h1>
       </div>
+
+      {/* P0-6 新手引导 */}
+      <OnboardingChecklist />
 
       {/* 统计卡片 */}
       <div className="grid grid-4" style={{ marginBottom: 24 }}>
