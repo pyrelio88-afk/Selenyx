@@ -273,7 +273,18 @@ export function TablesView() {
               const groups = selectField.options;
               const titleField = selected.fields.find((f) => f.type === 'text') || selected.fields[0];
               return (
-                <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12, minHeight: 400 }}>
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    // 边缘自动滚动：指针距容器左右边缘 <60px 时滚动
+                    const c = e.currentTarget;
+                    const rect = c.getBoundingClientRect();
+                    const margin = 60;
+                    if (e.clientX - rect.left < margin) c.scrollLeft -= 10;
+                    else if (rect.right - e.clientX < margin) c.scrollLeft += 10;
+                  }}
+                  style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12, minHeight: 400 }}
+                >
                   {groups.map((group) => {
                     const groupRecords = sortedFilteredRecords.filter((r) => {
                       const val = r[selectField.id];
@@ -308,7 +319,17 @@ export function TablesView() {
                           <span style={{ fontSize: 13, fontWeight: 600 }}>{group.label}</span>
                           <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{groupRecords.length}</span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 60 }}>
+                        <div
+                          onDragOver={(e) => {
+                            // 垂直边缘自动滚动
+                            const c = e.currentTarget;
+                            const rect = c.getBoundingClientRect();
+                            const margin = 50;
+                            if (e.clientY - rect.top < margin) c.scrollTop -= 10;
+                            else if (rect.bottom - e.clientY < margin) c.scrollTop += 10;
+                          }}
+                          style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 60 }}
+                        >
                           {groupRecords.map((record) => {
                             const rowIdx = record.__idx;
                             const isDragging = dragRowIdx === rowIdx;
@@ -320,6 +341,18 @@ export function TablesView() {
                                 onDragStart={(e) => {
                                   e.dataTransfer.effectAllowed = 'move';
                                   e.dataTransfer.setData('text/plain', String(rowIdx));
+                                  // 自定义拖拽预览：克隆节点 + 轻微旋转 + 阴影
+                                  const el = e.currentTarget as HTMLElement;
+                                  const clone = el.cloneNode(true) as HTMLElement;
+                                  clone.style.position = 'absolute';
+                                  clone.style.top = '-9999px';
+                                  clone.style.opacity = '0.85';
+                                  clone.style.transform = 'rotate(2deg) scale(0.95)';
+                                  clone.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
+                                  clone.style.width = el.offsetWidth + 'px';
+                                  document.body.appendChild(clone);
+                                  e.dataTransfer.setDragImage(clone, 12, 12);
+                                  setTimeout(() => document.body.removeChild(clone), 0);
                                   setDragRowIdx(rowIdx);
                                 }}
                                 onDragEnd={() => { setDragRowIdx(null); setDropTargetGroup(null); }}

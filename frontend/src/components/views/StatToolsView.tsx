@@ -89,9 +89,32 @@ function gammaP(a: number, x: number): number {
   return 1 - Math.exp(-x + a * Math.log(x) - gammaln(a)) * h;
 }
 
-/** 卡方分布 CDF */
-function chi2CDF(x: number, k: number): number {
-  return gammaP(k / 2, x / 2);
+/** 正则化上不完全伽马函数 Q(a, x) = 1 - P(a, x)
+ *  大 x 时直接用连分式算 Q，避免 1-P 的灾难性消去 */
+function gammaQ(a: number, x: number): number {
+  if (x < 0 || a <= 0) return NaN;
+  if (x === 0) return 1;
+  if (x < a + 1) {
+    // 小 x：P 不接近 1，1-P 消去不严重
+    return 1 - gammaP(a, x);
+  }
+  // 大 x：直接连分式算 Q，不做 1-Q 再取 1-
+  let b = x + 1 - a, c = 1e30, d = 1 / b, h = d;
+  for (let i = 1; i <= 300; i++) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b; if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = b + an / c; if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d;
+    const del = d * c; h *= del;
+    if (Math.abs(del - 1) < 3e-10) break;
+  }
+  return Math.exp(-x + a * Math.log(x) - gammaln(a)) * h;
+}
+
+/** 卡方分布生存函数 SF = 1 - CDF，直接用 gammaQ 避免消去 */
+function chi2SF(x: number, k: number): number {
+  return gammaQ(k / 2, x / 2);
 }
 
 /** 正则化不完全 Beta 函数 I_x(a, b) */
@@ -123,10 +146,12 @@ function ibeta(a: number, b: number, x: number): number {
   return x < (a + 1) / (a + b + 2) ? bt * betacf(a, b, x) / a : 1 - bt * betacf(b, a, 1 - x) / b;
 }
 
-/** F 分布 CDF */
-function fCDF(f: number, d1: number, d2: number): number {
-  if (f <= 0) return 0;
-  return ibeta(d1 / 2, d2 / 2, (d1 * f) / (d1 * f + d2));
+/** F 分布生存函数 SF = 1 - CDF
+ *  利用不完全 Beta 对称性 1-I_x(a,b)=I_{1-x}(b,a) 避免消去 */
+function fSF(f: number, d1: number, d2: number): number {
+  if (f <= 0) return 1;
+  const x = (d1 * f) / (d1 * f + d2);
+  return ibeta(d2 / 2, d1 / 2, 1 - x);
 }
 
 const Z_TABLE_ENTRIES = [
@@ -313,7 +338,7 @@ function ChiSquareCalc() {
     const n = A + B + C + D;
     const chi = n * Math.pow(A * D - B * C, 2) / ((A + B) * (C + D) * (A + C) * (B + D));
     // R86: 用精确卡方分布 CDF 替换粗近似
-    const pVal = chi > 0 ? Math.max(0, 1 - chi2CDF(chi, 1)) : 1;
+    const pVal = chi > 0 ? Math.max(0, chi2SF(chi, 1)) : 1;
     setResult({
       chi: chi.toFixed(4),
       df: '1',
@@ -537,7 +562,7 @@ function AnovaCalc() {
     const dfb = gs.length - 1, dfw = N - gs.length;
     if (ssw <= 0 || dfw <= 0) { setResult({ f: '组内方差为 0', df: '-', p: '-', eta: '-' }); return; }
     const F = (ssb / dfb) / (ssw / dfw);
-    const p = 1 - fCDF(F, dfb, dfw);
+    const p = fSF(F, dfb, dfw);
     const eta2 = ssb / (ssb + ssw);
     setResult({
       f: F.toFixed(4), df: `${dfb}, ${dfw}`,
@@ -578,16 +603,23 @@ function OrrrCalc() {
   const [result, setResult] = useState<{ or: string; orCi: string; rr: string; rrCi: string } | null>(null);
   function calc() {
     const A = parseFloat(a), B = parseFloat(b), C = parseFloat(c), D = parseFloat(d);
-    if ([A, B, C, D].some(isNaN) || A * B * C * D === 0) { setResult({ or: '输入有误（四格均须 > 0）', orCi: '', rr: '', rrCi: '' }); return; }
-    const OR = (A * D) / (B * C);
-    const seLogOr = Math.sqrt(1 / A + 1 / B + 1 / C + 1 / D);
+    if ([A, B, C, D].some(isNaN) || A < 0 || B < 0 || C < 0 || D < 0) { setResult({ or: '输入有误（须为非负数）', orCi: '', rr: '', rrCi: '' }); return; }
+    // Haldane-Anscombe 校正：含零格时全表 +0.5，避免除零
+    const hasZero = A === 0 || B === 0 || C === 0 || D === 0;
+    const a2 = A + (hasZero ? 0.5 : 0);
+    const b2 = B + (hasZero ? 0.5 : 0);
+    const c2 = C + (hasZero ? 0.5 : 0);
+    const d2 = D + (hasZero ? 0.5 : 0);
+    const OR = (a2 * d2) / (b2 * c2);
+    const seLogOr = Math.sqrt(1 / a2 + 1 / b2 + 1 / c2 + 1 / d2);
     const orLo = Math.exp(Math.log(OR) - 1.96 * seLogOr), orHi = Math.exp(Math.log(OR) + 1.96 * seLogOr);
-    const RR = (A / (A + B)) / (C / (C + D));
-    const seLogRr = Math.sqrt(1 / A - 1 / (A + B) + 1 / C - 1 / (C + D));
+    const RR = (a2 / (a2 + b2)) / (c2 / (c2 + d2));
+    const seLogRr = Math.sqrt(1 / a2 - 1 / (a2 + b2) + 1 / c2 - 1 / (c2 + d2));
     const rrLo = Math.exp(Math.log(RR) - 1.96 * seLogRr), rrHi = Math.exp(Math.log(RR) + 1.96 * seLogRr);
+    const tag = hasZero ? ' (Haldane 校正)' : '';
     setResult({
-      or: OR.toFixed(3), orCi: `[${orLo.toFixed(3)}, ${orHi.toFixed(3)}]`,
-      rr: RR.toFixed(3), rrCi: `[${rrLo.toFixed(3)}, ${rrHi.toFixed(3)}]`,
+      or: OR.toFixed(3) + tag, orCi: `[${orLo.toFixed(3)}, ${orHi.toFixed(3)}]`,
+      rr: RR.toFixed(3) + tag, rrCi: `[${rrLo.toFixed(3)}, ${rrHi.toFixed(3)}]`,
     });
   }
   return (
@@ -621,15 +653,22 @@ function DiagTestCalc() {
   const [result, setResult] = useState<{ sens: string; spec: string; ppv: string; npv: string; acc: string; lr: string } | null>(null);
   function calc() {
     const TP = parseFloat(tp), FP = parseFloat(fp), FN = parseFloat(fn), TN = parseFloat(tn);
-    if ([TP, FP, FN, TN].some(isNaN) || TP + FN === 0 || TN + FP === 0) { setResult({ sens: '输入有误', spec: '', ppv: '', npv: '', acc: '', lr: '' }); return; }
-    const sens = TP / (TP + FN), spec = TN / (TN + FP);
-    const ppv = TP + FP > 0 ? TP / (TP + FP) : NaN, npv = TN + FN > 0 ? TN / (TN + FN) : NaN;
-    const acc = (TP + TN) / (TP + FP + FN + TN);
-    const lrP = spec < 1 ? sens / (1 - spec) : Infinity, lrN = sens < 1 ? (1 - sens) / spec : Infinity;
+    if ([TP, FP, FN, TN].some(isNaN) || TP < 0 || FP < 0 || FN < 0 || TN < 0) { setResult({ sens: '输入有误（须为非负数）', spec: '', ppv: '', npv: '', acc: '', lr: '' }); return; }
+    const total = TP + FP + FN + TN;
+    if (total === 0) { setResult({ sens: '总样本量为 0', spec: '', ppv: '', npv: '', acc: '', lr: '' }); return; }
+    const sens = TP + FN > 0 ? TP / (TP + FN) : NaN;
+    const spec = TN + FP > 0 ? TN / (TN + FP) : NaN;
+    const ppv = TP + FP > 0 ? TP / (TP + FP) : NaN;
+    const npv = TN + FN > 0 ? TN / (TN + FN) : NaN;
+    const acc = (TP + TN) / total;
+    // LR+ = sens / (1-spec); spec=1 → ∞；LR- = (1-sens)/spec; spec=0 → ∞
+    const lrP = !isNaN(sens) && spec < 1 ? sens / (1 - spec) : Infinity;
+    const lrN = !isNaN(sens) && spec > 0 ? (1 - sens) / spec : Infinity;
+    const fmt = (v: number) => isNaN(v) ? '无法计算' : (v * 100).toFixed(1) + '%';
     setResult({
-      sens: (sens * 100).toFixed(1) + '%', spec: (spec * 100).toFixed(1) + '%',
-      ppv: isNaN(ppv) ? '-' : (ppv * 100).toFixed(1) + '%', npv: isNaN(npv) ? '-' : (npv * 100).toFixed(1) + '%',
-      acc: (acc * 100).toFixed(1) + '%',
+      sens: fmt(sens), spec: fmt(spec),
+      ppv: fmt(ppv), npv: fmt(npv),
+      acc: fmt(acc),
       lr: `LR+ = ${isFinite(lrP) ? lrP.toFixed(2) : '∞'} · LR- = ${isFinite(lrN) ? lrN.toFixed(2) : '∞'}`,
     });
   }

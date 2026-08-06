@@ -308,13 +308,13 @@ export function ClinicalDataView() {
 
       {/* 名词列表 */}
       {tab === 'glossary' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {(pagedList as typeof filteredGlossary).map((g, i) => (
             <button
               key={`${g.term}-${i}`}
               className="card"
               onClick={() => setDetail({ kind: 'glossary', data: g, customIndex: g.__customIdx })}
-              style={{ padding: '12px 16px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+              style={{ padding: '10px 14px', cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             >
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>{g.term}</span>
@@ -326,7 +326,7 @@ export function ClinicalDataView() {
                 {g.__customIdx !== undefined && (
                   <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
                 )}
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>点击查看完整解释 →</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>查看详情 →</span>
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{g.definition}</div>
             </button>
@@ -447,13 +447,13 @@ export function ClinicalDataView() {
           <div
             className="modal-card"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 640, width: '92%', maxHeight: '82vh', overflowY: 'auto', padding: 24 }}
+            style={{ maxWidth: 640, width: '92%', maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto', padding: 24 }}
           >
             {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
             {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
             {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
             {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} />}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, position: 'sticky', bottom: -24, background: 'var(--bg-surface)', padding: '12px 24px', margin: '20px -24px -24px', borderTop: '1px solid var(--border)', zIndex: 1 }}>
               {detail.customIndex !== undefined && (
                 <button
                   className="btn btn-danger-ghost"
@@ -671,7 +671,7 @@ function AddEntryModal({
       <div
         className="modal-card"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 560, width: '92%', maxHeight: '85vh', overflowY: 'auto', padding: 24 }}
+        style={{ maxWidth: 560, width: '92%', maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto', padding: 24 }}
       >
         <h3 style={{ marginBottom: 4, fontSize: 16 }}>自定义添加到「{disciplineName}」</h3>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>学到什么就记下来，数据保存在本机浏览器中</p>
@@ -713,7 +713,7 @@ function AddEntryModal({
           </div>
         ))}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, position: 'sticky', bottom: -24, background: 'var(--bg-surface)', padding: '12px 24px', margin: '8px -24px -24px', borderTop: '1px solid var(--border)', zIndex: 1 }}>
           <button className="btn" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={save}>保存</button>
         </div>

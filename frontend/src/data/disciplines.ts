@@ -1984,7 +1984,7 @@ export const DISCIPLINES: Discipline[] = [
       { term: "\u51fd\u6570", termEn: "Function", definition: "\u8f93\u5165\u8f93\u51fa\u7684\u5bf9\u5e94\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
       { term: "\u5b9a\u4e49\u57df", termEn: "Domain", definition: "\u51fd\u6570\u8f93\u5165\u7684\u8303\u56f4\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
       { term: "\u503c\u57df", termEn: "Range", definition: "\u51fd\u6570\u8f93\u51fa\u7684\u8303\u56f4\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
-      { term: "\u5355\u5c04", termEn: "Injection", definition: "\u4e00\u4e00\u5bf9\u5e94\u7684\u6620\u5c04\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
+      { term: "\u5355\u5c04", termEn: "Injection", definition: "\u4e0d\u540c\u8f93\u5165\u5bf9\u5e94\u4e0d\u540c\u8f93\u51fa\u7684\u6620\u5c04\uff08\u503c\u57df\u53ef\u4e0d\u6ee1\uff09\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
       { term: "\u6ee1\u5c04", termEn: "Surjection", definition: "\u8986\u76d6\u503c\u57df\u7684\u6620\u5c04\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
       { term: "\u53cc\u5c04", termEn: "Bijection", definition: "\u4e00\u4e00\u5bf9\u5e94\u4e14\u8986\u76d6\u7684\u6620\u5c04\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
       { term: "\u7b49\u4ef7\u5173\u7cfb", termEn: "Equivalence Relation", definition: "\u81ea\u53cd\u5bf9\u79f0\u4f20\u9012\u7684\u5173\u7cfb\u3002", category: "\u6570\u5b66\u00b7\u57fa\u7840" },
