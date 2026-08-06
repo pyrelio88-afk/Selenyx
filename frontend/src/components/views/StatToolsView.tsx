@@ -4,7 +4,11 @@
  */
 
 import { useState } from 'react';
-import { normalCDF, tCDF, chi2SF, fSF } from '@lib/stats';
+import {
+  normalCDF, chi2SF,
+  independentTTest, pairedTFromSummary, oneSampleTFromSummary,
+  anova, orRr, diagTest, correlationTest, effectSize,
+} from '@lib/stats';
 
 type Tab = 'calculator' | 'tables' | 'methods';
 
@@ -138,16 +142,12 @@ function TTestCalc() {
     const M1 = parseFloat(m1), M2 = parseFloat(m2), S1 = parseFloat(s1), S2 = parseFloat(s2);
     const N1 = parseInt(n1), N2 = parseInt(n2);
     if ([M1, M2, S1, S2, N1, N2].some(isNaN) || N1 < 2 || N2 < 2) { setResult({ t: '输入有误', df: '-', p: '-' }); return; }
-    // 合并方差 t 检验
-    const sp2 = ((N1 - 1) * S1 * S1 + (N2 - 1) * S2 * S2) / (N1 + N2 - 2);
-    const se = Math.sqrt(sp2 * (1 / N1 + 1 / N2));
-    const t = (M1 - M2) / se;
-    const df = N1 + N2 - 2;
-    const p = 2 * (1 - tCDF(Math.abs(t), df));
+    // R103: 改用 @lib/stats（合并方差独立 t，scipy 校验）
+    const r = independentTTest(M1, M2, S1, S2, N1, N2);
     setResult({
-      t: t.toFixed(4),
-      df: df.toString(),
-      p: p < 0.0001 ? p.toExponential(4) : p.toFixed(4),
+      t: r.t.toFixed(4),
+      df: r.df.toString(),
+      p: r.p < 0.0001 ? r.p.toExponential(4) : r.p.toFixed(4),
     });
   }
 
@@ -340,10 +340,9 @@ function PairedTTestCalc() {
   function calc() {
     const MD = parseFloat(md), SD = parseFloat(sd), N = parseInt(n);
     if ([MD, SD, N].some(isNaN) || N < 2 || SD <= 0) { setResult({ t: '输入有误', df: '-', p: '-' }); return; }
-    const t = MD / (SD / Math.sqrt(N));
-    const df = N - 1;
-    const p = 2 * (1 - tCDF(Math.abs(t), df));
-    setResult({ t: t.toFixed(4), df: String(df), p: p < 0.0001 ? p.toExponential(4) : p.toFixed(4) });
+    // R103: 改用 @lib/stats
+    const r = pairedTFromSummary(MD, SD, N);
+    setResult({ t: r.t.toFixed(4), df: String(r.df), p: r.p < 0.0001 ? r.p.toExponential(4) : r.p.toFixed(4) });
   }
   return (
     <div className="card" style={{ maxWidth: 480 }}>
@@ -372,10 +371,9 @@ function OneSampleTTestCalc() {
   function calc() {
     const M = parseFloat(m), MU = parseFloat(mu), SD = parseFloat(sd), N = parseInt(n);
     if ([M, MU, SD, N].some(isNaN) || N < 2 || SD <= 0) { setResult({ t: '输入有误', df: '-', p: '-' }); return; }
-    const t = (M - MU) / (SD / Math.sqrt(N));
-    const df = N - 1;
-    const p = 2 * (1 - tCDF(Math.abs(t), df));
-    setResult({ t: t.toFixed(4), df: String(df), p: p < 0.0001 ? p.toExponential(4) : p.toFixed(4) });
+    // R103: 改用 @lib/stats
+    const r = oneSampleTFromSummary(M, MU, SD, N);
+    setResult({ t: r.t.toFixed(4), df: String(r.df), p: r.p < 0.0001 ? r.p.toExponential(4) : r.p.toFixed(4) });
   }
   return (
     <div className="card" style={{ maxWidth: 480 }}>
@@ -409,19 +407,14 @@ function AnovaCalc() {
     const gs = groups.map((g) => ({ m: parseFloat(g.m), s: parseFloat(g.s), n: parseInt(g.n) }))
       .filter((g) => !isNaN(g.m) && !isNaN(g.s) && !isNaN(g.n) && g.n >= 2 && g.s >= 0);
     if (gs.length < 2) { setResult({ f: '至少需要 2 组有效数据', df: '-', p: '-', eta: '-' }); return; }
-    const N = gs.reduce((a, g) => a + g.n, 0);
-    const grandMean = gs.reduce((a, g) => a + g.m * g.n, 0) / N;
-    const ssb = gs.reduce((a, g) => a + g.n * Math.pow(g.m - grandMean, 2), 0);
-    const ssw = gs.reduce((a, g) => a + (g.n - 1) * g.s * g.s, 0);
-    const dfb = gs.length - 1, dfw = N - gs.length;
-    if (ssw <= 0 || dfw <= 0) { setResult({ f: '组内方差为 0', df: '-', p: '-', eta: '-' }); return; }
-    const F = (ssb / dfb) / (ssw / dfw);
-    const p = fSF(F, dfb, dfw);
-    const eta2 = ssb / (ssb + ssw);
+    // R103: 改用 @lib/stats
+    let r;
+    try { r = anova(gs); } catch { setResult({ f: '计算出错', df: '-', p: '-', eta: '-' }); return; }
+    if (!isFinite(r.F)) { setResult({ f: '组内方差为 0', df: '-', p: '-', eta: '-' }); return; }
     setResult({
-      f: F.toFixed(4), df: `${dfb}, ${dfw}`,
-      p: p < 0.0001 ? p.toExponential(4) : p.toFixed(4),
-      eta: eta2.toFixed(4),
+      f: r.F.toFixed(4), df: `${r.dfBetween}, ${r.dfWithin}`,
+      p: r.p < 0.0001 ? r.p.toExponential(4) : r.p.toFixed(4),
+      eta: r.eta2.toFixed(4),
     });
   }
   return (
@@ -458,22 +451,13 @@ function OrrrCalc() {
   function calc() {
     const A = parseFloat(a), B = parseFloat(b), C = parseFloat(c), D = parseFloat(d);
     if ([A, B, C, D].some(isNaN) || A < 0 || B < 0 || C < 0 || D < 0) { setResult({ or: '输入有误（须为非负数）', orCi: '', rr: '', rrCi: '' }); return; }
-    // Haldane-Anscombe 校正：含零格时全表 +0.5，避免除零
+    // R103: 改用 @lib/stats（含 Haldane 校正）
+    const r = orRr(A, B, C, D);
     const hasZero = A === 0 || B === 0 || C === 0 || D === 0;
-    const a2 = A + (hasZero ? 0.5 : 0);
-    const b2 = B + (hasZero ? 0.5 : 0);
-    const c2 = C + (hasZero ? 0.5 : 0);
-    const d2 = D + (hasZero ? 0.5 : 0);
-    const OR = (a2 * d2) / (b2 * c2);
-    const seLogOr = Math.sqrt(1 / a2 + 1 / b2 + 1 / c2 + 1 / d2);
-    const orLo = Math.exp(Math.log(OR) - 1.96 * seLogOr), orHi = Math.exp(Math.log(OR) + 1.96 * seLogOr);
-    const RR = (a2 / (a2 + b2)) / (c2 / (c2 + d2));
-    const seLogRr = Math.sqrt(1 / a2 - 1 / (a2 + b2) + 1 / c2 - 1 / (c2 + d2));
-    const rrLo = Math.exp(Math.log(RR) - 1.96 * seLogRr), rrHi = Math.exp(Math.log(RR) + 1.96 * seLogRr);
     const tag = hasZero ? ' (Haldane 校正)' : '';
     setResult({
-      or: OR.toFixed(3) + tag, orCi: `[${orLo.toFixed(3)}, ${orHi.toFixed(3)}]`,
-      rr: RR.toFixed(3) + tag, rrCi: `[${rrLo.toFixed(3)}, ${rrHi.toFixed(3)}]`,
+      or: r.OR.toFixed(3) + tag, orCi: `[${r.orCI[0].toFixed(3)}, ${r.orCI[1].toFixed(3)}]`,
+      rr: r.RR.toFixed(3) + tag, rrCi: `[${r.rrCI[0].toFixed(3)}, ${r.rrCI[1].toFixed(3)}]`,
     });
   }
   return (
@@ -510,20 +494,14 @@ function DiagTestCalc() {
     if ([TP, FP, FN, TN].some(isNaN) || TP < 0 || FP < 0 || FN < 0 || TN < 0) { setResult({ sens: '输入有误（须为非负数）', spec: '', ppv: '', npv: '', acc: '', lr: '' }); return; }
     const total = TP + FP + FN + TN;
     if (total === 0) { setResult({ sens: '总样本量为 0', spec: '', ppv: '', npv: '', acc: '', lr: '' }); return; }
-    const sens = TP + FN > 0 ? TP / (TP + FN) : NaN;
-    const spec = TN + FP > 0 ? TN / (TN + FP) : NaN;
-    const ppv = TP + FP > 0 ? TP / (TP + FP) : NaN;
-    const npv = TN + FN > 0 ? TN / (TN + FN) : NaN;
-    const acc = (TP + TN) / total;
-    // LR+ = sens / (1-spec); spec=1 → ∞；LR- = (1-sens)/spec; spec=0 → ∞
-    const lrP = !isNaN(sens) && spec < 1 ? sens / (1 - spec) : Infinity;
-    const lrN = !isNaN(sens) && spec > 0 ? (1 - sens) / spec : Infinity;
+    // R103: 改用 @lib/stats
+    const r = diagTest(TP, FP, FN, TN);
     const fmt = (v: number) => isNaN(v) ? '无法计算' : (v * 100).toFixed(1) + '%';
     setResult({
-      sens: fmt(sens), spec: fmt(spec),
-      ppv: fmt(ppv), npv: fmt(npv),
-      acc: fmt(acc),
-      lr: `LR+ = ${isFinite(lrP) ? lrP.toFixed(2) : '∞'} · LR- = ${isFinite(lrN) ? lrN.toFixed(2) : '∞'}`,
+      sens: fmt(r.sensitivity), spec: fmt(r.specificity),
+      ppv: fmt(r.ppv), npv: fmt(r.npv),
+      acc: fmt(r.accuracy),
+      lr: `LR+ = ${isFinite(r.lrPlus) ? r.lrPlus.toFixed(2) : '∞'} · LR- = ${isFinite(r.lrMinus) ? r.lrMinus.toFixed(2) : '∞'}`,
     });
   }
   return (
@@ -555,9 +533,9 @@ function CorrelationCalc() {
   function calc() {
     const R = parseFloat(r), N = parseInt(n);
     if (isNaN(R) || isNaN(N) || Math.abs(R) >= 1 || N < 3) { setResult({ t: '输入有误（|r| < 1, n ≥ 3）', p: '-', r2: '-' }); return; }
-    const t = R * Math.sqrt((N - 2) / (1 - R * R));
-    const p = 2 * (1 - tCDF(Math.abs(t), N - 2));
-    setResult({ t: t.toFixed(4), p: p < 0.0001 ? p.toExponential(4) : p.toFixed(4), r2: (R * R).toFixed(4) });
+    // R103: 改用 @lib/stats
+    const ct = correlationTest(R, N);
+    setResult({ t: ct.t.toFixed(4), p: ct.p < 0.0001 ? ct.p.toExponential(4) : ct.p.toFixed(4), r2: (R * R).toFixed(4) });
   }
   return (
     <div className="card" style={{ maxWidth: 480 }}>
@@ -583,16 +561,17 @@ function EffectSizeCalc() {
   const [m1, setM1] = useState(''); const [m2, setM2] = useState('');
   const [s1, setS1] = useState(''); const [s2, setS2] = useState('');
   const [n1, setN1] = useState(''); const [n2, setN2] = useState('');
-  const [result, setResult] = useState<{ d: string; interp: string } | null>(null);
+  const [result, setResult] = useState<{ d: string; g: string; interp: string } | null>(null);
   function calc() {
     const M1 = parseFloat(m1), M2 = parseFloat(m2), S1 = parseFloat(s1), S2 = parseFloat(s2);
     const N1 = parseInt(n1), N2 = parseInt(n2);
-    if ([M1, M2, S1, S2, N1, N2].some(isNaN) || N1 < 2 || N2 < 2) { setResult({ d: '输入有误', interp: '' }); return; }
-    const sp = Math.sqrt(((N1 - 1) * S1 * S1 + (N2 - 1) * S2 * S2) / (N1 + N2 - 2));
-    const d = (M1 - M2) / sp;
-    const abs = Math.abs(d);
+    if ([M1, M2, S1, S2, N1, N2].some(isNaN) || N1 < 2 || N2 < 2) { setResult({ d: '输入有误', g: '-', interp: '' }); return; }
+    // R103: 改用 @lib/stats
+    const r = effectSize(M1, M2, S1, S2, N1, N2);
+    const abs = Math.abs(r.d);
     setResult({
-      d: d.toFixed(3),
+      d: r.d.toFixed(3),
+      g: r.hedgesG.toFixed(3),
       interp: abs < 0.2 ? '微小效应' : abs < 0.5 ? '小效应' : abs < 0.8 ? '中等效应' : '大效应',
     });
   }
@@ -610,7 +589,10 @@ function EffectSizeCalc() {
       </div>
       <button className="btn btn-primary" onClick={calc}>计算</button>
       {result && (
-        <ResultBox label="Cohen's d" value={result.d} note={result.interp ? `${result.interp}（0.2 小 / 0.5 中 / 0.8 大）` : ''} />
+        <>
+          <ResultBox label="Cohen's d" value={result.d} note={result.interp ? `${result.interp}（0.2 小 / 0.5 中 / 0.8 大）` : ''} />
+          <ResultBox label="Hedges' g" value={result.g} note="小样本校正后的 d，n<20 时更准确" />
+        </>
       )}
     </div>
   );

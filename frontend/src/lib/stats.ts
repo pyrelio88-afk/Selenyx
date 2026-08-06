@@ -175,7 +175,7 @@ export function oneSampleTTest(sample: number[], mu0: number): {
 
 /** 单因素方差分析 */
 export function anova(groups: { m: number; s: number; n: number }[]): {
-  F: number; p: number; dfBetween: number; dfWithin: number;
+  F: number; p: number; dfBetween: number; dfWithin: number; eta2: number;
 } {
   const gs = groups.filter((g) => g.n >= 2 && g.s >= 0);
   if (gs.length < 2) throw new Error('至少需要 2 组有效数据');
@@ -184,10 +184,55 @@ export function anova(groups: { m: number; s: number; n: number }[]): {
   const ssb = gs.reduce((a, g) => a + g.n * (g.m - grandMean) ** 2, 0);
   const ssw = gs.reduce((a, g) => a + (g.n - 1) * g.s * g.s, 0);
   const dfB = gs.length - 1, dfW = N - gs.length;
-  if (ssw <= 0) return { F: Infinity, p: 0, dfBetween: dfB, dfWithin: dfW };
+  const eta2 = ssb / (ssb + ssw);
+  if (ssw <= 0) return { F: Infinity, p: 0, dfBetween: dfB, dfWithin: dfW, eta2 };
   const F = (ssb / dfB) / (ssw / dfW);
   const p = fSF(F, dfB, dfW);
-  return { F, p, dfBetween: dfB, dfWithin: dfW };
+  return { F, p, dfBetween: dfB, dfWithin: dfW, eta2 };
+}
+
+/** 独立样本 t 检验（合并方差，摘要量输入） */
+export function independentTTest(
+  m1: number, m2: number, s1: number, s2: number, n1: number, n2: number,
+): { t: number; p: number; df: number } {
+  if (n1 < 2 || n2 < 2) throw new Error('样本量不足，无法计算');
+  const sp2 = ((n1 - 1) * s1 * s1 + (n2 - 1) * s2 * s2) / (n1 + n2 - 2);
+  const se = Math.sqrt(sp2 * (1 / n1 + 1 / n2));
+  if (se === 0) {
+    return { t: m1 === m2 ? 0 : Infinity, p: m1 === m2 ? 1 : 0, df: n1 + n2 - 2 };
+  }
+  const t = (m1 - m2) / se;
+  const df = n1 + n2 - 2;
+  const p = 2 * (1 - tCDF(Math.abs(t), df));
+  return { t, p, df };
+}
+
+/** 配对 t 检验（摘要量输入：差值均值/差值标准差/对子数） */
+export function pairedTFromSummary(
+  meanDiff: number, sdDiff: number, n: number,
+): { t: number; p: number; df: number } {
+  if (n < 2) throw new Error('样本量不足，无法计算');
+  const df = n - 1;
+  if (sdDiff === 0) {
+    return { t: meanDiff === 0 ? 0 : Infinity, p: meanDiff === 0 ? 1 : 0, df };
+  }
+  const t = meanDiff / (sdDiff / Math.sqrt(n));
+  const p = 2 * (1 - tCDF(Math.abs(t), df));
+  return { t, p, df };
+}
+
+/** 单样本 t 检验（摘要量输入：样本均值/总体均值/标准差/样本量） */
+export function oneSampleTFromSummary(
+  mean: number, mu0: number, sd: number, n: number,
+): { t: number; p: number; df: number } {
+  if (n < 2) throw new Error('样本量不足，无法计算');
+  const df = n - 1;
+  if (sd === 0) {
+    return { t: mean === mu0 ? 0 : Infinity, p: mean === mu0 ? 1 : 0, df };
+  }
+  const t = (mean - mu0) / (sd / Math.sqrt(n));
+  const p = 2 * (1 - tCDF(Math.abs(t), df));
+  return { t, p, df };
 }
 
 /** OR/RR 计算（含 Haldane 校正） */
@@ -210,15 +255,17 @@ export function orRr(a: number, b: number, c: number, d: number): {
 
 /** 诊断试验四格表 */
 export function diagTest(tp: number, fp: number, fn: number, tn: number): {
-  sensitivity: number; specificity: number; ppv: number; npv: number; lrPlus: number; lrMinus: number;
+  sensitivity: number; specificity: number; ppv: number; npv: number; lrPlus: number; lrMinus: number; accuracy: number;
 } {
+  const total = tp + fp + fn + tn;
   const sens = tp + fn > 0 ? tp / (tp + fn) : NaN;
   const spec = tn + fp > 0 ? tn / (tn + fp) : NaN;
   const ppv = tp + fp > 0 ? tp / (tp + fp) : NaN;
   const npv = tn + fn > 0 ? tn / (tn + fn) : NaN;
   const lrPlus = !isNaN(sens) && spec < 1 ? sens / (1 - spec) : Infinity;
   const lrMinus = !isNaN(sens) && spec > 0 ? (1 - sens) / spec : Infinity;
-  return { sensitivity: sens, specificity: spec, ppv, npv, lrPlus, lrMinus };
+  const accuracy = total > 0 ? (tp + tn) / total : NaN;
+  return { sensitivity: sens, specificity: spec, ppv, npv, lrPlus, lrMinus, accuracy };
 }
 
 /** Pearson 相关系数检验 */

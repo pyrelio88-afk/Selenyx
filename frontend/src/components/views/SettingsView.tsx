@@ -330,9 +330,18 @@ export function SettingsView() {
                 </div>
               )}
             </div>
-            <p style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-              密钥仅存储在本地浏览器（localStorage），请求由浏览器直连 LLM 提供商，不经过任何中转服务器。
-            </p>
+            <div style={{
+              marginTop: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-light)', border: '1px solid var(--accent)',
+              fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
+            }}>
+              <span style={{ fontWeight: 600, color: 'var(--accent)' }}>⚠ API Key 安全须知</span>
+              <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
+                <li>密钥以明文存储在本地浏览器 localStorage，请求由浏览器直连 LLM 提供商，不经过任何中转服务器。</li>
+                <li>请勿在公共/共享电脑上配置；清除浏览器数据会同时删除密钥。</li>
+                <li>建议使用各平台提供的用量可观测、可吊销的受限 Key，并定期轮换。</li>
+              </ul>
+            </div>
           </div>
         )}
 

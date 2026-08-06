@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   normalCDF, chi2SF, tCDF, fSF,
   pairedTTest, oneSampleTTest, anova, orRr, diagTest, correlationTest, effectSize,
+  independentTTest, pairedTFromSummary, oneSampleTFromSummary,
 } from '../stats';
 
 // 相对误差断言（p 值等小量绝对误差没意义）
@@ -62,6 +63,7 @@ describe('stats 高阶计算器（vs scipy）', () => {
     expectRel(r.p, 2.009e-6, 5e-2);
     expect(r.dfBetween).toBe(2);
     expect(r.dfWithin).toBe(12);
+    expect(r.eta2).toBeCloseTo(0.8877, 3);  // scipy ssb/(ssb+ssw)
   });
 
   it('orRr：无零格 OR=3.5 RR=2.0', () => {
@@ -78,6 +80,7 @@ describe('stats 高阶计算器（vs scipy）', () => {
     expect(r.specificity).toBeCloseTo(0.8095, 4);   // 85/105
     expect(r.ppv).toBeCloseTo(0.8, 4);              // 80/100
     expect(r.npv).toBeCloseTo(0.85, 4);             // 85/100
+    expect(r.accuracy).toBeCloseTo(0.825, 3);       // (80+85)/200
     expect(r.lrPlus).toBeGreaterThan(0);
     expect(r.lrMinus).toBeGreaterThan(0);
   });
@@ -95,6 +98,27 @@ describe('stats 高阶计算器（vs scipy）', () => {
     expect(r.d).toBeCloseTo(1.1486, 3);
     expect(r.hedgesG).toBeCloseTo(1.1336, 3);
   });
+
+  it('independentTTest：t=4.448 p=3.98e-5 df=58', () => {
+    const r = independentTTest(10.5, 8.2, 2.1, 1.9, 30, 30);
+    expect(r.t).toBeCloseTo(4.4484, 3);     // scipy pooled t
+    expectRel(r.p, 3.9755e-5, 2e-2);
+    expect(r.df).toBe(58);
+  });
+
+  it('pairedTFromSummary：md=-5.625 sd=2.4458 n=8 → t=-6.505', () => {
+    const r = pairedTFromSummary(-5.625, 2.4458, 8);
+    expect(r.t).toBeCloseTo(-6.5049, 3);
+    expectRel(r.p, 0.0003326, 1e-2);
+    expect(r.df).toBe(7);
+  });
+
+  it('oneSampleTFromSummary：m=5.15 mu0=5 sd=0.2449 n=8 → t=1.732', () => {
+    const r = oneSampleTFromSummary(5.15, 5.0, 0.244949, 8);
+    expect(r.t).toBeCloseTo(1.7321, 3);
+    expectRel(r.p, 0.12687, 1e-2);
+    expect(r.df).toBe(7);
+  });
 });
 
 describe('stats 边界与防御', () => {
@@ -109,6 +133,9 @@ describe('stats 边界与防御', () => {
     expect(() => oneSampleTTest([5], 5)).toThrow();
     expect(() => correlationTest(0.5, 2)).toThrow();
     expect(() => anova([{ m: 1, s: 1, n: 5 }])).toThrow();
+    expect(() => independentTTest(1, 2, 1, 1, 1, 5)).toThrow();
+    expect(() => pairedTFromSummary(1, 1, 1)).toThrow();
+    expect(() => oneSampleTFromSummary(1, 1, 1, 1)).toThrow();
   });
   it('orRr 零格 Haldane 校正不崩且 OR 有限', () => {
     const r = orRr(0, 40, 30, 70);          // a=0 触发 +0.5 校正
