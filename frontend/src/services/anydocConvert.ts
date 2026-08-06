@@ -7,8 +7,9 @@
  * 限制：anydoc 对扫描版（图片型）PDF 无 OCR 能力——仅能提取含文本层的 PDF；
  * 图片型 PDF 会抛出 code='unsupported'。UI 层需对此说明。
  *
- * WASM 加载策略：构建时把 wasm 二进制 base64 内联（vite 插件），运行时用
- * initSync 加载，绕开 new URL(import.meta.url)（单文件构建不兼容该模式）。
+ * WASM 加载策略：wasm 二进制放 public/ 目录（不参与 singlefile 内联），
+ * 运行时 fetch 按需加载——首次使用「文档转MD」时才下载 6.2MB wasm，
+ * 避免首屏 bundle 膨胀（gzip 从 6.27MB 回落至 ~1.3MB）。
  *
  * 转换是同步阻塞调用（wasm 单线程），大文件会短暂卡 UI，故在调用前让出主线程一帧
  * 以确保 loading 状态渲染出来。
@@ -20,7 +21,6 @@ import {
   formatFromBytes,
   type Format,
 } from '@firecrawl/anydoc-wasm';
-import wasmBase64 from 'virtual:anydoc-wasm-base64';
 
 export type AnydocErrorCode =
   | 'unsupported' | 'malformed' | 'encrypted' | 'resourceLimit' | 'missingPart';
@@ -51,23 +51,21 @@ const EXT_TO_FORMAT: Record<string, Format> = {
 let wasmReady = false;
 let initPromise: Promise<void> | null = null;
 
-/** 解码 base64 → Uint8Array（兼容 atob 的二进制安全解码） */
-function decodeBase64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const len = bin.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
+/** 运行时 fetch wasm 二进制（public/ 目录，不参与 singlefile 内联） */
+async function loadWasmBytes(): Promise<ArrayBuffer> {
+  const res = await fetch('anydoc.wasm');
+  if (!res.ok) throw new Error(`anydoc.wasm 加载失败: HTTP ${res.status}`);
+  return res.arrayBuffer();
 }
 
-/** 惰性初始化 wasm（仅首次调用时解码并实例化，约 6MB） */
+/** 惰性初始化 wasm（仅首次调用时 fetch 并实例化，约 6.2MB） */
 export function ensureAnydocReady(): Promise<void> {
   if (wasmReady) return Promise.resolve();
   if (!initPromise) {
     initPromise = (async () => {
-      const bytes = decodeBase64ToBytes(wasmBase64);
+      const buf = await loadWasmBytes();
       // initSync 具名导入；对象形式 { module: BufferSource }（与官方 Node 测试一致）
-      initSync({ module: bytes });
+      initSync({ module: buf });
       wasmReady = true;
     })().catch((err) => {
       initPromise = null; // 失败则允许重试
