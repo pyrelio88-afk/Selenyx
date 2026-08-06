@@ -22,6 +22,7 @@ import type * as PdfjsLibType from 'pdfjs-dist';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import type { Annotation, AnnotationType } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
+import { runOcr, detectScannedPdf, terminateOcr, OCR_LANG_LABEL } from '@services/ocr';
 
 // 动态加载器：模块级单例缓存，多次打开 PDF 不重复下载
 let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null;
@@ -177,6 +178,12 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
   const annoListRef = useRef<HTMLUListElement>(null);
   const [pulseId, setPulseId] = useState<string | null>(null);
   const pulseTimerRef = useRef<number | null>(null);
+  // R85：OCR 文字识别（扫描版 PDF / 图片文献补位，与 pdfjs 文本层互补）
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState('');
+  const [ocrResult, setOcrResult] = useState<{ text: string; confidence: number; page: number | 'all' } | null>(null);
+  const [ocrPanelOpen, setOcrPanelOpen] = useState(false);
+  const [scannedHint, setScannedHint] = useState(false);
 
   /** R78：跳转到批注时给目标一个 1.2s 脉冲闪烁，让用户认得出落点 */
   const triggerPulse = useCallback((id: string) => {
@@ -225,6 +232,11 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
           if (ol.length === 0) ol = await detectImradOutline(d);
           if (!cancelled) setOutline(ol);
         } catch { setOutline([]); }
+        // R85：探测是否扫描版 PDF（无文本层）→ 提示用户可 OCR
+        try {
+          const scanned = await detectScannedPdf(d);
+          if (!cancelled) setScannedHint(scanned);
+        } catch { /* 探测失败不阻塞阅读 */ }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -313,6 +325,62 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [goPrev, goNext, zoomIn, zoomOut, selectionPopup]);
+
+  // ===== R85：OCR 文字识别（扫描版 PDF / 图片补位）=====
+  /** 把指定页渲染到离屏 Canvas（用于 OCR 或导出），返回 canvas */
+  const renderPageToCanvas = useCallback(async (page: PdfjsLibType.PDFPageProxy): Promise<HTMLCanvasElement> => {
+    const vp = page.getViewport({ scale: 2 }); // 2x 保证 OCR 精度
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width;
+    canvas.height = vp.height;
+    const ctx = canvas.getContext('2d')!;
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    return canvas;
+  }, []);
+
+  /** 识别当前页：直接复用已渲染的可见 canvas */
+  const runOcrPage = useCallback(async () => {
+    if (!doc || !canvasRef.current || ocrRunning) return;
+    setOcrRunning(true);
+    setOcrProgress('准备识别…');
+    setOcrPanelOpen(true);
+    try {
+      const res = await runOcr(canvasRef.current);
+      setOcrResult({ ...res, page: pageNum });
+    } catch (e) {
+      setOcrResult({ text: `识别失败：${e instanceof Error ? e.message : String(e)}`, confidence: 0, page: pageNum });
+    } finally {
+      setOcrRunning(false);
+      setOcrProgress('');
+    }
+  }, [doc, pageNum, ocrRunning]);
+
+  /** 识别全部页：逐页离屏渲染 + OCR，拼接为全文 */
+  const runOcrAll = useCallback(async () => {
+    if (!doc || ocrRunning) return;
+    setOcrRunning(true);
+    setOcrPanelOpen(true);
+    setOcrResult(null);
+    const parts: string[] = [];
+    try {
+      for (let p = 1; p <= doc.numPages; p++) {
+        setOcrProgress(`识别中…（${p}/${doc.numPages}）`);
+        const page = await doc.getPage(p);
+        const canvas = await renderPageToCanvas(page);
+        const res = await runOcr(canvas);
+        parts.push(`\n\n===== 第 ${p} 页 =====\n${res.text}`);
+      }
+      setOcrResult({ text: parts.join('\n').trim(), confidence: 0, page: 'all' });
+    } catch (e) {
+      setOcrResult({ text: `识别失败：${e instanceof Error ? e.message : String(e)}`, confidence: 0, page: 'all' });
+    } finally {
+      setOcrRunning(false);
+      setOcrProgress('');
+    }
+  }, [doc, ocrRunning, renderPageToCanvas]);
+
+  // 卸载时释放 OCR worker 内存
+  useEffect(() => () => { terminateOcr(); }, []);
 
   // ===== 批注：当前页的批注 =====
   const pageAnnotations = annotations.filter((a) => a.page === pageNum);
@@ -496,6 +564,16 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
         </div>
 
         <div className="pdf-toolbar-right">
+          <button
+            className={`icon-btn ${ocrPanelOpen ? 'active' : ''}`}
+            onClick={() => setOcrPanelOpen((v) => !v)}
+            disabled={ocrRunning}
+            title={`OCR 文字识别（${OCR_LANG_LABEL}）`}
+            aria-label="OCR 文字识别"
+            aria-pressed={ocrPanelOpen}
+          >
+            <Icon name="search" size={16} />
+          </button>
           {ANNOTATION_TYPES.map((t) => (
             <button
               key={t}
@@ -596,6 +674,15 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
 
       {/* ===== 页面区 ===== */}
       <div className="pdf-body" ref={containerRef}>
+        {/* ===== R85 扫描版 PDF 提示 ===== */}
+        {scannedHint && !ocrRunning && (
+          <div className="pdf-ocr-hint" role="status">
+            <Icon name="search" size={15} />
+            <span>检测到扫描版 PDF（无可提取文本层）。点击右上角 OCR 按钮识别文字。</span>
+            <button className="pdf-ocr-hint-btn" onClick={runOcrPage}>识别本页</button>
+            <button className="icon-btn" onClick={() => setScannedHint(false)} aria-label="关闭提示"><Icon name="close" size={13} /></button>
+          </div>
+        )}
         {loading && (
           <div className="pdf-loading">
             <div className="skeleton" style={{ width: 400, height: 560, maxWidth: '90vw' }} />
@@ -694,6 +781,52 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
                   <Icon name="close" size={14} />
                 </button>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== R85 OCR 结果面板（底部抽屉）===== */}
+        {ocrPanelOpen && (
+          <div className="pdf-ocr-panel" role="region" aria-label="OCR 识别结果">
+            <div className="pdf-ocr-panel-header">
+              <span className="pdf-ocr-panel-title">
+                <Icon name="search" size={14} /> OCR 文字识别
+              </span>
+              <span className="pdf-ocr-lang">{OCR_LANG_LABEL}</span>
+              <div className="pdf-ocr-actions">
+                <button className="btn btn-sm" onClick={runOcrPage} disabled={ocrRunning || !doc}>
+                  {ocrRunning && ocrResult === null ? '…' : '识别本页'}
+                </button>
+                <button className="btn btn-sm" onClick={runOcrAll} disabled={ocrRunning || !doc}>
+                  识别全部
+                </button>
+                {ocrResult?.text && !ocrRunning && (
+                  <button className="btn btn-sm" onClick={() => { navigator.clipboard?.writeText(ocrResult.text); }}>复制全文</button>
+                )}
+                <button className="icon-btn" onClick={() => setOcrPanelOpen(false)} aria-label="关闭 OCR 面板"><Icon name="close" size={14} /></button>
+              </div>
+            </div>
+            {ocrRunning && (
+              <div className="pdf-ocr-progress">{ocrProgress || '加载 OCR 引擎与语言数据（首次约 5–10 秒）…'}</div>
+            )}
+            {!ocrRunning && ocrResult && (
+              <>
+                {ocrResult.confidence > 0 && (
+                  <div className="pdf-ocr-meta">
+                    {ocrResult.page === 'all' ? '全文' : `第 ${ocrResult.page} 页`} · 置信度 {ocrResult.confidence}%
+                  </div>
+                )}
+                <textarea
+                  className="pdf-ocr-text"
+                  value={ocrResult.text || '（未识别到文字，可能图片清晰度不足）'}
+                  readOnly
+                  rows={10}
+                  aria-label="OCR 识别文本"
+                />
+              </>
+            )}
+            {!ocrRunning && !ocrResult && (
+              <p className="pdf-ocr-empty">点击「识别本页」或「识别全部」开始。扫描版 PDF / 图片文献首次使用需下载引擎（约 7MB，浏览器自动缓存）。</p>
             )}
           </div>
         )}
