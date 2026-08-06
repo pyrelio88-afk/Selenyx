@@ -25,12 +25,14 @@ import { MANAGEMENT_EXTRA } from './management';
 import { AGRICULTURE_EXTRA } from './agriculture';
 import { HISTORY_EXTRA } from './history';
 import { LITERATURE_EXTRA } from './literature';
+import { PARAMS_OFFICIAL_REGISTRY } from './parameters_official';
 
 export interface DisciplineExpansion {
   glossary?: DisciplineGlossary[];
   parameters?: DisciplineParameter[];
   formulas?: DisciplineFormula[];
   standards?: DisciplineStandard[];
+  officialDocs?: DisciplineStandard[];  // R106: 红头文件
 }
 
 /** 合并同一学科的多个扩展批次 */
@@ -40,27 +42,37 @@ function mergeExpansions(...extras: DisciplineExpansion[]): DisciplineExpansion 
     parameters: [],
     formulas: [],
     standards: [],
+    officialDocs: [],
   };
   for (const ext of extras) {
     if (ext.glossary) result.glossary!.push(...ext.glossary);
     if (ext.parameters) result.parameters!.push(...ext.parameters);
     if (ext.formulas) result.formulas!.push(...ext.formulas);
     if (ext.standards) result.standards!.push(...ext.standards);
+    if (ext.officialDocs) result.officialDocs!.push(...ext.officialDocs);
   }
   return result;
 }
 
+// R106: 合并参数+红头文件到每个学科
+function withParamsOfficial(base: DisciplineExpansion, discId: string): DisciplineExpansion {
+  const extra = PARAMS_OFFICIAL_REGISTRY[discId];
+  if (!extra) return base;
+  return mergeExpansions(base, extra);
+}
+
 export const DISCIPLINE_EXPANSIONS: Record<string, DisciplineExpansion> = {
-  medicine: mergeExpansions(MEDICINE_EXTRA, MEDICINE_BATCH2),
-  science: SCIENCE_EXTRA,
-  education: EDUCATION_EXTRA,
-  engineering: ENGINEERING_EXTRA,
-  economics: ECONOMICS_EXTRA,
-  law: LAW_EXTRA,
-  military: MILITARY_EXTRA,
-  art: ART_EXTRA,
-  management: MANAGEMENT_EXTRA,
-  agriculture: AGRICULTURE_EXTRA,
-  history: HISTORY_EXTRA,
-  literature: LITERATURE_EXTRA,
+  philosophy: withParamsOfficial({ glossary: [], parameters: [], formulas: [], standards: [] }, 'philosophy'),
+  medicine: withParamsOfficial(mergeExpansions(MEDICINE_EXTRA, MEDICINE_BATCH2), 'medicine'),
+  science: withParamsOfficial(SCIENCE_EXTRA, 'science'),
+  education: withParamsOfficial(EDUCATION_EXTRA, 'education'),
+  engineering: withParamsOfficial(ENGINEERING_EXTRA, 'engineering'),
+  economics: withParamsOfficial(ECONOMICS_EXTRA, 'economics'),
+  law: withParamsOfficial(LAW_EXTRA, 'law'),
+  military: withParamsOfficial(MILITARY_EXTRA, 'military'),
+  art: withParamsOfficial(ART_EXTRA, 'art'),
+  management: withParamsOfficial(MANAGEMENT_EXTRA, 'management'),
+  agriculture: withParamsOfficial(AGRICULTURE_EXTRA, 'agriculture'),
+  history: withParamsOfficial(HISTORY_EXTRA, 'history'),
+  literature: withParamsOfficial(LITERATURE_EXTRA, 'literature'),
 };

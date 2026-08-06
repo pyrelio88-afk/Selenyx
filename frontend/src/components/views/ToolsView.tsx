@@ -39,7 +39,7 @@ export function ToolsView() {
             onClick={() => setTab(t.key)}
             style={{ borderRadius: '0 0 0 0', borderBottom: tab === t.key ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: '-1px' }}
           >
-            {t.label}
+            <Icon name={t.icon} size={14} /> {t.label}
           </button>
         ))}
       </div>

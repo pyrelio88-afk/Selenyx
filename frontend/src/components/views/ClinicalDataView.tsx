@@ -16,7 +16,7 @@ import {
   type DisciplineStandard,
 } from '../../data/disciplines';
 
-type Tab = 'glossary' | 'parameters' | 'formulas' | 'standards';
+type Tab = 'glossary' | 'parameters' | 'formulas' | 'standards' | 'officialDocs';
 type EntryKind = Tab;
 
 /** 自定义条目存储 */
@@ -120,7 +120,7 @@ export function ClinicalDataView() {
         <div className="view-header" style={{ marginBottom: 16 }}>
           <h1 className="view-title">学科数据</h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-            覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 名词 / {totalParams} 数值参数 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 标准规范
+            覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 名词 / {totalParams} 数值参数 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 标准规范 / {DISCIPLINES.reduce((a, d) => a + (d.officialDocs?.length ?? 0), 0)} 红头文件
             {customEntries.length > 0 && ` · ${customEntries.length} 条自定义`}
           </p>
         </div>
@@ -158,6 +158,7 @@ export function ClinicalDataView() {
                 <span>{paramCount(d)} 数值</span>
                 <span>{d.formulas.length} 公式</span>
                 <span>{d.standards.length} 标准</span>
+                {(d.officialDocs?.length ?? 0) > 0 && <span style={{ color: '#c3272b' }}>{d.officialDocs!.length} 红头文件</span>}
               </div>
             </button>
           ))}
@@ -204,6 +205,13 @@ export function ClinicalDataView() {
       issuer: e.issuer, year: e.year, __customIdx: e.__globalIdx,
     })),
   ];
+  const mergedOfficialDocs: (DisciplineStandard & { __customIdx?: number })[] = [
+    ...(selected.officialDocs || []),
+    ...customForDisc.filter((e) => e.kind === 'officialDocs').map((e) => ({
+      name: e.name || '', code: e.code || '', description: e.description || '',
+      issuer: e.issuer, year: e.year, source: e.source, __customIdx: e.__globalIdx,
+    })),
+  ];
 
   const detailSearch = search.toLowerCase();
   const matchG = (g: DisciplineGlossary) =>
@@ -221,9 +229,10 @@ export function ClinicalDataView() {
   const filteredParams = mergedParams.filter(matchP);
   const filteredFormulas = mergedFormulas.filter(matchF);
   const filteredStandards = mergedStandards.filter(matchS);
+  const filteredOfficialDocs = mergedOfficialDocs.filter(matchS);
 
   // 当前 tab 的分页数据
-  const currentList = tab === 'glossary' ? filteredGlossary : tab === 'parameters' ? filteredParams : tab === 'formulas' ? filteredFormulas : filteredStandards;
+  const currentList = tab === 'glossary' ? filteredGlossary : tab === 'parameters' ? filteredParams : tab === 'formulas' ? filteredFormulas : tab === 'officialDocs' ? filteredOfficialDocs : filteredStandards;
   const pageCount = Math.ceil(currentList.length / PAGE_SIZE);
   const pagedList = currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -232,6 +241,7 @@ export function ClinicalDataView() {
     { key: 'parameters', label: '数值参数', count: mergedParams.length },
     { key: 'formulas', label: '公式', count: mergedFormulas.length },
     { key: 'standards', label: '标准规范', count: mergedStandards.length },
+    { key: 'officialDocs', label: '红头文件', count: mergedOfficialDocs.length },
   ];
 
   return (
@@ -430,6 +440,40 @@ export function ClinicalDataView() {
         </div>
       )}
 
+      {tab === 'officialDocs' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(pagedList as typeof filteredOfficialDocs).map((s, i) => (
+            <button
+              key={`doc-${s.code}-${i}`}
+              className="card"
+              onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}
+              style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', borderLeft: '4px solid #c3272b', background: 'var(--bg-surface)' }}
+            >
+              <div style={{
+                fontSize: 9, padding: '2px 6px', borderRadius: 'var(--radius-sm)',
+                background: '#c3272b', color: '#fff', fontWeight: 700, flexShrink: 0, marginTop: 2, whiteSpace: 'nowrap',
+              }}>{s.code || '红头文件'}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#c3272b' }}>
+                  {s.name}
+                  {s.__customIdx !== undefined && (
+                    <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                  )}
+                </div>
+                {s.issuer && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>颁布机构：{s.issuer}{s.year && ` · ${s.year}年`}</div>}
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.description}</div>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>详情 →</span>
+            </button>
+          ))}
+          {filteredOfficialDocs.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>
+              暂无红头文件数据
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 分页 */}
       {pageCount > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
@@ -451,6 +495,7 @@ export function ClinicalDataView() {
             {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
             {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
             {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} />}
+            {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} />}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, position: 'sticky', bottom: -24, background: 'var(--bg-surface)', padding: '12px 24px', margin: '20px -24px -24px', borderTop: '1px solid var(--border)', zIndex: 1 }}>
               {detail.customIndex !== undefined && (
                 <button
@@ -577,6 +622,27 @@ function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color
   );
 }
 
+function OfficialDocDetail({ doc, discipline }: { doc: DisciplineStandard; discipline: string }) {
+  return (
+    <div>
+      <div style={{ borderBottom: '3px solid #c3272b', paddingBottom: 12, marginBottom: 16 }}>
+        <div style={{
+          display: 'inline-block', fontSize: 12, padding: '3px 10px', borderRadius: 'var(--radius-sm)',
+          background: '#c3272b', color: '#fff', fontWeight: 700, marginBottom: 8,
+        }}>{doc.code || '红头文件'}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#c3272b' }}>{doc.name}</div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          {doc.issuer && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: '#fef0f0', color: '#c3272b' }}>颁布机构：{doc.issuer}</span>}
+          {doc.year && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{doc.year}年</span>}
+        </div>
+      </div>
+      <DetailRow label="文件内容">{doc.description}</DetailRow>
+      {doc.source && <DetailRow label="来源"><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{doc.source}</span></DetailRow>}
+    </div>
+  );
+}
+
 // ===== 自定义添加弹窗 =====
 
 function AddEntryModal({
@@ -608,11 +674,11 @@ function AddEntryModal({
       onSave({ ...base, name: fields.name.trim(), formula: fields.formula.trim(), description: fields.description.trim(), unit: fields.unit?.trim(), variables: fields.variables?.trim(), reference: fields.reference?.trim() });
     } else {
       if (!fields.name?.trim() || !fields.code?.trim() || !fields.description?.trim()) return;
-      onSave({ ...base, name: fields.name.trim(), code: fields.code.trim(), description: fields.description.trim(), issuer: fields.issuer?.trim(), year: fields.year?.trim() });
+      onSave({ ...base, name: fields.name.trim(), code: fields.code.trim(), description: fields.description.trim(), issuer: fields.issuer?.trim(), year: fields.year?.trim(), source: fields.source?.trim() });
     }
   }
 
-  const kindLabels: Record<EntryKind, string> = { glossary: '名词', parameters: '数值参数', formulas: '公式', standards: '标准规范' };
+  const kindLabels: Record<EntryKind, string> = { glossary: '名词', parameters: '数值参数', formulas: '公式', standards: '标准规范', officialDocs: '红头文件' };
 
   const fieldDefs: { kind: EntryKind; fields: { key: string; label: string; required?: boolean; textarea?: boolean; placeholder?: string }[] }[] = [
     {
@@ -658,6 +724,17 @@ function AddEntryModal({
         { key: 'issuer', label: '发布机构' },
         { key: 'year', label: '年份' },
         { key: 'description', label: '内容说明', required: true, textarea: true },
+      ],
+    },
+    {
+      kind: 'officialDocs',
+      fields: [
+        { key: 'code', label: '文件编号', required: true, placeholder: '如：中发〔2022〕14号' },
+        { key: 'name', label: '文件名称', required: true },
+        { key: 'issuer', label: '颁布机构' },
+        { key: 'year', label: '年份' },
+        { key: 'source', label: '来源' },
+        { key: 'description', label: '文件内容', required: true, textarea: true },
       ],
     },
   ];

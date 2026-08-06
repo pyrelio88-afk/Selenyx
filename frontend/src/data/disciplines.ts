@@ -56,6 +56,7 @@ export interface Discipline {
   parameters?: DisciplineParameter[];
   formulas: DisciplineFormula[];
   standards: DisciplineStandard[];
+  officialDocs?: DisciplineStandard[];  // R106: 红头文件/政府政策文件
 }
 
 export const DISCIPLINES: Discipline[] = [
@@ -3230,5 +3231,8 @@ for (const d of DISCIPLINES) {
     const extCodes = new Set(ext.standards.map((s) => s.code));
     d.standards = d.standards.filter((s) => !extCodes.has(s.code));
     d.standards.push(...ext.standards);
+  }
+  if (ext.officialDocs) {
+    d.officialDocs = [...(d.officialDocs || []), ...ext.officialDocs];
   }
 }
