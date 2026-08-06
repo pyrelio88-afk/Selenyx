@@ -1,0 +1,58 @@
+/**
+ * 军事学扩展数据
+ * R93 第一批
+ */
+
+import type { DisciplineExpansion } from './index';
+
+export const MILITARY_EXTRA: DisciplineExpansion = {
+  glossary: [
+    { term: '军事战略', termEn: 'Military Strategy', definition: '指导战争全局的方略，是战略体系的最高层次。核心要素：战略目标、战略方针、战略力量、战略部署。与战役法、战术构成战略-战役-战术三级层次。孙子\'上兵伐谋，其次伐交，其次伐兵，其下攻城\'体现了战略优先的思想。', category: '军事理论', source: '《孙子兵法》' },
+    { term: '人民战争', termEn: 'People\'s War', definition: '毛泽东军事思想的核心概念：动员和依靠广大人民群众进行的革命战争。基本特征：正义性、群众性、持久性。战略战术：积极防御、集中优势兵力各个歼灭敌人、运动战为主配合游击战和阵地战。', category: '军事理论', source: '毛泽东《论持久战》' },
+    { term: '积极防御', termEn: 'Active Defense', definition: '在战略防御态势下以攻势行动达成防御目的的战略指导思想。不是消极防守，而是\'防中有攻\'——在防御中寻找战机、以攻助防。中国国防政策表述为\'积极防御军事战略方针\'。', category: '军事理论' },
+    { term: '信息战', termEn: 'Information Warfare (IW)', definition: '围绕信息获取权、控制权和使用权的对抗。包括：情报战、电子战、网络战、心理战、指挥控制战。现代战争中信息优势成为决定战争胜负的关键因素——\'制信息权\'与制空权、制海权并列。', category: '现代战争' },
+    { term: '电子战', termEn: 'Electronic Warfare (EW)', definition: '利用电磁能量控制电磁频谱或攻击敌方的军事行动。三大分支：电子攻击（干扰/欺骗/定向能）、电子防护（抗干扰/频谱管理）、电子战支援（信号情报/威胁告警）。现代战争中几乎所有武器系统都依赖电磁频谱。', category: '现代战争' },
+    { term: '网络战', termEn: 'Cyber Warfare', definition: '通过攻击敌方计算机网络和信息系统以破坏其指挥、控制、通信和情报能力的作战行动。手段：分布式拒绝服务（DDoS）、恶意软件注入、网络间谍、数据篡改。2007年爱沙尼亚遭网络攻击是首例国家级网络战案例。', category: '现代战争' },
+    { term: '不对称战争', termEn: 'Asymmetric Warfare', definition: '交战双方在军事力量、技术手段或作战方式上存在显著差异的战争形态。弱方利用非传统手段（游击战、恐怖袭击、网络攻击）对抗强方的常规军事优势。越战、阿富汗战争是典型。', category: '现代战争' },
+    { term: '联合作战', termEn: 'Joint Operations', definition: '两个或两个以上军种在统一指挥下协同进行的作战。现代战争的基本形式——单一军种难以完成复杂作战任务。联合作战要求：统一指挥、联合计划、协同行动、信息共享。美军 1986 年《戈德华特-尼科尔斯法案》推动联合作战体制改革。', category: '军事理论' },
+    { term: '制空权', termEn: 'Air Superiority / Air Supremacy', definition: '在特定时空范围内对空域的控制程度。制空权（air superiority）：己方不受实质性空中威胁；绝对制空权（air supremacy）：对方完全无法进行空中作战。杜黑《制空权》（1921）提出空中力量决定战争胜负的理论。', category: '军事理论', source: 'Douhet (1921)' },
+    { term: '制海权', termEn: 'Sea Control', definition: '在特定海域内控制海上交通和使用海域的能力。马汉《海权论》提出控制海洋是国家强盛的关键。制海权分绝对制海权（对方无法行动）和局部制海权（特定海域/时段）。现代制海权还需要制空、制电磁、制水下多维配合。', category: '军事理论', source: 'Mahan AT (1890)' },
+    { term: '威慑', termEn: 'Deterrence', definition: '通过展示实力和决心使对手因预期代价过大而放弃行动的战略。核威慑是冷战国际关系核心：相互确保摧毁（MAD）使核大战成为\'不可想象的选项\'。威慑三要素：能力、意志、沟通（对方必须知道你的能力和决心）。', category: '战略学', source: 'Schelling TC (1960)' },
+    { term: '核威慑', termEn: 'Nuclear Deterrence', definition: '以核武器报复能力为基础的战略威慑。核三角：陆基洲际导弹、潜射弹道导弹、战略轰炸机——确保二次打击能力（遭受首轮核打击后仍能反击），使先发制人核打击无利可图。不首先使用核武器是中国核政策的核心承诺。', category: '战略学' },
+    { term: '游击战', termEn: 'Guerrilla Warfare', definition: '以小股武装力量在敌后进行袭击、破坏、骚扰的作战形式。特征：流动性、主动性、灵活性、隐蔽性。毛泽东游击战十六字诀：\'敌进我退，敌驻我扰，敌疲我打，敌退我追\'。', category: '战术学', source: '毛泽东《抗日游击战争的战略问题》' },
+    { term: '运动战', termEn: 'Mobile Warfare', definition: '在广阔战场上以兵团快速机动寻找战机、在运动中歼灭敌人的作战形式。与阵地战相对。核心：打得赢就打、打不赢就走、避实击虚。解放战争中运动战是解放军主要作战形式。', category: '战术学' },
+    { term: '阵地战', termEn: 'Positional Warfare', definition: '依托坚固阵地进行攻防的作战形式。特征：战线相对固定、火力密集、消耗大。一战西线堑壕战是典型阵地战。现代战争中阵地战比例下降但仍不可替代——城市攻防本质是阵地战。', category: '战术学' },
+    { term: '军事地形学', termEn: 'Military Topography', definition: '研究地形对军事行动影响的学科。地形分类：平原、丘陵、山地、高原、沙漠、水网。不同地形对兵力机动、火力发扬、阵地构筑、后勤保障影响不同。地图判读和定向是军人基本技能。', category: '军事基础' },
+    { term: '兵要地志', termEn: 'Military Geography Description', definition: '对某一地区的军事地理条件进行系统描述的资料，包括地形、水文、气象、交通、居民地、经济状况及其对军事行动的影响。是制定作战计划和部队行动的基础资料。', category: '军事基础' },
+    { term: '军事气象学', termEn: 'Military Meteorology', definition: '研究气象条件对军事行动影响的学科。气象影响：航空（能见度/风/雷暴）、航海（风浪/海雾）、地面作战（气温/降水/能见度）、核生化武器（风向/降水影响扩散）。诺曼底登陆选在气象窗口期是经典案例。', category: '军事基础' },
+    { term: '后勤保障', termEn: 'Logistics', definition: '军队物资补给、装备维修、卫勤保障、运输等保障工作的总称。\'外行谈战略，内行谈后勤\'——拿破仑远征俄罗斯失败、德军斯大林格勒战役失败都与后勤断裂密切相关。现代后勤强调精确保障、可视化追踪。', category: '军事后勤', source: 'Clausewitz《战争论》' },
+    { term: '卫勤保障', termEn: 'Medical Support', definition: '军队医疗保障系统，包括战伤救治、疾病预防、卫生防疫、医学防护。战伤救治阶梯：连营急救→团旅救护→师野战医院→后方医院。黄金一小时原则：重伤员1小时内得到救治存活率显著提高。', category: '军事后勤' },
+    { term: '军事通信', termEn: 'Military Communications', definition: '保障军事指挥的信息传输系统。手段：无线电、卫星通信、光纤、数据链。要求：保密性（加密传输）、抗干扰性（跳频/扩频）、可靠性（多链路冗余）、实时性。C4ISR系统（指挥Control/控制Command/通信Communication/计算机Computer/情报Intelligence/监视Surveillance/侦察Reconnaissance）是现代军事信息系统的总称。', category: '军事基础' },
+    { term: '精确打击', termEn: 'Precision Strike', definition: '利用精确制导武器对目标实施准确攻击的作战方式。精确制导武器：激光制导炸弹、GPS制导导弹、电视制导、红外成像制导。海湾战争（1991）中精确制导武器占比约7%，科索沃战争约35%，伊拉克战争约68%，体现了精确化趋势。', category: '现代战争' },
+    { term: '无人机作战', termEn: 'Unmanned Aerial Vehicle (UAV) Operations', definition: '使用无人驾驶飞行器执行侦察、打击、电子战等军事任务。分类：侦察型（如全球鹰）、攻击型（如翼龙/彩虹）、自杀式（如弹簧刀）。无人机改变战争形态：低成本、零人员伤亡风险、长时间巡航。纳卡冲突（2020）中无人机成为决定性力量。', category: '现代战争' },
+    { term: '军事卫星', termEn: 'Military Satellite', definition: '用于军事目的的人造卫星。类型：侦察卫星（光学/雷达成像）、通信卫星、导航卫星（GPS/北斗/格洛纳斯/伽利略）、预警卫星（导弹发射红外探测）、气象卫星。现代军事行动高度依赖卫星系统——反卫星武器成为大国竞争新领域。', category: '现代战争' },
+    { term: '核武器', termEn: 'Nuclear Weapon', definition: '利用核裂变（原子弹）或核聚变（氢弹）释放巨大能量的武器。威力以TNT当量衡量：广岛原子弹约1.5万吨TNT、现代战略核弹头可达数十至上百万吨。五大核国家：美俄中英法。印度、巴基斯坦、以色列、朝鲜也拥有核武器。不扩散核武器条约（NPT）是国际核不扩散体系基石。', category: '战略武器' },
+    { term: '生物武器', termEn: 'Biological Weapon', definition: '利用致病微生物或生物毒素造成人员伤亡和动植物病害的武器。禁止：《禁止生物武器公约》（1972）。历史上：日军731部队在华实施生物战。生物武器特点：传染性强、潜伏期、难以控制、恐慌效应大。', category: '战略武器', source: '《禁止生物武器公约》1972' },
+    { term: '化学武器', termEn: 'Chemical Weapon', definition: '利用化学毒剂造成人员伤亡的武器。分类：神经性（沙林/ VX）、糜烂性（芥子气）、窒息性（光气）、失能性（毕兹）。禁止：《禁止化学武器公约》（1993）。叙利亚内战、东京地铁沙林事件表明化学武器仍是现实威胁。', category: '战略武器', source: '《禁止化学武器公约》1993' },
+    { term: '弹道导弹防御', termEn: 'Ballistic Missile Defense (BMD)', definition: '探测、跟踪、拦截弹道导弹的系统。分层拦截：助推段（导弹发射后推进段）、中段（大气层外飞行段）、末段（再入大气层段）。美国 GMD 系统、萨德 THAAD、爱国者 PAC-3 是不同层级的拦截系统。技术难度大——\'用子弹击落子弹\'。', category: '战略武器' },
+    { term: '军事同盟', termEn: 'Military Alliance', definition: '两个或多个国家为共同安全目的结成的军事合作协定。北约（NATO）：集体防御（第5条：对一国的武装攻击视为对全体的攻击）。华约（已解散）。中日美安保条约。同盟困境：被拖入战争（entrapment）vs 被抛弃（abandonment）。', category: '国际安全' },
+    { term: '军备控制', termEn: 'Arms Control', definition: '通过国际协定限制特定武器的发展和部署。主要协定：新START（美俄战略核武器限制）、《禁止核武器条约》（2017，核武器国家均未加入）、《渥太华禁雷公约》。军控困境：安全困境（一方增强防御引起对方不安→军备竞赛）。', category: '国际安全' },
+    { term: '非战争军事行动', termEn: 'Military Operations Other Than War (MOOTW)', definition: '除战争以外的军事行动，包括：反恐、维和、抢险救灾、撤侨、海上护航、国际救援。中国军队在汶川地震、也门撤侨等行动中发挥重要作用。非战争军事行动要求与战争不同的交战规则和装备配置。', category: '军事理论' },
+    { term: '孙子兵法', termEn: 'The Art of War', definition: '中国春秋时期孙武所著兵书，13篇约6000字。核心思想：\'兵者，国之大事\'、\'知彼知己，百战不殆\'、\'不战而屈人之兵，善之善者也\'、\'上兵伐谋\'。全球最古老的军事理论著作，被译为数十种语言，影响远超军事领域——广泛应用于商业竞争和博弈策略。', category: '军事文献', source: '孙武（约公元前544-470年）' },
+    { term: '战争论', termEn: 'On War (Vom Kriege)', definition: '普鲁士军事理论家克劳塞维茨所著，1832年出版。核心观点：\'战争是政治的延续\'、战争具有暴力性/偶然性/政治从属性三重性质、防御是较强的作战形式、摩擦（friction）使简单的事变得困难。现代军事理论奠基之作。', category: '军事文献', source: 'Clausewitz CV (1832)' },
+    { term: '海权论', termEn: 'The Influence of Sea Power Upon History', definition: '美国海军军官马汉所著，1890年出版。核心论点：制海权决定国家兴衰，英国称霸世界源于海上优势。推动德意志帝国、日本帝国、美国大力发展海军。六要素决定海权：地理位置、自然形态、领土范围、人口、民族特征、政府政策。', category: '军事文献', source: 'Mahan AT (1890)' },
+    { term: '空权论', termEn: 'The Command of the Air', definition: '意大利军事理论家杜黑所著，1921年出版。核心观点：未来战争由空中力量决定，空军应作为独立军种，战略轰炸可直接摧毁敌方战争意志和工业能力。预见了空中力量在二战中的决定性作用，但低估了防空能力和民众抵抗意志。', category: '军事文献', source: 'Douhet G (1921)' },
+    { term: '国防动员', termEn: 'National Defense Mobilization', definition: '国家将经济和社会由平时状态转入战时状态的活动。分类：武装力量动员、国民经济动员、人民防空动员、交通动员。现代战争对动员速度要求高——海湾战争中美国动员约6个月，现代冲突可能只有数天。', category: '军事管理', source: '《国防动员法》2010' },
+    { term: '军事训练', termEn: 'Military Training', definition: '提高部队战斗力的基本途径。分类：基础训练（单兵技能）、战术训练（班排连协同）、战役训练（师旅级）、战略演习（战区/全军）。实兵对抗演习（红蓝对抗）是检验训练效果的重要方式。', category: '军事管理' },
+    { term: '军衔制度', termEn: 'Military Rank System', definition: '区分军人等级、表明军人身份的称号制度。中国军衔：尉官（少尉/中尉/上尉）、校官（少校/中校/上校/大校）、将官（少将/中将/上将）。军衔与职务不完全对应——军衔是终身荣誉，职务可变。', category: '军事管理', source: '《军官法》' },
+    { term: '战俘待遇', termEn: 'Prisoner of War (POW) Treatment', definition: '战俘应受到人道待遇的国际法规范。《日内瓦第三公约》（1949）：战俘不得被虐待、不得用于危险劳动、享有通信和医疗权利、不得因参与敌对行动本身受惩罚。保护对象：正规军、民兵、自发抵抗运动成员。', category: '战争法', source: '《日内瓦第三公约》1949' },
+    { term: '战争法', termEn: 'Law of Armed Conflict (LOAC)', definition: '规范武装冲突行为的国际法规则，也称国际人道法。核心原则：区分原则（区分军事目标与平民/民用物体）、比例原则（附带损害不得过分）、军事必要性原则。主要条约：《日内瓦公约》及其附加议定书。', category: '战争法', source: '《日内瓦公约》1949及附加议定书1977' },
+    { term: '日内瓦公约', termEn: 'Geneva Conventions', definition: '保护战争受难者的国际条约体系。四个公约（1949）：第一公约改善战地武装部队伤者病者境遇、第二公约改善海上武装部队伤者病者及遇船难者境遇、第三公约战俘待遇、第四公约战时保护平民。全球196个国家加入。', category: '战争法', source: '1949年日内瓦四公约' },
+    { term: '军民融合', termEn: 'Civil-Military Integration', definition: '将国防建设融入经济社会发展体系、军民资源共享的战略。意义：降低国防成本、提升技术转化效率、增强战时动员能力。美国DARPA模式、以色列全民皆兵模式是不同路径。中国2017年成立中央军民融合发展委员会。', category: '军事管理' },
+    { term: '兵棋推演', termEn: 'Wargaming', definition: '使用规则和模型模拟军事冲突以训练指挥和检验方案的方法。起源：普鲁士Kriegsspiel（1824）。现代兵棋：手工兵棋（地图+骰子+规则）和计算机兵棋。美军每年组织多次大规模兵棋推演。', category: '军事训练' },
+    { term: '电磁频谱战', termEn: 'Electromagnetic Spectrum Warfare', definition: '在电磁频谱领域进行的攻防对抗，涵盖电子战+频谱管理+赛博行动。现代战争中频谱是继陆海空天后第五维战场——频谱优势是信息优势的前提。', category: '现代战争' },
+    { term: '太空战', termEn: 'Space Warfare', definition: '在外层空间进行的军事对抗。反卫星武器（动能拦截/激光/共轨干扰）、太空电子战、太空监视。2007年中国反卫星试验、2008年美国卫星拦截试验标志着太空军事化加速。太空碎片问题也日益严峻。', category: '现代战争' },
+    { term: '混合战争', termEn: 'Hybrid Warfare', definition: '综合运用常规军事力量、非正规武装、网络攻击、信息战、经济施压等多种手段的战争形态。2014年克里米亚事件中\'小绿人\'行动被视为混合战争范例。特征：模糊战争与和平的界限、难以归因、利用社会裂痕。', category: '现代战争' },
+    { term: '灰色地带', termEn: 'Gray Zone Operations', definition: '介于和平与战争之间、低于传统武装冲突门槛的竞争性行动。手段：海上民兵、经济胁迫、信息操控、代理人武装。挑战：难以用传统战争法规则回应、国际机制缺位。南海争议中的部分行为被归为灰色地带行动。', category: '现代战争' },
+  ],
+};
