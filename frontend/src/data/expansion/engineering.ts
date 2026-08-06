@@ -18,7 +18,7 @@ export const ENGINEERING_EXTRA: DisciplineExpansion = {
     { term: '机器人学', termEn: 'Robotics', definition: '研究机器人设计、控制与应用的交叉学科。核心要素：自由度（6 轴可空间任意位姿）、运动学正逆解、动力学、轨迹规划、力控与视觉伺服。工业机器人四大家族（发那科/ABB/库卡/安川）；协作机器人与人形机器人是当前热点。', category: '机械', source: 'Craig JJ《Introduction to Robotics》1986' },
     // ===== 电气电子 =====
     { term: '基尔霍夫定律', termEn: "Kirchhoff's Laws", definition: '电路分析基石：KCL——任一节点流入电流代数和为零（电荷守恒）；KVL——任一闭合回路电压代数和为零（能量守恒）。配合元件伏安关系可解任意线性电路，是节点法与回路法的基础。', category: '电气电子', source: 'Kirchhoff (1845)' },
-    { term: '戴维南定理', termEn: "Thévenin's Theorem", definition: '任何线性含源二端网络对外可等效为一个电压源（开路电压 U_oc）串联一个电阻（等效内阻 R_o，独立源置零求得）。诺顿定理为其对偶（电流源并联内阻）。用于简化复杂电路的负载分析。', category: '电气电子' },
+    { term: '戴维南定理', termEn: "Thévenin's Theorem", definition: '任何线性含源二端网络对外可等效为一个电压源（开路电压 U_oc）串联一个电阻（等效内阻 R_o，独立源置零求得）。诺顿定理为其对偶（电流源并联内阻）。用于简化复杂电路的负载分析。', category: '电气电子' , source: 'Thévenin (1883)；电路等效理论' },
     { term: '三相交流电', termEn: 'Three-Phase AC', definition: '三幅值相等、频率相同、相位互差 120° 的正弦交流电系统。星形接法：线电压 = √3 相电压；我国低压配电线电压 380V/相电压 220V。三相瞬时功率恒定、旋转磁场天然形成，是工业供电与电机的标准制式。', category: '电气电子', source: 'Tesla N 1888 多相交流电系统专利；《电机学》' },
     { term: '变压器', termEn: 'Transformer', definition: '利用电磁感应实现交流电压变换的静止电器：U₁/U₂ = N₁/N₂，理想情况功率守恒故电流反比变换。油浸式用于配电主变，干式用于楼宇。损耗含铜损（负载相关）与铁损（空载即有），效率可达 98–99%。', category: '电气电子', source: 'Steinmetz CP《Theory and Calculation of Alternating Current Phenomena》1897' },
     { term: 'PN 结', termEn: 'PN Junction', definition: 'P 型与 N 型半导体接触界面形成的结构：内建电场使扩散与漂移平衡，形成耗尽层。单向导电性——正偏导通（硅管开启约 0.6–0.7V）、反偏截止（有微漏电流，超过击穿电压则雪崩击穿）。是二极管、晶体管等一切半导体器件的物理基础。', category: '电气电子', source: 'Shockley W《Electrons and Holes in Semiconductors》1950；诺贝尔奖1956' },

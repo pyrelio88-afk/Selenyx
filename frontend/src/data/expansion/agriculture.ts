@@ -8,14 +8,14 @@ import type { DisciplineExpansion } from './index';
 export const AGRICULTURE_EXTRA: DisciplineExpansion = {
   glossary: [
     { term: '绿色革命', termEn: 'Green Revolution', definition: '1960-70年代以高产矮秆品种、化学肥料和灌溉技术为核心的农业技术变革。诺曼·博洛格培育矮秆小麦使印度/墨西哥粮食产量翻倍，1970年获诺贝尔和平奖。批评：过度依赖化肥农药、品种单一化、小农受益有限。', category: '农业发展史', source: 'Borlaug N (1970 Nobel Peace Prize)' },
-    { term: '精准农业', termEn: 'Precision Agriculture', definition: '利用GPS、遥感、传感器和变量技术实现精细化管理。核心：定位（GPS厘米级）、感知（遥感/无人机多光谱）、决策（GIS数据分析）、执行（变量施肥/灌溉/播种）。区别于传统均匀管理，按田间差异精准施策，提高效率减少浪费。', category: '农业技术' },
+    { term: '精准农业', termEn: 'Precision Agriculture', definition: '利用GPS、遥感、传感器和变量技术实现精细化管理。核心：定位（GPS厘米级）、感知（遥感/无人机多光谱）、决策（GIS数据分析）、执行（变量施肥/灌溉/播种）。区别于传统均匀管理，按田间差异精准施策，提高效率减少浪费。', category: '农业技术' , source: '精准农业 PA 概念；GIS/RS 支撑体系' },
     { term: '轮作', termEn: 'Crop Rotation', definition: '在同一田块按一定顺序轮换种植不同作物的农业制度。作用：减少土壤养分单一消耗（豆科固氮补充氮素）、打断病虫害循环、抑制杂草、改善土壤结构。典型轮作：玉米-大豆-小麦三年轮作。', category: '耕作制度', source: '《农学概论》；中国传统农业经典制度' },
     { term: '间作套种', termEn: 'Intercropping', definition: '在同一田块同时或先后种植两种以上作物的种植方式。间作：同行或带状同时种植（玉米间作大豆）。套种：前茬作物收获前在行间播种后茬（小麦套种棉花）。优势：提高光能利用率、充分利用空间和时间、减少病虫害。', category: '耕作制度', source: '《耕作学》' },
     { term: '杂交水稻', termEn: 'Hybrid Rice', definition: '利用水稻杂种优势培育的高产稻种。袁隆平1973年完成三系配套（不育系/保持系/恢复系），使中国水稻亩产从300kg提高到500kg以上。两系法（光温敏不育系）和超级稻进一步突破。杂交稻种子只能用一代（F1），第二代性状分离需重新购种。', category: '作物育种', source: '袁隆平（1973年三系配套）' },
-    { term: '基因编辑作物', termEn: 'CRISPR-Edited Crops', definition: '使用CRISPR-Cas9等基因编辑技术精准改良作物性状。区别于转基因（插入外源基因），基因编辑可以只敲除或微调自身基因，很多国家不按转基因监管。应用：抗病小麦、高营养水稻、无褐变蘑菇。', category: '生物技术' },
+    { term: '基因编辑作物', termEn: 'CRISPR-Edited Crops', definition: '使用CRISPR-Cas9等基因编辑技术精准改良作物性状。区别于转基因（插入外源基因），基因编辑可以只敲除或微调自身基因，很多国家不按转基因监管。应用：抗病小麦、高营养水稻、无褐变蘑菇。', category: '生物技术' , source: 'CRISPR-Cas9 (Doudna/Charpentier 2012) 作物应用' },
     { term: '有机农业', termEn: 'Organic Agriculture', definition: '不使用化学合成肥料、农药、生长调节剂和转基因种子的农业生产体系。原则：健康、生态、公平、谨慎。依靠轮作、堆肥、生物防治维持土壤肥力和控制病虫害。产量通常比常规农业低10-30%但溢价销售。', category: '农业体系', source: 'IFOAM 有机农业标准' },
-    { term: '垂直农业', termEn: 'Vertical Farming', definition: '在室内多层立体环境中进行作物生产。优势：不受气候限制、节水90%以上、无农药、靠近消费地减少运输。劣势：能耗高（人工光照）、初始投资大、主要适合叶菜类。LED光源和水培/气培是核心技术。', category: '农业技术' },
-    { term: '土壤有机质', termEn: 'Soil Organic Matter (SOM)', definition: '土壤中来源于生物的含碳有机物质，包括腐殖质和未分解生物残体。功能：改善土壤结构（团粒结构）、保水保肥、缓冲pH、提供微生物能源。中国农田有机质含量普遍偏低（1-2%），高产田需>2.5%。', category: '土壤学' },
+    { term: '垂直农业', termEn: 'Vertical Farming', definition: '在室内多层立体环境中进行作物生产。优势：不受气候限制、节水90%以上、无农药、靠近消费地减少运输。劣势：能耗高（人工光照）、初始投资大、主要适合叶菜类。LED光源和水培/气培是核心技术。', category: '农业技术' , source: 'Despommier (2010) 垂直农业概念' },
+    { term: '土壤有机质', termEn: 'Soil Organic Matter (SOM)', definition: '土壤中来源于生物的含碳有机物质，包括腐殖质和未分解生物残体。功能：改善土壤结构（团粒结构）、保水保肥、缓冲pH、提供微生物能源。中国农田有机质含量普遍偏低（1-2%），高产田需>2.5%。', category: '土壤学' , source: '土壤学标准概念（腐殖质）' },
     { term: '测土配方施肥', termEn: 'Soil Testing and Formula Fertilization', definition: '根据土壤养分测定结果和作物需肥规律制定施肥方案的技术。步骤：取土样→化验N/P/K和微量元素→根据目标产量计算需肥量→制定配方→指导施肥。可减少化肥过量施用、提高肥料利用率、降低面源污染。', category: '土壤肥料', source: '《测土配方施肥技术规范》农业部' },
     { term: '滴灌', termEn: 'Drip Irrigation', definition: '通过管道系统和滴头将水精准输送到作物根区的灌溉方式。优势：节水30-70%（相比漫灌）、减少蒸发和深层渗漏、可结合施肥（ fertigation）、降低病害（叶面不湿）。以色列在干旱条件下发展滴灌成为农业强国。', category: '灌溉技术', source: 'Netafim（以色列）' },
     { term: '生物防治', termEn: 'Biological Control', definition: '利用天敌、寄生蜂、病原微生物等生物因子控制有害生物的方法。经典案例：澳洲瓢虫防治吹绵蚧、赤眼蜂防治玉米螟、苏云金芽孢杆菌Bt防治鳞翅目害虫。优势：环境友好、不易产生抗药性；局限：见效慢、效果受环境影响大。', category: '植保技术', source: 'FAO生物防治指南；《植物保护学》' },
