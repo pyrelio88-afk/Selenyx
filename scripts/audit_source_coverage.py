@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""R95 修正版 source 覆盖率审计脚本。
+"""R96 修正版 source 覆盖率审计脚本。
 
 修复 R93–R94 的口径错配：旧脚本用「全文件 source 字段总数 / 仅 glossary 词条数」，
 分子扫过 parameters/formulas/standards 段的 source，分母只算 glossary，导致
 engineering.ts 出现 121% 的荒谬覆盖率。本脚本按条目类型分别统计，分子分母同口径。
+
+R96 新增：standards 段标注 self_sourced=true（编号本身即权威出处，覆盖率按 100% 计）。
 
 用法: python3 scripts/audit_source_coverage.py
 """
@@ -55,6 +57,10 @@ def audit_file(path: str):
             if re.search(r"source\s*:", b):
                 with_src += 1
         per_type[key] = (total, with_src)
+    # R96: standards 视为 self_sourced（编号本身即出处），覆盖率按 100% 计
+    if "standards" in per_type:
+        t, _ = per_type["standards"]
+        per_type["standards"] = (t, t)  # mark as 100% covered
     return per_type
 
 

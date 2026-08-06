@@ -33,6 +33,7 @@ export interface DisciplineFormula {
   unit?: string;
   reference?: string;
   variables?: string;    // R86: 变量说明
+  source?: string;       // R96: 出处/提出者
 }
 
 export interface DisciplineStandard {
@@ -41,6 +42,7 @@ export interface DisciplineStandard {
   description: string;
   issuer?: string;       // R86: 发布机构
   year?: string;         // R86: 发布/现行年份
+  source?: string;       // R96: 出处（编号本身即出处，通常不额外标注）
 }
 
 export interface Discipline {
