@@ -33,6 +33,13 @@ export function ReferencesView() {
   const [pdfRefId, setPdfRefId] = useState<string | null>(null);
   const [anydocOpen, setAnydocOpen] = useState(false);
   const [anydocRefId, setAnydocRefId] = useState<string | null>(null);
+  // A1 导出预览弹窗（飞书 webview 拦截 a.click 下载 → 改为应用内展示+复制）
+  const [exportPreview, setExportPreview] = useState<{ format: string; content: string } | null>(null);
+  // A2 删除二次确认（飞书 webview 拦截 window.confirm → 改为应用内确认弹窗）
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // A3 开放获取 PDF 链接（Unpaywall 查询结果）
+  const [oaPdfUrl, setOaPdfUrl] = useState<string | null>(null);
+  const [oaLoading, setOaLoading] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -198,25 +205,28 @@ export function ReferencesView() {
     }
   }, [addReferences, flashToast]);
 
-  /** 导出：生成 BibTeX/RIS 文本并下载（含剪贴板兜底，适配内嵌 webview 下载被拦场景） */
+  /** A1 导出修复：生成 BibTeX/RIS 文本 → 应用内弹窗展示 + 复制按钮（飞书 webview 拦截 a.click 下载） */
   const handleExport = useCallback((format: 'bibtex' | 'ris') => {
     const target = searchQuery ? filtered : references;
     if (target.length === 0) { flashToast('没有可导出的文献'); return; }
     const content = format === 'bibtex' ? exportBibTeX(target) : exportRIS(target);
-    const ext = format === 'bibtex' ? 'bib' : 'ris';
-    // 兜底 1：复制到剪贴板（内嵌 webview 常拦截 a.click 下载）
-    try { navigator.clipboard?.writeText(content); } catch { /* ignore */ }
-    // 兜底 2：触发下载
-    try {
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `selenyx-references.${ext}`;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    } catch { /* ignore */ }
-    flashToast(`已导出 ${target.length} 条文献为 ${format.toUpperCase()}，内容已复制到剪贴板`);
+    setExportPreview({ format: format.toUpperCase(), content });
   }, [searchQuery, filtered, references, flashToast]);
+
+  /** A1 导出复制：优先 clipboard API，降级 execCommand 选中文本框（webview 兼容） */
+  const handleExportCopy = useCallback(async () => {
+    if (!exportPreview) return;
+    const text = exportPreview.content;
+    try {
+      await navigator.clipboard?.writeText(text);
+      flashToast(`已复制 ${text.length} 字符到剪贴板`);
+    } catch {
+      // 降级：选中文本框内容让用户手动 Ctrl+C
+      const ta = document.getElementById('export-textarea') as HTMLTextAreaElement | null;
+      if (ta) { ta.focus(); ta.select(); flashToast('剪贴板不可用，已全选文本，请按 Ctrl+C 复制'); }
+      else { flashToast('剪贴板不可用'); }
+    }
+  }, [exportPreview, flashToast]);
 
   /** 打开 PDF 阅读器：读取文件 → ArrayBuffer → 渲染 */
   const handleOpenPdf = useCallback(async (file: File) => {
@@ -410,7 +420,7 @@ export function ReferencesView() {
 
       {/* 详情侧滑面板（ONES/Mobbin 模式：点击行 → 右侧详情，不离开列表上下文） */}
       <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />
-      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onConvertMd={(id) => { setAnydocRefId(id); setAnydocOpen(true); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => { if (confirm('确认删除该文献？此操作不可撤销。')) { deleteReference(id); closePanel(); flashToast('已删除文献'); } }} />}
+      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onConvertMd={(id) => { setAnydocRefId(id); setAnydocOpen(true); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => setConfirmDeleteId(id)} oaPdfUrl={oaPdfUrl} oaLoading={oaLoading} onLookupOa={async (doi) => { if (!doi) return; setOaLoading(true); setOaPdfUrl(null); try { const res = await fetch(`https://api.unpaywall.org/v2/${doi}?email=selenyx@research.local`); if (res.ok) { const d = await res.json(); const loc = d.best_oa_location; if (loc?.url_for_pdf || loc?.url) { setOaPdfUrl(loc.url_for_pdf || loc.url); flashToast('找到开放获取 PDF 链接'); } else { flashToast('未找到开放获取版本'); } } else { flashToast('Unpaywall 查询失败'); } } catch { flashToast('网络请求失败（可能被 CORS 限制）'); } finally { setOaLoading(false); } }} />}
 
       {/* 隐藏 PDF 文件输入 */}
       <input
@@ -477,12 +487,44 @@ export function ReferencesView() {
       {toast && (
         <div className="toast" role="status" aria-live="polite">{toast}</div>
       )}
+
+      {/* A1 导出预览弹窗（飞书 webview 拦截下载 → 应用内展示+复制） */}
+      {exportPreview && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setExportPreview(null)}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 640, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600 }}>导出 {exportPreview.format} · {exportPreview.content.split('\n').filter(l=>l.trim()).length} 条</h3>
+              <button className="icon-btn" onClick={() => setExportPreview(null)} aria-label="关闭"><Icon name="close" size={18} /></button>
+            </div>
+            <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ flex: 1, margin: 16, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.6, resize: 'none', minHeight: 200 }} />
+            <div style={{ display: 'flex', gap: 8, padding: '0 20px 16px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={handleExportCopy}><Icon name="import" size={15} /> 复制全部</button>
+              <button className="btn" onClick={() => setExportPreview(null)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* A2 删除二次确认弹窗（飞书 webview 拦截 window.confirm → 应用内确认） */}
+      {confirmDeleteId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setConfirmDeleteId(null)}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 360, width: '100%', padding: 24, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>确认删除此文献？</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>此操作不可撤销，文献及其笔记/批注将永久删除。</p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn" style={{ flex: 1 }} onClick={() => setConfirmDeleteId(null)}>取消</button>
+              <button className="btn" style={{ flex: 1, background: 'var(--danger, #c3272b)', color: '#fff', borderColor: 'var(--danger, #c3272b)' }} onClick={() => { deleteReference(confirmDeleteId); setConfirmDeleteId(null); closePanel(); flashToast('已删除文献'); }}>确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, onDelete }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _onOpenWeb, onDelete, oaPdfUrl, oaLoading, onLookupOa }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void; oaPdfUrl: string | null; oaLoading: boolean; onLookupOa: (doi: string) => void }) {
   const [copied, setCopied] = useState(false);
 
   function generateGBT7714(): string {
@@ -635,13 +677,25 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, on
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onOpenPdf(r.id)}><Icon name="download" size={15} /> 获取全文</button>
-          <button className="btn" style={{ flex: 1 }} onClick={() => onConvertMd(r.id)} title="上传该文献的 PDF/Word 等文件，本地转 Markdown"><Icon name="import" size={15} /> 转Markdown</button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" style={{ flex: '1 1 120px' }} onClick={() => onOpenPdf(r.id)} title="上传本地 PDF 文件在阅读器中查看"><Icon name="download" size={15} /> 上传PDF阅读</button>
+          <button className="btn" style={{ flex: '1 1 120px' }} onClick={() => onConvertMd(r.id)} title="上传该文献的 PDF/Word 等文件，本地转 Markdown"><Icon name="import" size={15} /> 转Markdown</button>
           {r.doi && (
-            <button className="btn" style={{ flex: 1 }} onClick={() => onOpenWeb(`https://doi.org/${r.doi}`)}><Icon name="link" size={15} /> 在线阅读</button>
+            <>
+              <button className="btn" style={{ flex: '1 1 120px' }} onClick={() => onLookupOa(r.doi)} disabled={oaLoading} title="通过 Unpaywall 查询开放获取版本">
+                <Icon name="link" size={15} /> {oaLoading ? '查询中…' : '查找OA全文'}
+              </button>
+              {oaPdfUrl && (
+                <a className="btn btn-primary" style={{ flex: '1 1 120px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} href={oaPdfUrl} target="_blank" rel="noopener noreferrer" title="在新窗口打开开放获取 PDF">
+                  <Icon name="download" size={15} /> 打开OA PDF
+                </a>
+              )}
+              <a className="btn" style={{ flex: '1 1 120px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" title="在新窗口打开出版商页面">
+                <Icon name="link" size={15} /> 在线阅读
+              </a>
+            </>
           )}
-          <button className="btn" style={{ flex: 1 }}><Icon name="tag" size={15} /> 编辑标签</button>
+          <button className="btn" style={{ flex: '1 1 120px' }}><Icon name="tag" size={15} /> 编辑标签</button>
           <button className="btn" style={{ flex: '0 0 auto', color: 'var(--danger, #c3272b)' }} onClick={() => onDelete(r.id)} title="删除此文献"><Icon name="close" size={15} /> 删除</button>
         </div>
       </div>
