@@ -58,6 +58,7 @@ export const PHILOSOPHY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于实施中华优秀传统文化传承发展工程的意见",
       code: "中办发〔2017〕6号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%AE%9E%E6%96%BD%E4%B8%AD%E5%8D%8E%E4%BC%98%E7%A7%80%E4%BC%A0%E7%BB%9F%E6%96%87%E5%8C%96%E4%BC%A0%E6%89%BF%E5%8F%91%E5%B1%95%E5%B7%A5%E7%A8%8B%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "中共中央办公厅、国务院办公厅联合印发，将中华优秀传统文化传承发展上升到国家战略高度，明确哲学社会科学在文化传承中的核心地位。",
       issuer: "中共中央办公厅、国务院办公厅",
       year: "2017",
@@ -66,6 +67,7 @@ export const PHILOSOPHY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于加强新时代马克思主义理论研究和建设工程的实施意见",
       code: "中办发〔2019〕32号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%8A%A0%E5%BC%BA%E6%96%B0%E6%97%B6%E4%BB%A3%E9%A9%AC%E5%85%8B%E6%80%9D%E4%B8%BB%E4%B9%89%E7%90%86%E8%AE%BA%E7%A0%94%E7%A9%B6%E5%92%8C%E5%BB%BA%E8%AE%BE%E5%B7%A5%E7%A8%8B%E7%9A%84%E5%AE%9E%E6%96%BD%E6%84%8F%E8%A7%81",
       description: "推进马克思主义中国化时代化，加强哲学社会科学体系建设，支持哲学学科交叉融合。",
       issuer: "中共中央办公厅",
       year: "2019",
@@ -74,6 +76,7 @@ export const PHILOSOPHY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "面向2035的高校哲学社会科学自主知识体系建构计划",
       code: "教社科〔2022〕1号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E9%9D%A2%E5%90%912035%E7%9A%84%E9%AB%98%E6%A0%A1%E5%93%B2%E5%AD%A6%E7%A4%BE%E4%BC%9A%E7%A7%91%E5%AD%A6%E8%87%AA%E4%B8%BB%E7%9F%A5%E8%AF%86%E4%BD%93%E7%B3%BB%E5%BB%BA%E6%9E%84%E8%AE%A1%E5%88%92",
       description: "教育部启动实施，推动高校哲学社会科学知识体系自主创新，支持哲学学科建设中国特色话语体系。",
       issuer: "教育部",
       year: "2022",
@@ -152,6 +155,7 @@ export const ECONOMICS_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国国民经济和社会发展第十四个五年规划和2035年远景目标纲要",
       code: "十三届全国人大四次会议批准",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E5%9B%BD%E6%B0%91%E7%BB%8F%E6%B5%8E%E5%92%8C%E7%A4%BE%E4%BC%9A%E5%8F%91%E5%B1%95%E7%AC%AC%E5%8D%81%E5%9B%9B%E4%B8%AA%E4%BA%94%E5%B9%B4%E8%A7%84%E5%88%92%E5%92%8C2035%E5%B9%B4%E8%BF%9C%E6%99%AF%E7%9B%AE%E6%A0%87%E7%BA%B2%E8%A6%81",
       description: "明确经济发展主要目标：GDP年均增长保持在合理区间，全员劳动生产率增长高于GDP增长。",
       issuer: "全国人民代表大会",
       year: "2021",
@@ -160,6 +164,7 @@ export const ECONOMICS_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于加快建设全国统一大市场的意见",
       code: "中发〔2022〕14号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%8A%A0%E5%BF%AB%E5%BB%BA%E8%AE%BE%E5%85%A8%E5%9B%BD%E7%BB%9F%E4%B8%80%E5%A4%A7%E5%B8%82%E5%9C%BA%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "破除地方保护和市场分割，打通制约经济循环的关键堵点，促进商品要素资源在更大范围内畅通流动。",
       issuer: "中共中央、国务院",
       year: "2022",
@@ -168,6 +173,7 @@ export const ECONOMICS_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于完善社会主义市场经济体制的意见",
       code: "中发〔2020〕17号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%AE%8C%E5%96%84%E7%A4%BE%E4%BC%9A%E4%B8%BB%E4%B9%89%E5%B8%82%E5%9C%BA%E7%BB%8F%E6%B5%8E%E4%BD%93%E5%88%B6%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "深化经济体制改革，构建更加成熟定型的高水平社会主义市场经济体制。",
       issuer: "中共中央、国务院",
       year: "2020",
@@ -228,6 +234,7 @@ export const LAW_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国民法典",
       code: "主席令第四十五号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E6%B0%91%E6%B3%95%E5%85%B8",
       description: "2020年5月28日通过，2021年1月1日施行。新中国第一部以法典命名的法律，共7编1260条，被誉为'社会生活的百科全书'。",
       issuer: "全国人民代表大会",
       year: "2020",
@@ -236,6 +243,7 @@ export const LAW_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "法治社会建设实施纲要（2020—2025年）",
       code: "中法委发〔2020〕5号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E6%B3%95%E6%B2%BB%E7%A4%BE%E4%BC%9A%E5%BB%BA%E8%AE%BE%E5%AE%9E%E6%96%BD%E7%BA%B2%E8%A6%81%EF%BC%882020%E2%80%942025%E5%B9%B4%EF%BC%89",
       description: "全面推进依法治国，加快建设法治社会，明确法治社会建设路线图和时间表。",
       issuer: "中央全面依法治国委员会",
       year: "2020",
@@ -244,6 +252,7 @@ export const LAW_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于加强新时代法学教育和法学理论研究的意见",
       code: "中办发〔2023〕5号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%8A%A0%E5%BC%BA%E6%96%B0%E6%97%B6%E4%BB%A3%E6%B3%95%E5%AD%A6%E6%95%99%E8%82%B2%E5%92%8C%E6%B3%95%E5%AD%A6%E7%90%86%E8%AE%BA%E7%A0%94%E7%A9%B6%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "推动法学教育高质量发展，加强中国特色社会主义法学学科体系建设。",
       issuer: "中共中央办公厅、国务院办公厅",
       year: "2023",
@@ -258,6 +267,7 @@ export const EDUCATION_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国教育法",
       code: "主席令第八十二号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E6%95%99%E8%82%B2%E6%B3%95",
       description: "教育领域基本法，1995年颁布，2021年修正。确立教育方针、教育基本制度、学校教育体系等根本制度。",
       issuer: "全国人民代表大会",
       year: "1995",
@@ -266,6 +276,7 @@ export const EDUCATION_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中国教育现代化2035",
       code: "中发〔2019〕8号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E4%B8%AD%E5%9B%BD%E6%95%99%E8%82%B2%E7%8E%B0%E4%BB%A3%E5%8C%962035",
       description: "中共中央、国务院印发，面向2035年教育现代化战略规划，提出教育发展总体目标和十大战略任务。",
       issuer: "中共中央、国务院",
       year: "2019",
@@ -274,6 +285,7 @@ export const EDUCATION_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "深化新时代教育评价改革总体方案",
       code: "中发〔2020〕19号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E6%B7%B1%E5%8C%96%E6%96%B0%E6%97%B6%E4%BB%A3%E6%95%99%E8%82%B2%E8%AF%84%E4%BB%B7%E6%94%B9%E9%9D%A9%E6%80%BB%E4%BD%93%E6%96%B9%E6%A1%88",
       description: "改革党委和政府教育工作评价、学校评价、教师评价、学生评价和用人评价，破除'五唯'顽瘴痼疾。",
       issuer: "中共中央、国务院",
       year: "2020",
@@ -325,6 +337,7 @@ export const LITERATURE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于实施中华优秀传统文化传承发展工程的意见",
       code: "中办发〔2017〕6号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%AE%9E%E6%96%BD%E4%B8%AD%E5%8D%8E%E4%BC%98%E7%A7%80%E4%BC%A0%E7%BB%9F%E6%96%87%E5%8C%96%E4%BC%A0%E6%89%BF%E5%8F%91%E5%B1%95%E5%B7%A5%E7%A8%8B%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "加强中华优秀传统文化研究阐释和传播普及，推动经典文学作品的整理、研究和推广。",
       issuer: "中共中央办公厅、国务院办公厅",
       year: "2017",
@@ -333,6 +346,7 @@ export const LITERATURE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于繁荣发展新时代文艺的意见",
       code: "中发〔2021〕21号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E7%B9%81%E8%8D%A3%E5%8F%91%E5%B1%95%E6%96%B0%E6%97%B6%E4%BB%A3%E6%96%87%E8%89%BA%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "推动新时代文艺创作繁荣发展，鼓励优秀文学作品创作，加强文学评论和文学理论研究。",
       issuer: "中共中央",
       year: "2021",
@@ -341,6 +355,7 @@ export const LITERATURE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "全民阅读促进条例",
       code: "国务院令第773号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%A8%E6%B0%91%E9%98%85%E8%AF%BB%E4%BF%83%E8%BF%9B%E6%9D%A1%E4%BE%8B",
       description: "2025年3月公布，保障公民基本阅读权利，促进全民阅读，完善公共阅读设施和服务体系。",
       issuer: "国务院",
       year: "2025",
@@ -401,6 +416,7 @@ export const HISTORY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于加强文物保护利用改革的若干意见",
       code: "中办发〔2018〕23号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%8A%A0%E5%BC%BA%E6%96%87%E7%89%A9%E4%BF%9D%E6%8A%A4%E5%88%A9%E7%94%A8%E6%94%B9%E9%9D%A9%E7%9A%84%E8%8B%A5%E5%B9%B2%E6%84%8F%E8%A7%81",
       description: "深化文物保护利用改革，推动文物活起来，加强历史文化遗产保护传承。",
       issuer: "中共中央办公厅、国务院办公厅",
       year: "2018",
@@ -409,6 +425,7 @@ export const HISTORY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华优秀传统文化传承发展工程实施方案",
       code: "中宣发〔2017〕14号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E4%B8%AD%E5%8D%8E%E4%BC%98%E7%A7%80%E4%BC%A0%E7%BB%9F%E6%96%87%E5%8C%96%E4%BC%A0%E6%89%BF%E5%8F%91%E5%B1%95%E5%B7%A5%E7%A8%8B%E5%AE%9E%E6%96%BD%E6%96%B9%E6%A1%88",
       description: "实施中华文明探源工程、非物质文化遗产保护工程等15个项目，推动历史文化传承。",
       issuer: "中宣部",
       year: "2017",
@@ -417,6 +434,7 @@ export const HISTORY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于推进新时代古籍工作的意见",
       code: "中办发〔2022〕3号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E6%8E%A8%E8%BF%9B%E6%96%B0%E6%97%B6%E4%BB%A3%E5%8F%A4%E7%B1%8D%E5%B7%A5%E4%BD%9C%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "加强古籍整理研究和出版利用，推进古籍数字化，培养古籍人才。",
       issuer: "中共中央办公厅、国务院办公厅",
       year: "2022",
@@ -431,6 +449,7 @@ export const SCIENCE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国科学技术进步法",
       code: "主席令第一〇三号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E7%A7%91%E5%AD%A6%E6%8A%80%E6%9C%AF%E8%BF%9B%E6%AD%A5%E6%B3%95",
       description: "2021年修订，基础研究独立成章，强化自然科学基金资助，明确科研人员激励保障制度。",
       issuer: "全国人民代表大会常务委员会",
       year: "2021",
@@ -439,6 +458,7 @@ export const SCIENCE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "国家自然科学基金'十四五'发展规划",
       code: "国科金发计〔2022〕17号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%9B%BD%E5%AE%B6%E8%87%AA%E7%84%B6%E7%A7%91%E5%AD%A6%E5%9F%BA%E9%87%91%27%E5%8D%81%E5%9B%9B%E4%BA%94%27%E5%8F%91%E5%B1%95%E8%A7%84%E5%88%92",
       description: "明确基础研究优先资助领域，数学/物理/化学/生命/地球科学等各学科发展方向和重点资助领域。",
       issuer: "国家自然科学基金委员会",
       year: "2022",
@@ -447,6 +467,7 @@ export const SCIENCE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于全面加强基础科学研究的若干意见",
       code: "国发〔2018〕4号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%85%A8%E9%9D%A2%E5%8A%A0%E5%BC%BA%E5%9F%BA%E7%A1%80%E7%A7%91%E5%AD%A6%E7%A0%94%E7%A9%B6%E7%9A%84%E8%8B%A5%E5%B9%B2%E6%84%8F%E8%A7%81",
       description: "加强数学、物理、化学、生物等基础学科建设，稳定支持基础研究，加大对原创性研究的资助力度。",
       issuer: "国务院",
       year: "2018",
@@ -461,6 +482,7 @@ export const ENGINEERING_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中国制造2025",
       code: "国发〔2015〕28号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E4%B8%AD%E5%9B%BD%E5%88%B6%E9%80%A02025",
       description: "实施制造强国战略第一个十年行动纲领，聚焦新一代信息技术、高档数控机床、航空航天装备等十大重点领域。",
       issuer: "国务院",
       year: "2015",
@@ -469,6 +491,7 @@ export const ENGINEERING_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于加强创新型国家建设的若干意见",
       code: "中发〔2018〕2号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%8A%A0%E5%BC%BA%E5%88%9B%E6%96%B0%E5%9E%8B%E5%9B%BD%E5%AE%B6%E5%BB%BA%E8%AE%BE%E7%9A%84%E8%8B%A5%E5%B9%B2%E6%84%8F%E8%A7%81",
       description: "实施创新驱动发展战略，加强关键核心技术攻关，推动工程科技创新。",
       issuer: "中共中央、国务院",
       year: "2018",
@@ -477,6 +500,7 @@ export const ENGINEERING_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "'十四五'规划纲要工程科技重点",
       code: "十三届全国人大四次会议批准",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%27%E5%8D%81%E5%9B%9B%E4%BA%94%27%E8%A7%84%E5%88%92%E7%BA%B2%E8%A6%81%E5%B7%A5%E7%A8%8B%E7%A7%91%E6%8A%80%E9%87%8D%E7%82%B9",
       description: "聚焦新一代人工智能、量子信息、集成电路、空天科技、深地深海等前沿领域工程化攻关。",
       issuer: "全国人民代表大会",
       year: "2021",
@@ -537,6 +561,7 @@ export const AGRICULTURE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国农业法",
       code: "主席令第二十二号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E5%86%9C%E4%B8%9A%E6%B3%95",
       description: "1993年颁布，2012年修订。保障农业在国民经济中的基础地位，维护农民权益，促进农业现代化。",
       issuer: "全国人民代表大会常务委员会",
       year: "2012",
@@ -545,6 +570,7 @@ export const AGRICULTURE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "乡村振兴促进法",
       code: "主席令第七十七号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B9%A1%E6%9D%91%E6%8C%AF%E5%85%B4%E4%BF%83%E8%BF%9B%E6%B3%95",
       description: "2021年6月1日施行，全面实施乡村振兴战略，促进农业全面升级、农村全面进步、农民全面发展。",
       issuer: "全国人民代表大会常务委员会",
       year: "2021",
@@ -553,6 +579,7 @@ export const AGRICULTURE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "全国高标准农田建设规划（2021—2030年）",
       code: "农建发〔2021〕6号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%A8%E5%9B%BD%E9%AB%98%E6%A0%87%E5%87%86%E5%86%9C%E7%94%B0%E5%BB%BA%E8%AE%BE%E8%A7%84%E5%88%92%EF%BC%882021%E2%80%942030%E5%B9%B4%EF%BC%89",
       description: "到2030年建成12亿亩高标准农田，改造提升2.8亿亩，稳定保障1.2万亿斤以上粮食产能。",
       issuer: "农业农村部",
       year: "2021",
@@ -567,6 +594,7 @@ export const MEDICINE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国基本医疗卫生与健康促进法",
       code: "主席令第三十八号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E5%9F%BA%E6%9C%AC%E5%8C%BB%E7%96%97%E5%8D%AB%E7%94%9F%E4%B8%8E%E5%81%A5%E5%BA%B7%E4%BF%83%E8%BF%9B%E6%B3%95",
       description: "2019年12月28日通过，2020年6月1日施行。卫生与健康领域第一部基础性、综合性法律。",
       issuer: "全国人民代表大会常务委员会",
       year: "2019",
@@ -575,6 +603,7 @@ export const MEDICINE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "'健康中国2030'规划纲要",
       code: "中发〔2016〕23号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%27%E5%81%A5%E5%BA%B7%E4%B8%AD%E5%9B%BD2030%27%E8%A7%84%E5%88%92%E7%BA%B2%E8%A6%81",
       description: "中共中央、国务院印发，明确健康中国建设总体目标和主要指标，推进健康中国建设。",
       issuer: "中共中央、国务院",
       year: "2016",
@@ -583,6 +612,7 @@ export const MEDICINE_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于深化医教协同进一步推进医学教育改革与发展的意见",
       code: "国办发〔2017〕63号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E6%B7%B1%E5%8C%96%E5%8C%BB%E6%95%99%E5%8D%8F%E5%90%8C%E8%BF%9B%E4%B8%80%E6%AD%A5%E6%8E%A8%E8%BF%9B%E5%8C%BB%E5%AD%A6%E6%95%99%E8%82%B2%E6%94%B9%E9%9D%A9%E4%B8%8E%E5%8F%91%E5%B1%95%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "深化医学教育改革，优化医学人才培养结构，提升医学人才培养质量。",
       issuer: "国务院办公厅",
       year: "2017",
@@ -634,6 +664,7 @@ export const MANAGEMENT_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于加快建设全国统一大市场的意见",
       code: "中发〔2022〕14号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E5%8A%A0%E5%BF%AB%E5%BB%BA%E8%AE%BE%E5%85%A8%E5%9B%BD%E7%BB%9F%E4%B8%80%E5%A4%A7%E5%B8%82%E5%9C%BA%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "规范市场行为、完善市场规则、优化管理服务，促进管理科学在市场治理中的应用。",
       issuer: "中共中央、国务院",
       year: "2022",
@@ -642,6 +673,7 @@ export const MANAGEMENT_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于深化'放管服'改革进一步优化营商环境的通知",
       code: "国发〔2020〕17号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E6%B7%B1%E5%8C%96%27%E6%94%BE%E7%AE%A1%E6%9C%8D%27%E6%94%B9%E9%9D%A9%E8%BF%9B%E4%B8%80%E6%AD%A5%E4%BC%98%E5%8C%96%E8%90%A5%E5%95%86%E7%8E%AF%E5%A2%83%E7%9A%84%E9%80%9A%E7%9F%A5",
       description: "优化行政管理流程、提升政务服务效率，推动公共管理创新。",
       issuer: "国务院",
       year: "2020",
@@ -650,6 +682,7 @@ export const MANAGEMENT_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "'十四五'数字经济发展规划",
       code: "国发〔2021〕29号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%27%E5%8D%81%E5%9B%9B%E4%BA%94%27%E6%95%B0%E5%AD%97%E7%BB%8F%E6%B5%8E%E5%8F%91%E5%B1%95%E8%A7%84%E5%88%92",
       description: "明确数字经济发展目标和管理创新方向，推动数字技术与公共管理深度融合。",
       issuer: "国务院",
       year: "2021",
@@ -701,6 +734,7 @@ export const ART_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国非物质文化遗产法",
       code: "主席令第四十二号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E9%9D%9E%E7%89%A9%E8%B4%A8%E6%96%87%E5%8C%96%E9%81%97%E4%BA%A7%E6%B3%95",
       description: "2011年6月1日施行，保护非物质文化遗产，传承中华优秀传统文化。",
       issuer: "全国人民代表大会常务委员会",
       year: "2011",
@@ -709,6 +743,7 @@ export const ART_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "关于繁荣发展社会主义文艺的意见",
       code: "中发〔2015〕27号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E5%85%B3%E4%BA%8E%E7%B9%81%E8%8D%A3%E5%8F%91%E5%B1%95%E7%A4%BE%E4%BC%9A%E4%B8%BB%E4%B9%89%E6%96%87%E8%89%BA%E7%9A%84%E6%84%8F%E8%A7%81",
       description: "推动文艺创作繁荣发展，加强艺术教育，培养高水平艺术人才。",
       issuer: "中共中央",
       year: "2015",
@@ -717,6 +752,7 @@ export const ART_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "'十四五'艺术创作规划",
       code: "文艺发〔2021〕5号",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%27%E5%8D%81%E5%9B%9B%E4%BA%94%27%E8%89%BA%E6%9C%AF%E5%88%9B%E4%BD%9C%E8%A7%84%E5%88%92",
       description: "加强艺术创作生产、艺术人才培养、艺术评论研究，推动文艺高质量发展。",
       issuer: "文化和旅游部",
       year: "2021",
@@ -768,6 +804,7 @@ export const MILITARY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国国防法",
       code: "主席令第五十二号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E5%9B%BD%E9%98%B2%E6%B3%95",
       description: "1997年颁布，2020年修订。规范国防活动基本准则，明确国防领导体制和公民国防义务。",
       issuer: "全国人民代表大会常务委员会",
       year: "2020",
@@ -776,6 +813,7 @@ export const MILITARY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "中华人民共和国兵役法",
       code: "主席令第九十五号",
+      docUrl: "https://flk.npc.gov.cn/#/search?title=%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E5%85%B5%E5%BD%B9%E6%B3%95",
       description: "2021年修订，实行以志愿兵役为主体的志愿兵役与义务兵役相结合的兵役制度。",
       issuer: "全国人民代表大会常务委员会",
       year: "2021",
@@ -784,6 +822,7 @@ export const MILITARY_PARAMS_OFFICIAL: DisciplineExpansion = {
     {
       name: "新时代的中国国防白皮书",
       code: "国务院新闻办公室",
+      docUrl: "https://sousuo.www.gov.cn/sousuo/search.shtml?t=zhengcelibrary_gw&q=%E6%96%B0%E6%97%B6%E4%BB%A3%E7%9A%84%E4%B8%AD%E5%9B%BD%E5%9B%BD%E9%98%B2%E7%99%BD%E7%9A%AE%E4%B9%A6",
       description: "2019年发布，阐述新时代中国防御性国防政策，明确军事力量建设发展目标。",
       issuer: "国务院新闻办公室",
       year: "2019",

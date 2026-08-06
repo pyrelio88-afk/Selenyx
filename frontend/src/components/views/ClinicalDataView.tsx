@@ -603,7 +603,6 @@ function FormulaDetail({ f, color, discipline }: { f: DisciplineFormula; color: 
 }
 
 function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color: string; discipline: string }) {
-  const [showFullText, setShowFullText] = useState(false);
   return (
     <div>
       <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
@@ -620,29 +619,35 @@ function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color
       </div>
       <DetailRow label="内容说明">{s.description}</DetailRow>
       {/* R108: 嵌入原文条文 — 点击展开查看 */}
-      {s.fullText && (
-        <div style={{ marginTop: 12 }}>
-          <button
-            onClick={() => setShowFullText(!showFullText)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'var(--accent-light)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--accent)', width: '100%', textAlign: 'left' }}
-          >
-            <Icon name="chevronRight" size={14} style={{ transform: showFullText ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
-            {showFullText ? '收起原文条文' : '查看原文条文'}
-          </button>
-          {showFullText && (
-            <div style={{ marginTop: 8, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 400, overflow: 'auto' }}>
-              {s.fullText}
-            </div>
-          )}
-        </div>
-      )}
+      {s.fullText && <FullTextBlock text={s.fullText} />}
       {/* R108: 官方原文链接 */}
       {s.docUrl && (
         <div style={{ marginTop: 12 }}>
           <a href={s.docUrl} target="_blank" rel="noopener noreferrer"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent)' }}>
-            <Icon name="link" size={14} /> 查看官方原文
+            <Icon name="link" size={14} /> 查看官方原文 ↗
           </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 原文条文展开块（标准规范 / 红头文件共用） */
+function FullTextBlock({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        onClick={() => setShow(!show)}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'var(--accent-light)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--accent)', width: '100%', textAlign: 'left' }}
+      >
+        <Icon name="chevronRight" size={14} style={{ transform: show ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+        {show ? '收起原文条文' : '查看原文条文'}
+      </button>
+      {show && (
+        <div style={{ marginTop: 8, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 400, overflow: 'auto' }}>
+          {text}
         </div>
       )}
     </div>
@@ -666,6 +671,18 @@ function OfficialDocDetail({ doc, discipline }: { doc: DisciplineStandard; disci
       </div>
       <DetailRow label="文件内容">{doc.description}</DetailRow>
       {doc.source && <DetailRow label="来源"><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{doc.source}</span></DetailRow>}
+      {/* R108 R5: 红头文件嵌入原文条文 + 官方原文链接 */}
+      {doc.fullText && (
+        <FullTextBlock text={doc.fullText} />
+      )}
+      {doc.docUrl && (
+        <div style={{ marginTop: 12 }}>
+          <a href={doc.docUrl} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#c3272b', fontWeight: 500 }}>
+            <Icon name="link" size={14} /> 查看官方原文 ↗
+          </a>
+        </div>
+      )}
     </div>
   );
 }
