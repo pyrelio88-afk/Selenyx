@@ -22,7 +22,7 @@ const APP_VERSION = 'R108 · 2026-08-07';
 // D6: 应用内版本自动校验 —— 单文件 SPA 浏览器强缓存，加载时比对远端最新构建标记，不一致弹 banner 自动刷新
 // 注意：字面量直接写入赋值（不经 const），确保 terser 不混淆、远端 HTML 正则可提取
 if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, string>).__SELENYX_BUILD__ = 'R108-r10-2026-08-07';
+  (window as unknown as Record<string, string>).__SELENYX_BUILD__ = 'R108-r11-2026-08-07';
 }
 
 function VersionChecker() {
