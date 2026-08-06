@@ -6,10 +6,12 @@
 import { useState } from 'react';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { fetchByDOI, searchArXiv, type FetchedReference } from '@services/metadataFetch';
+import { ChartTool } from '@components/views/ChartView';
 
-type ToolTab = 'doi' | 'cite' | 'count' | 'models' | 'browser' | 'pico' | 'design' | 'ethics' | 'matrix' | 'grant';
+type ToolTab = 'chart' | 'doi' | 'cite' | 'count' | 'models' | 'browser' | 'pico' | 'design' | 'ethics' | 'matrix' | 'grant';
 
 const TABS: { key: ToolTab; label: string; icon: IconName }[] = [
+  { key: 'chart', label: '图表', icon: 'chart' },
   { key: 'browser', label: '网页浏览', icon: 'globe' },
   { key: 'doi', label: 'DOI 查询', icon: 'tag' },
   { key: 'cite', label: '引用格式化', icon: 'quote' },
@@ -23,7 +25,7 @@ const TABS: { key: ToolTab; label: string; icon: IconName }[] = [
 ];
 
 export function ToolsView() {
-  const [tab, setTab] = useState<ToolTab>('doi');
+  const [tab, setTab] = useState<ToolTab>('chart');
 
   return (
     <div>
@@ -59,6 +61,7 @@ export function ToolsView() {
         );
       })()}
 
+      {tab === 'chart' && <ChartTool />}
       {tab === 'browser' && <WebBrowser />}
       {tab === 'doi' && <DOILookup />}
       {tab === 'cite' && <CiteFormatter />}

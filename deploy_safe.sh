@@ -3,7 +3,7 @@
 # 用法: bash deploy_safe.sh "commit message"
 set -e
 
-REPO_DIR="/home/gem/.aily/workdir/task_7669744666866224081/selenyx-next"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND="$REPO_DIR/frontend"
 MSG="${1:-R100 deploy}"
 

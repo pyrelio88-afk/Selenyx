@@ -28,7 +28,7 @@ export type IconName =
   // 状态/类型
   | 'dot' | 'empty' | 'link' | 'tag' | 'calendar'
   // 工具箱专用
-  | 'globe' | 'quote' | 'grant' | 'count' | 'shield' | 'target' | 'blueprint' | 'chip'
+  | 'globe' | 'quote' | 'grant' | 'count' | 'shield' | 'target' | 'blueprint' | 'chip' | 'chart'
   // R109 AI 助手动作图标
   | 'copy' | 'pencil' | 'retry' | 'branch' | 'pin' | 'trash' | 'send' | 'stop'
   | 'sparkles' | 'chevronDown' | 'chevronLeft' | 'clock' | 'editIn' | 'list';
@@ -107,6 +107,8 @@ const PATHS: Record<IconName, ReactNode> = {
   clock: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></>),
   editIn: (<><path d="M4 20h4L19 9a2 2 0 0 0-2.8-2.8L5 16z" /><path d="M14 6l4 4" /><path d="M4 20l1-4" /></>),
   list: (<><path d="M8 6h12M8 12h12M8 18h12" /><circle cx="4" cy="6" r="1.3" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1.3" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1.3" fill="currentColor" stroke="none" /></>),
+  // 图表 —— 三柱递增 + 折线，呼应统计/可视化
+  chart: (<><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8 20v-6" /><path d="M12 20v-9" /><path d="M16 20v-4" /><path d="M7 14l5-5 3 3 4-6" /></>),
 };
 
 interface IconProps {
