@@ -2899,3 +2899,12 @@ tr:hover .row-delete-btn { opacity: 0.6; }
 /* 工具类 */
 .touch-target { min-height: 44px; min-width: 44px; }
 .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+
+
+/* R108-r13-fix: source order 修复——基础样式 .mobile-topbar{display:none} 在文件后段，
+ * 会覆盖中段(563行)的媒体查询 display:flex，导致 TopBar 永远不显示。
+ * 媒体查询规则必须放在基础样式之后才能生效，此处后置覆盖。 */
+@media (max-width: 768px) {
+  .mobile-topbar { display: flex; }
+}

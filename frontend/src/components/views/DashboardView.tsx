@@ -109,9 +109,9 @@ function PomodoroTimer() {
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>已完成 {sessions} 轮专注</span>
       </div>
 
-      {/* 事件选择（预设 + 自定义） */}
+      {/* 事件选择（预设 + 自定义）— D4: 按时长降序排列（深度专注→专注→长休息→短休息） */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {events.map((ev) => (
+        {[...events].sort((a, b) => b.minutes - a.minutes).map((ev) => (
           <span key={ev.id} style={{ position: 'relative', display: 'inline-flex' }}>
             <button
               className={`btn btn-sm ${activeId === ev.id ? 'btn-primary' : ''}`}
@@ -485,7 +485,6 @@ function OnboardingChecklist() {
         <h3 style={{ fontSize: 15, fontWeight: 600 }}>
           🚀 新手指南 · {completed}/4 完成
         </h3>
-        <button className="btn btn-sm" onClick={skip} style={{ fontSize: 12 }}>跳过引导</button>
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {steps.map((step, i) => (
@@ -510,6 +509,9 @@ function OnboardingChecklist() {
             </div>
           </div>
         ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+        <button className="btn btn-sm" onClick={skip} style={{ fontSize: 12 }}>跳过引导</button>
       </div>
     </div>
   );
