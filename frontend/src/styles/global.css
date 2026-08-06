@@ -556,14 +556,13 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-/* ===== Responsive (mobile/tablet) ===== */
+/* ===== Responsive (mobile/tablet) — Spec v1 drawer 范式 ===== */
+/* 平板/大屏手机过渡档 ≤768px：隐藏常驻 Sidebar, 启用 MobileShell(TopBar+Drawer) */
 @media (max-width: 768px) {
+  .sidebar { display: none; }
+  .mobile-topbar { display: flex; }
   .app-shell { flex-direction: column; }
-  .sidebar { width: 100%; min-width: 0; height: auto; flex-direction: row; overflow-x: auto; padding: 8px; }
-  .sidebar-logo { display: none; }
-  .sidebar-nav { flex-direction: row; }
-  .nav-item { white-space: nowrap; }
-  .app-main { padding: 16px; }
+  .app-main { padding: 12px 16px 80px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .pipeline { flex-direction: column; }
 }
@@ -2665,3 +2664,238 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   .aichat-messages { scroll-behavior: auto; }
   .aichat-quick-item:hover { transform: none; }
 }
+
+
+
+/* ============================================================
+ * R108-r13: 移动端适配批一 (Selenyx Mobile Spec v1)
+ * TopBar + Drawer + BottomSheet 组件样式 + V1总览 + V9番茄钟 + 全局触控
+ * 桌面 >768px: MobileShell 组件渲染但 .mobile-topbar display:none
+ * ============================================================ */
+
+/* --- MobileShell: TopBar (桌面隐藏, ≤768px 显示) --- */
+.mobile-topbar {
+  display: none; /* 桌面隐藏, 768px 媒体查询里 display:flex */
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  margin: -12px -16px 12px; /* 抵消 app-main padding, 顶栏通栏 */
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.mobile-topbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-topbar-btn:active { background: var(--bg-hover); }
+.mobile-topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Drawer (左滑出) --- */
+.mobile-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  animation: fadeIn .15s ease;
+}
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  max-width: 85vw;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform .2s ease;
+  overflow-y: auto;
+}
+.mobile-drawer.open { transform: translateX(0); }
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+.mobile-drawer-body { flex: 1; padding: 0 8px 16px; }
+.mobile-drawer-group { margin-bottom: 8px; }
+.mobile-drawer-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 12px 12px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.mobile-drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-drawer-item.active {
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+}
+.mobile-drawer-item:active { background: var(--bg-hover); }
+.mobile-drawer-item .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* --- BottomSheet --- */
+.bottom-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 300;
+  animation: fadeIn .15s ease;
+}
+.bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 85vh;
+  background: var(--bg-surface);
+  border-radius: 12px 12px 0 0;
+  z-index: 301;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.2);
+  animation: slideUp .2s ease;
+}
+.bottom-sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: 2px;
+  margin: 8px auto 4px;
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+.bottom-sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 4px 20px 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.bottom-sheet-body {
+  padding: 0 20px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+/* ============================================================
+ * ≤430px 手机主断点 (H2 验收视口 390×844)
+ * ============================================================ */
+@media (max-width: 430px) {
+  /* 全局红线：无横向溢出 */
+  #root, body { overflow-x: hidden; }
+  .app-main { padding: 10px 14px 70px; }
+  .mobile-topbar { margin: -10px -14px 10px; }
+
+  /* 字号/间距缩放 */
+  .view-title { font-size: 20px; }
+  .view-header { margin-bottom: 16px; }
+  .card { padding: 12px; }
+  .stat-card { padding: 10px; }
+  .stat-card .value { font-size: 24px; }
+  .stat-card .label { font-size: 12px; }
+
+  /* V1 总览：统计卡 4列→2×2 */
+  .grid-4 { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+  .grid-2 { grid-template-columns: 1fr !important; gap: 12px; }
+
+  /* V1 总览：今日区块(时钟+番茄钟)单列堆叠, 宽度一致 */
+  .grid-2 > .card { width: 100%; }
+
+  /* V1 总览：快捷操作 7按钮→2列网格 */
+  .grid-2:has(.btn) .card,
+  .card .btn { flex: 1 1 calc(50% - 4px); min-width: 0; }
+
+  /* V1 总览：横向时间线→纵向时间线 */
+  .pipeline { flex-direction: column !important; gap: 4px; }
+  .pipeline-stage {
+    flex-direction: row !important;
+    align-items: flex-start;
+    width: 100%;
+    text-align: left;
+    border-left: 2px solid var(--accent);
+    padding-left: 12px;
+    margin-bottom: 4px;
+  }
+
+  /* V9 番茄钟：计时数字放大 */
+  .card .btn btn-sm { font-size: 12px; }
+
+  /* 触控目标：所有可点元素 ≥44px */
+  .btn, .nav-item, .icon-btn, .mobile-drawer-item {
+    min-height: 44px;
+  }
+  .btn-sm { min-height: 36px; }
+  .icon-btn { min-width: 44px; }
+
+  /* 表单元素 48px */
+  .input, select.input {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  /* 底部安全区适配 */
+  .app-main { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+}
+
+/* 工具类 */
+.touch-target { min-height: 44px; min-width: 44px; }
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }

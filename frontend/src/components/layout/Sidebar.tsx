@@ -1,12 +1,12 @@
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
 
-interface NavGroup {
+export interface NavGroup {
   label: string;
   items: { key: ViewKey; label: string }[];
 }
 
-const NAV_GROUPS: NavGroup[] = [
+export const NAV_GROUPS: NavGroup[] = [
   {
     label: '',
     items: [

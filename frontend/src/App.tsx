@@ -1,5 +1,6 @@
 import { useEffect, useState, Component, type ReactNode } from 'react';
 import { Sidebar } from '@components/layout/Sidebar';
+import { MobileShell } from '@components/layout/MobileShell';
 import { DashboardView } from '@components/views/DashboardView';
 import { ReferencesView } from '@components/views/ReferencesView';
 import { PipelineView } from '@components/views/PipelineView';
@@ -144,6 +145,7 @@ export default function App() {
       <div className="app-shell">
         <Sidebar />
         <main className="app-main">
+          <MobileShell />
           <VersionChecker />
           <ErrorBoundary>
             {CurrentView()}
