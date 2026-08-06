@@ -18,6 +18,7 @@ export function PipelineView() {
   const {
     references, projects, currentProjectId, updateProject,
     llmConfig, pipelineRuns, setPipelineRun, stageConfigs, setStageConfig,
+    addNote, setPendingNoteId, setView,
   } = useAppStore();
   const project = projects.find((p) => p.id === currentProjectId);
   const [runningStage, setRunningStage] = useState<PipelineStageKey | null>(null);
@@ -75,6 +76,19 @@ export function PipelineView() {
     setPipelineRun(key, { ...getRun(stage), passed: true });
     const next = nextStage(stage);
     if (next) updateProject(project!.id, { currentStage: next });
+  }
+
+  /** R109：在该段快速记一条笔记，关联当前阶段，跳转笔记区编辑 */
+  function quickNote(stage: PipelineStageKey) {
+    const stageLabel = PIPELINE_STAGES.find((s) => s.key === stage)?.label ?? stage;
+    const id = addNote({
+      title: `${stageLabel} · 随手记`,
+      category: '文献批注',
+      linkedStage: stage,
+      body: `## ${stageLabel}\n\n`,
+    });
+    setPendingNoteId(id);
+    setView('notes');
   }
 
   return (
@@ -152,6 +166,9 @@ export function PipelineView() {
                     {next ? `通过门控，推进到「${PIPELINE_STAGES.find((s) => s.key === next)?.label}」` : '通过门控（已到最后一段）'}
                   </button>
                 )}
+                <button className="btn btn-sm" onClick={() => quickNote(stage.key)} title="为该段记一条笔记">
+                  <Icon name="notes" size={14} /> 记笔记
+                </button>
                 {run.runAt && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>运行于 {new Date(run.runAt).toLocaleString('zh-CN')}</span>}
               </div>
 

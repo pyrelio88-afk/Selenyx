@@ -8,11 +8,14 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   Reference, ResearchProject, RefCollection, RefTag,
   KanbanTask, LLMConfig, MultiDimTable, TableField,
+  Note,
 } from '@apptypes/index';
+import { createEmptyNote } from '@apptypes/index';
 
 export type ViewKey =
   | 'dashboard' | 'projects' | 'references' | 'pipeline'
-  | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings' | 'tools' | 'skills';
+  | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings' | 'tools' | 'skills'
+  | 'notes';
 
 export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic';
 export type ThemeMode = 'light' | 'dark';
@@ -92,6 +95,16 @@ interface AppState {
   // === 检索 ===
   searchQuery: string;
   setSearchQuery: (q: string) => void;
+
+  // === R109：笔记区 ===
+  notes: Note[];
+  addNote: (partial?: Partial<Note>) => string; // 返回新笔记 id
+  updateNote: (id: string, patch: Partial<Note>) => void;
+  deleteNote: (id: string) => void;
+  toggleNotePin: (id: string) => void;
+  /** 跨视图触发：从流水线/文献页快速记笔记后，记录待打开的笔记 id */
+  pendingNoteId: string | null;
+  setPendingNoteId: (id: string | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -180,10 +193,30 @@ export const useAppStore = create<AppState>()(
 
       searchQuery: '',
       setSearchQuery: (q) => set({ searchQuery: q }),
+
+      // === R109：笔记区 ===
+      notes: [],
+      addNote: (partial) => {
+        const note = createEmptyNote(partial);
+        set((s) => ({ notes: [note, ...s.notes] }));
+        return note.id;
+      },
+      updateNote: (id, patch) => set((s) => ({
+        notes: s.notes.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: new Date().toISOString() } : n)),
+      })),
+      deleteNote: (id) => set((s) => ({
+        notes: s.notes.filter((n) => n.id !== id),
+        pendingNoteId: s.pendingNoteId === id ? null : s.pendingNoteId,
+      })),
+      toggleNotePin: (id) => set((s) => ({
+        notes: s.notes.map((n) => (n.id === id ? { ...n, pinned: !n.pinned, updatedAt: new Date().toISOString() } : n)),
+      })),
+      pendingNoteId: null,
+      setPendingNoteId: (id) => set({ pendingNoteId: id }),
     }),
     {
       name: 'selenyx-v2',
-      version: 3,
+      version: 4,
       // D6：版本化迁移链（R102）。migrate 只做"补默认值 + 结构调整"，绝不整个 reset
       // ——reset 留给下方 storage.getItem 的 JSON 预校验兜底（数据真损坏读不出时才回退）。
       // 新增持久化字段时在此补默认（state.xxx ??= defaultValue），保持链路完整可追踪。
@@ -191,6 +224,9 @@ export const useAppStore = create<AppState>()(
         const state = (persistedState as Record<string, unknown>) ?? {};
         // v<2 → v2：R91.1 时代字段补默认（历史布局/配置缺字段类崩溃的正式迁移占位）
         // v2 → v3：本轮起占位，后续新增持久化字段在此补默认
+        // v3 → v4（R109）：笔记区持久化字段补默认
+        if (!Array.isArray(state.notes)) state.notes = [];
+        if (state.pendingNoteId !== null && typeof state.pendingNoteId !== 'string') state.pendingNoteId = null;
         return state;
       },
       // C1 修复：自定义 storage 预校验 JSON，脏数据降级为初始状态而非白屏崩溃

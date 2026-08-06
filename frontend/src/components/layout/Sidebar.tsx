@@ -19,6 +19,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'projects', label: '项目管理' },
       { key: 'references', label: '文献库' },
+      { key: 'notes', label: '笔记区' },
       { key: 'pipeline', label: '科研流水线' },
     ],
   },

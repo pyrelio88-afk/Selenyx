@@ -14,6 +14,7 @@ export type IconName =
   // 导航
   | 'dashboard' | 'references' | 'pipeline' | 'projects'
   | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings' | 'skills'
+  | 'notes'
   // 模式切换（手绘日/月，非 emoji）
   | 'sun' | 'moon'
   // 操作
@@ -41,6 +42,8 @@ const PATHS: Record<IconName, ReactNode> = {
   aiChat: (<><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" /><path d="M12 8.5l.9 2 2.1.3-1.5 1.5.4 2.1L12 13.4l-1.9 1 .4-2.1L9 10.8l2.1-.3z" /></>),
   settings: (<><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" /><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" /></>),
   skills: (<><path d="M12 3l8 4v6c0 4-3.2 6.5-8 8-4.8-1.5-8-4-8-8V7z" /><path d="M8.5 12l2.5 2.5L15.5 10" /></>),
+  // 笔记区 —— 翻开的本子 + 书写线（手绘意象，非方块）
+  notes: (<><path d="M5 3.5A1.5 1.5 0 0 1 6.5 2H18a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6.5A1.5 1.5 0 0 1 5 20.5z" /><path d="M5 5.5h2M5 9h2M5 12.5h2M5 16h2" /><path d="M9.5 8h7M9.5 11.5h7M9.5 15h4" /></>),
 
   // 模式切换 —— 手绘日轮/月牙，非 emoji
   sun: (<><circle cx="12" cy="12" r="4" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" /></>),
@@ -143,4 +146,5 @@ export const NAV_ICONS: Record<string, IconName> = {
   aiChat: 'aiChat',
   settings: 'settings',
   skills: 'skills',
+  notes: 'notes',
 };

@@ -11,18 +11,19 @@ import { AIChatView } from '@components/views/AIChatView';
 import { SettingsView } from '@components/views/SettingsView';
 import { ToolsView } from '@components/views/ToolsView';
 import { SkillsView } from '@components/views/SkillsView';
+import { NotesView } from '@components/views/NotesView';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
 import './styles/tokens.css';
 
 export type { ViewKey } from '@stores/appStore';
 
-const APP_VERSION = 'R108 · 2026-08-07';
+const APP_VERSION = 'R109 · 2026-08-07';
 
 // D6: 应用内版本自动校验 —— 单文件 SPA 浏览器强缓存，加载时比对远端最新构建标记，不一致弹 banner 自动刷新
 // 注意：字面量直接写入赋值（不经 const），确保 terser 不混淆、远端 HTML 正则可提取
 if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, string>).__SELENYX_BUILD__ = 'R108-r11-2026-08-07';
+  (window as unknown as Record<string, string>).__SELENYX_BUILD__ = 'R109-notes-2026-08-07';
 }
 
 function VersionChecker() {
@@ -117,6 +118,7 @@ const VIEWS: Record<ViewKey, () => React.ReactNode> = {
   settings: () => <SettingsView />,
   tools: () => <ToolsView />,
   skills: () => <SkillsView />,
+  notes: () => <NotesView />,
 };
 
 export default function App() {

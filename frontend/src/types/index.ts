@@ -25,3 +25,6 @@ export type {
   ResearchRecipe, AgentRun, AuditEntry, RetrievalResult,
   GraphNode, GraphEdge, KnowledgeGraph,
 } from './ai';
+
+export type { Note } from './note';
+export { NOTE_CATEGORIES, NOTE_MOODS, createEmptyNote } from './note';
