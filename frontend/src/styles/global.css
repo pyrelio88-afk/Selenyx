@@ -3096,3 +3096,251 @@ tr:hover .row-delete-btn { opacity: 0.6; }
 .ref-mobile-list { display: none; }
 /* 移动端底部操作网格默认隐藏(桌面用 flex) */
 .ref-detail-actions-mobile { display: none; }
+
+
+
+/* ============================================================ */
+/* 批三 (R108-r19): V3/V4/V7/V8 组件级移动适配 + 批二 P2 尾修    */
+/* ============================================================ */
+
+/* --- 桌面默认隐藏, 移动端显示 --- */
+.fw-select-btn { display: none; }
+
+/* --- R90 P0 看板空态 CTA (桌面+移动共用基底) --- */
+.kanban-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0 16px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+@media (max-width: 430px) {
+  /* ===== 批二 P2-①: V6 页面标题不换行 + 描述单行截断 ===== */
+  .view-title {
+    font-size: 20px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .cd-header-desc {
+    font-size: 12px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ===== V3/V4 共用: 列表↔详情互斥返回栏 ===== */
+  .mobile-back-bar {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    height: 56px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .mobile-back-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--accent);
+  }
+  .mobile-back-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ===== V3 笔记区: 格式化工具栏 fixed 底部 横滑 44px ===== */
+  .notes-format-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(48px + env(safe-area-inset-bottom, 0px));
+    padding: 0 8px env(safe-area-inset-bottom, 0px);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    z-index: 20;
+  }
+  .notes-format-bar::-webkit-scrollbar { display: none; }
+  .notes-format-btn {
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    background: none;
+    border: none;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .notes-format-btn:active { color: var(--accent); }
+  /* 编辑器/预览正文 16px / 1.6 (覆盖 inline 13.5/14) */
+  .note-editor-textarea {
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+  }
+  .note-editor-preview {
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* ===== V4 工具箱: 2 列网格选择器 ===== */
+  .tools-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 4px;
+  }
+  .tools-card {
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-height: 96px;
+    padding: 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: var(--transition-color);
+  }
+  .tools-card:active { border-color: var(--accent); }
+  .tools-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+  }
+  .tools-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .tools-card-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* ===== V7 项目管理 ===== */
+  .proj-create-form .input {
+    min-height: 48px !important;
+    width: 100%;
+  }
+  .fw-select-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 16px;
+    font-size: 13px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .pomo-field {
+    min-height: 48px !important;
+    width: 100%;
+  }
+
+  /* ===== R90 P0: 看板空态 CTA 移动端全宽 48px ===== */
+  .kanban-empty-cta {
+    display: block !important;
+    width: 100%;
+    min-height: 48px;
+  }
+  /* 看板列移动端横滑 (可选, 列宽 85vw scroll-snap) */
+  .kanban-board {
+    display: flex !important;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+  }
+  .kanban-board > * {
+    flex: 0 0 85vw;
+    scroll-snap-align: start;
+  }
+
+  /* ===== V8 统计: 计算器选择单列卡 ===== */
+  .stat-calc-list {
+    display: flex !important;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stat-calc-item {
+    display: flex !important;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    min-height: 44px;
+    padding: 12px 14px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: var(--transition-color);
+  }
+  .stat-calc-item.active {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .stat-calc-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .stat-calc-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  /* 计算器表单: card 全宽, 输入框 48px */
+  .stattools-calc .card {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  .stattools-calc input.input,
+  .stattools-calc select.input {
+    min-height: 48px !important;
+    width: 100%;
+  }
+}

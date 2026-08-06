@@ -9,6 +9,8 @@ import { PIPELINE_STAGES } from '@apptypes/index';
 import { Icon, NAV_ICONS, STAGE_ICONS, type IconName } from '@components/ui/Icon';
 import { StatusChip, ProjectStatusChip } from '@components/ui/StatusChip';
 import { versionedLoad, versionedSave, getOnboardingState, setOnboardingState } from '@lib/storage';
+import { BottomSheet } from '@components/layout/BottomSheet';
+import { useIsMobile } from '@lib/useIsMobile';
 
 // === 番茄钟组件（R86: 自定义事件） ===
 interface PomodoroEvent {
@@ -44,6 +46,7 @@ function PomodoroTimer() {
   const [newName, setNewName] = useState('');
   const [newMinutes, setNewMinutes] = useState('30');
   const [newKind, setNewKind] = useState<'focus' | 'rest'>('focus');
+  const isMobile = useIsMobile();
 
   const active = events.find((e) => e.id === activeId) || events[0];
 
@@ -139,8 +142,26 @@ function PomodoroTimer() {
         </button>
       </div>
 
-      {/* 添加自定义事件 */}
-      {showAdd && (
+      {/* 添加自定义事件：桌面内联 / 移动端 BottomSheet 大输入框 48px（R90 P1） */}
+      {showAdd && (isMobile ? (
+        <BottomSheet open onClose={() => setShowAdd(false)} title="自定义番茄钟">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <input
+              className="input pomo-field" placeholder="事件名（如：读文献）" value={newName}
+              onChange={(e) => setNewName(e.target.value)} style={{ fontSize: 14 }}
+            />
+            <input
+              className="input pomo-field" type="number" inputMode="numeric" min={1} max={480} placeholder="分钟" value={newMinutes}
+              onChange={(e) => setNewMinutes(e.target.value)} style={{ fontSize: 14 }}
+            />
+            <select className="input pomo-field" value={newKind} onChange={(e) => setNewKind(e.target.value as 'focus' | 'rest')} style={{ fontSize: 14 }}>
+              <option value="focus">专注</option>
+              <option value="rest">休息</option>
+            </select>
+            <button className="btn btn-primary" onClick={addEvent} style={{ minHeight: 48 }}>添加</button>
+          </div>
+        </BottomSheet>
+      ) : (
         <div style={{
           display: 'flex', gap: 6, marginBottom: 12, padding: 10,
           background: 'var(--bg-canvas)', borderRadius: 'var(--radius-sm)', flexWrap: 'wrap',
@@ -159,7 +180,7 @@ function PomodoroTimer() {
           </select>
           <button className="btn btn-sm btn-primary" onClick={addEvent}>添加</button>
         </div>
-      )}
+      ))}
 
       {/* 计时显示 */}
       <div style={{ textAlign: 'center', marginBottom: 12 }}>

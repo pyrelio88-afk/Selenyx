@@ -5,27 +5,58 @@
 
 import { useState } from 'react';
 import { Icon, type IconName } from '@components/ui/Icon';
+import { useIsMobile } from '@lib/useIsMobile';
 import { fetchByDOI, searchArXiv, type FetchedReference } from '@services/metadataFetch';
 import { ChartTool } from '@components/views/ChartView';
 
 type ToolTab = 'chart' | 'doi' | 'cite' | 'count' | 'models' | 'browser' | 'pico' | 'design' | 'ethics' | 'matrix' | 'grant';
 
-const TABS: { key: ToolTab; label: string; icon: IconName }[] = [
-  { key: 'chart', label: '图表', icon: 'chart' },
-  { key: 'browser', label: '网页浏览', icon: 'globe' },
-  { key: 'doi', label: 'DOI 查询', icon: 'tag' },
-  { key: 'cite', label: '引用格式化', icon: 'quote' },
-  { key: 'pico', label: 'PICO 构建', icon: 'target' },
-  { key: 'design', label: '研究设计', icon: 'blueprint' },
-  { key: 'ethics', label: '伦理审查', icon: 'shield' },
-  { key: 'matrix', label: '文献矩阵', icon: 'tables' },
-  { key: 'grant', label: '基金申请', icon: 'grant' },
-  { key: 'count', label: '字数统计', icon: 'count' },
-  { key: 'models', label: '本地模型', icon: 'chip' },
+const TABS: { key: ToolTab; label: string; icon: IconName; desc: string }[] = [
+  { key: 'chart', label: '图表', icon: 'chart', desc: 'ECharts 科研图绘制' },
+  { key: 'browser', label: '网页浏览', icon: 'globe', desc: '应用内打开网页' },
+  { key: 'doi', label: 'DOI 查询', icon: 'tag', desc: '自动抓取文献元数据' },
+  { key: 'cite', label: '引用格式化', icon: 'quote', desc: 'GB/T 7714 等格式' },
+  { key: 'pico', label: 'PICO 构建', icon: 'target', desc: '循证问题结构化' },
+  { key: 'design', label: '研究设计', icon: 'blueprint', desc: '设计要点核查' },
+  { key: 'ethics', label: '伦理审查', icon: 'shield', desc: '伦理清单自查' },
+  { key: 'matrix', label: '文献矩阵', icon: 'tables', desc: '多文献对比表' },
+  { key: 'grant', label: '基金申请', icon: 'grant', desc: '标书大纲生成' },
+  { key: 'count', label: '字数统计', icon: 'count', desc: '中英文字数分析' },
+  { key: 'models', label: '本地模型', icon: 'chip', desc: 'Ollama 模型信息' },
 ];
 
 export function ToolsView() {
   const [tab, setTab] = useState<ToolTab>('chart');
+  const isMobile = useIsMobile();
+  // 移动端：工具选择网格 ↔ 工具详情互斥
+  const [pickerOpen, setPickerOpen] = useState(true);
+
+  function openTool(key: ToolTab) {
+    setTab(key);
+    setPickerOpen(false);
+  }
+
+  const active = TABS.find((t) => t.key === tab)!;
+
+  // 移动端：工具卡 2 列网格（图标 accent 色 32px + 名称 14px + 说明 12px）
+  if (isMobile && pickerOpen) {
+    return (
+      <div>
+        <div className="view-header">
+          <h1 className="view-title">工具箱</h1>
+        </div>
+        <div className="tools-grid">
+          {TABS.map((t) => (
+            <button key={t.key} className="tools-card" onClick={() => openTool(t.key)}>
+              <span className="tools-card-icon"><Icon name={t.icon} size={32} strokeWidth={1.6} /></span>
+              <span className="tools-card-name">{t.label}</span>
+              <span className="tools-card-desc">{t.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -33,6 +64,17 @@ export function ToolsView() {
         <h1 className="view-title">工具箱</h1>
       </div>
 
+      {/* 移动端：返回工具网格 */}
+      {isMobile && (
+        <div className="mobile-back-bar">
+          <button className="mobile-back-btn" onClick={() => setPickerOpen(true)}>
+            <Icon name="chevronRight" size={18} style={{ transform: 'rotate(180deg)' }} /> 工具箱
+          </button>
+          <span className="mobile-back-title">{active.label}</span>
+        </div>
+      )}
+
+      {!isMobile && (
       <div style={{ display: 'flex', gap: 2, marginBottom: 16, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
         {TABS.map((t) => (
           <button
@@ -45,9 +87,9 @@ export function ToolsView() {
           </button>
         ))}
       </div>
-      {/* 活动工具标题栏 */}
-      {(() => {
-        const active = TABS.find((t) => t.key === tab)!;
+      )}
+      {/* 活动工具标题栏（移动端由返回栏替代） */}
+      {!isMobile && (() => {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '10px 14px', background: 'var(--accent-light)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
             <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent)', borderRadius: 10, color: '#fff', flexShrink: 0 }}>

@@ -56,9 +56,11 @@ interface KanbanViewProps {
   groupBy: GroupField;
   onGroupChange: (id: string, patch: Partial<Reference>) => void;
   onSelect: (id: string) => void;
+  /** R90 P0：空列引导操作（移动端显示 48px 全宽按钮，桌面仅显示引导文案） */
+  emptyAction?: { label: string; onClick: () => void };
 }
 
-export function KanbanView({ references, groupBy, onGroupChange, onSelect }: KanbanViewProps) {
+export function KanbanView({ references, groupBy, onGroupChange, onSelect, emptyAction }: KanbanViewProps) {
   const columns = GROUP_COLUMNS[groupBy];
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
@@ -124,7 +126,12 @@ export function KanbanView({ references, groupBy, onGroupChange, onSelect }: Kan
               {items.length === 0 && (
                 <div className="kanban-empty">
                   <Icon name="empty" size={20} strokeWidth={1.4} />
-                  <span>拖拽卡片到此处</span>
+                  <span>这一列还没有卡片</span>
+                  {emptyAction && (
+                    <button className="kanban-empty-cta" onClick={emptyAction.onClick}>
+                      {emptyAction.label}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

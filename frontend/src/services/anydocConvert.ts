@@ -74,7 +74,8 @@ const WASM_SOURCES = [
 /** 运行时 fetch wasm 二进制（多源回退 + 魔数校验，防 HTML 兜底页误判） */
 async function loadWasmBytes(): Promise<ArrayBuffer> {
   const errors: string[] = [];
-  for (const src of WASM_SOURCES) {
+  for (let i = 0; i < WASM_SOURCES.length; i++) {
+    const src = WASM_SOURCES[i];
     try {
       const res = await fetch(src);
       if (!res.ok) {
@@ -86,6 +87,7 @@ async function loadWasmBytes(): Promise<ArrayBuffer> {
         errors.push(`${src}: 非 wasm 内容（可能是 HTML 兜底页）`);
         continue;
       }
+      if (i > 0) console.warn(`[anydoc] 首选加载源不可用，已回退到 ${src}`);
       return buf;
     } catch (e) {
       errors.push(`${src}: ${e instanceof Error ? e.message : String(e)}`);

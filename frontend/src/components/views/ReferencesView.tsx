@@ -368,8 +368,10 @@ export function ReferencesView() {
 
       {filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="icon" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="references" size={48} strokeWidth={1.2} /></div>
-          <p>暂无文献。点击「检索」从 OpenAlex/Crossref/arXiv 检索，或「导入」BibTeX/RIS。</p>
+          <div className="icon" style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}><Icon name="references" size={48} strokeWidth={1.6} /></div>
+          <p>{isMobile
+            ? '暂无文献。点击右上角「更多」导入 BibTeX/RIS 或检索文献。'
+            : '暂无文献。点击「检索」从 OpenAlex/Crossref/arXiv 检索，或「导入」BibTeX/RIS。'}</p>
         </div>
       ) : isMobile ? (
         <div className="ref-mobile-list">
@@ -408,6 +410,9 @@ export function ReferencesView() {
           groupBy={groupBy}
           onGroupChange={(id, patch) => { updateReference(id, patch); flashToast('已更新'); }}
           onSelect={setSelectedId}
+          emptyAction={isMobile
+            ? { label: '添加文献', onClick: () => setShowMoreMenu(true) }
+            : { label: '导入文献', onClick: () => fileInputRef.current?.click() }}
         />
       ) : viewMode === 'gallery' ? (
         <GalleryView references={filtered} onSelect={setSelectedId} />
@@ -734,7 +739,7 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _o
           <div className="ref-detail-field">
             <span className="field-label">标签</span>
             <span className="field-value" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {r.tags.map((t) => (<span key={t} className="status-chip chip-unread chip-xs"><span className="chip-mark chip-mark-dash" />{t}</span>))}
+              {r.tags.map((t) => (<span key={t} className="status-chip chip-unread chip-xs">{t}</span>))}
             </span>
           </div>
         )}
@@ -851,7 +856,7 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _o
             <span className="field-label">标签</span>
             <span className="field-value" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {r.tags.map((t) => (
-                <span key={t} className="status-chip chip-unread chip-xs"><span className="chip-mark chip-mark-dash" />{t}</span>
+                <span key={t} className="status-chip chip-unread chip-xs">{t}</span>
               ))}
             </span>
           </div>

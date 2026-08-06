@@ -9,6 +9,8 @@ import { PIPELINE_STAGES } from '@apptypes/index';
 import type { ResearchProject, PipelineStageKey } from '@apptypes/index';
 import { Icon, NAV_ICONS, STAGE_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
+import { BottomSheet } from '@components/layout/BottomSheet';
+import { useIsMobile } from '@lib/useIsMobile';
 import { RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
 
 const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
@@ -35,6 +37,7 @@ export function ProjectsView() {
   const [form, setForm] = useState({ name: '', description: '', frameworkId: '' });
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [disciplineFilter, setDisciplineFilter] = useState(DISCIPLINE_FILTERS[0]);
+  const isMobile = useIsMobile();
 
   const visibleFrameworks = disciplineFilter.match.length === 0
     ? RESEARCH_FRAMEWORKS
@@ -166,10 +169,142 @@ export function ProjectsView() {
         </div>
       )}
 
-      {/* 创建项目弹窗 */}
+      {/* 创建项目弹窗：桌面居中 modal / 移动端 BottomSheet（范式统一，消除展开跳动） */}
       {showCreate && (
-        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, maxHeight: '85vh', overflow: 'auto' }}>
+        <>
+          {isMobile ? (
+            <BottomSheet open onClose={() => setShowCreate(false)} title="新建项目">
+              <div className="proj-create-form">
+
+                {/* 项目名称 - 必填，优先 */}
+                <div style={{ marginBottom: 12 }}>
+                  <label className="form-label">项目名称 *</label>
+                  <input className="input" placeholder="如：AI辅助SBAR护理交接训练研究" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label className="form-label">项目描述</label>
+                  <textarea className="input" placeholder="简述研究背景和目标..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
+                </div>
+
+                {/* 框架选择 - 可选可折叠 */}
+                <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setShowFrameworks(!showFrameworks)}
+                    style={{ width: '100%', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: 'var(--bg-surface)', border: 'none', fontSize: 14, fontWeight: 500 }}
+                  >
+                    <span>{selectedFramework ? `已选框架：${selectedFramework.name}` : '选择研究框架（可选）'}</span>
+                    <Icon name="chevronRight" size={16} style={{ transform: showFrameworks ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+                  </button>
+
+                  {showFrameworks && (
+                    <div style={{ padding: '0 14px 14px' }}>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                        覆盖 13 个学科门类的研究设计框架，不一定都按框架走——选了帮你生成字段，不选也可以直接创建项目
+                      </p>
+                      {/* 学科筛选 */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                        {DISCIPLINE_FILTERS.map((f) => (
+                          <button
+                            key={f.label}
+                            onClick={() => setDisciplineFilter(f)}
+                            style={{
+                              fontSize: 11, padding: '3px 10px', borderRadius: 10, cursor: 'pointer',
+                              border: `1px solid ${disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--border)'}`,
+                              background: disciplineFilter.label === f.label ? 'var(--accent-light)' : 'transparent',
+                              color: disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--text-muted)',
+                            }}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto' }}>
+                {/* 学科筛选 */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                  {DISCIPLINE_FILTERS.map((f) => (
+                    <button
+                      key={f.label}
+                      onClick={() => setDisciplineFilter(f)}
+                      style={{
+                        fontSize: 12, padding: '3px 12px', borderRadius: 12, cursor: 'pointer',
+                        border: `1px solid ${disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--border)'}`,
+                        background: disciplineFilter.label === f.label ? 'var(--accent-light)' : 'transparent',
+                        color: disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                        {visibleFrameworks.map((fw) => (
+                          <div
+                            key={fw.id}
+                            className="card"
+                            style={{
+                              padding: 12, cursor: 'pointer',
+                              border: `2px solid ${selectedFramework?.id === fw.id ? 'var(--accent)' : 'var(--border)'}`,
+                              transition: 'all .15s',
+                            }}
+                            onClick={() => selectFramework(fw)}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                              <span style={{ fontSize: 14, fontWeight: 600 }}>{fw.name}</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fw.fields.length} 字段</span>
+                                <button
+                                  className="fw-select-btn"
+                                  onClick={(e) => { e.stopPropagation(); selectFramework(fw); }}
+                                >选用</button>
+                              </span>
+                            </div>
+                            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>{fw.description.slice(0, 80)}...</p>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: 'var(--accent-light)', color: 'var(--accent)' }}>{fw.bestFor}</span>
+                              {fw.disciplines.slice(0, 2).map((d) => (
+                                <span key={d} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{d}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 已选框架的字段填写区 */}
+                  {selectedFramework && (
+                    <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>{selectedFramework.nameEn}</span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn btn-sm" onClick={loadExample} style={{ fontSize: 12, padding: '3px 10px' }}>填入示例</button>
+                          <button className="btn btn-sm" onClick={clearFramework} style={{ fontSize: 12, padding: '3px 10px' }}>移除框架</button>
+                        </div>
+                      </div>
+                      {selectedFramework.fields.map((f) => (
+                        <div key={f.key} style={{ marginBottom: 8 }}>
+                          <label className="form-label" style={{ fontSize: 12 }}>{f.label}</label>
+                          <input
+                            className="input"
+                            placeholder={f.placeholder}
+                            value={fieldValues[f.key] || ''}
+                            onChange={(e) => setFieldValues({ ...fieldValues, [f.key]: e.target.value })}
+                          />
+                          {f.hint && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>{f.hint}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn" onClick={() => setShowCreate(false)}>取消</button>
+                  <button className="btn btn-primary" onClick={handleCreate} disabled={!form.name.trim()}>创建项目</button>
+                </div>
+              </div>
+            </BottomSheet>
+          ) : (
+            <div className="modal-overlay" onClick={() => setShowCreate(false)}>
+              <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, maxHeight: '85vh', overflow: 'auto' }}>
                 <h3 style={{ marginBottom: 16, fontSize: 16 }}>新建项目</h3>
 
                 {/* 项目名称 - 必填，优先 */}
@@ -245,7 +380,13 @@ export function ProjectsView() {
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                               <span style={{ fontSize: 14, fontWeight: 600 }}>{fw.name}</span>
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fw.fields.length} 字段</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fw.fields.length} 字段</span>
+                                <button
+                                  className="fw-select-btn"
+                                  onClick={(e) => { e.stopPropagation(); selectFramework(fw); }}
+                                >选用</button>
+                              </span>
                             </div>
                             <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: 4 }}>{fw.description.slice(0, 80)}...</p>
                             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
@@ -290,8 +431,10 @@ export function ProjectsView() {
                   <button className="btn" onClick={() => setShowCreate(false)}>取消</button>
                   <button className="btn btn-primary" onClick={handleCreate} disabled={!form.name.trim()}>创建项目</button>
                 </div>
-          </div>
-        </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

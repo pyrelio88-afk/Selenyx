@@ -123,7 +123,7 @@ export function ClinicalDataView() {
       <div>
         <div className="view-header" style={{ marginBottom: 16 }}>
           <h1 className="view-title">学科数据</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+          <p className="cd-header-desc" style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
             覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 名词 / {totalParams} 数值参数 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 标准规范 / {DISCIPLINES.reduce((a, d) => a + (d.officialDocs?.length ?? 0), 0)} 红头文件
             {customEntries.length > 0 && ` · ${customEntries.length} 条自定义`}
           </p>

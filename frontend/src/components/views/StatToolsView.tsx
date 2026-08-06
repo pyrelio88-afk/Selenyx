@@ -3,7 +3,9 @@
  * R80: 从空壳替换为全套可用计算器
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { BottomSheet } from '@components/layout/BottomSheet';
+import { useIsMobile } from '@lib/useIsMobile';
 import {
   normalCDF, chi2SF,
   independentTTest, pairedTFromSummary, oneSampleTFromSummary,
@@ -66,18 +68,45 @@ const CALC_LIST: { key: CalcKey; label: string }[] = [
   { key: 'survival', label: '生存分析' },
 ];
 
+const CALC_DESC: Record<CalcKey, string> = {
+  pvalue: 'Z 值转双尾 p 值',
+  ttest: '两组独立均值比较',
+  pairedt: '前后配对资料比较',
+  onesamplet: '样本与总体均值比较',
+  anova: '三组及以上均值比较',
+  chi: '四格表关联性检验',
+  orrr: '比值比 / 相对危险度',
+  diagtest: '敏感度 / 特异度评估',
+  correlation: 'Pearson 线性相关',
+  effectsize: "Cohen's d 等效应量",
+  samplesize: '研究所需样本量估算',
+  ci: '均值 / 率的置信区间',
+  cronbach: '量表内部一致性信度',
+  regression: '一元线性回归分析',
+  mannwhitney: '非参数秩和检验',
+  logistic: '二分类结局建模',
+  roc: '诊断界值与曲线下面积',
+  survival: 'KM / Cox 生存分析',
+};
+
 function Calculators() {
   const [calc, setCalc] = useState<CalcKey>('pvalue');
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const calcRef = useRef<HTMLDivElement>(null);
+  const activeCalc = CALC_LIST.find((c) => c.key === calc)!;
 
-  return (
-    <>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
-        {CALC_LIST.map((c) => (
-          <button key={c.key} className={`btn btn-sm ${calc === c.key ? 'btn-primary' : ''}`} onClick={() => setCalc(c.key)}>
-            {c.label}
-          </button>
-        ))}
-      </div>
+  useEffect(() => {
+    if (!isMobile) return;
+    const node = calcRef.current;
+    if (!node) return;
+    node.querySelectorAll('input.input').forEach((el) => {
+      (el as HTMLInputElement).setAttribute('inputmode', 'decimal');
+    });
+  }, [isMobile, calc, sheetOpen]);
+
+  const calcBody = (
+    <div className="stattools-calc" ref={calcRef}>
       {calc === 'pvalue' && <PValueCalc />}
       {calc === 'ttest' && <TTestCalc />}
       {calc === 'pairedt' && <PairedTTestCalc />}
@@ -96,6 +125,46 @@ function Calculators() {
       {calc === 'logistic' && <LogisticRegCalc />}
       {calc === 'roc' && <ROCCalc />}
       {calc === 'survival' && <SurvivalCalc />}
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        <div className="stat-calc-list">
+          {CALC_LIST.map((c) => (
+            <button
+              key={c.key}
+              className={`stat-calc-item ${calc === c.key ? 'active' : ''}`}
+              onClick={() => {
+                setCalc(c.key);
+                setSheetOpen(true);
+              }}
+            >
+              <span className="stat-calc-name">{c.label}</span>
+              <span className="stat-calc-desc">{CALC_DESC[c.key]}</span>
+            </button>
+          ))}
+        </div>
+        {sheetOpen && (
+          <BottomSheet open onClose={() => setSheetOpen(false)} title={activeCalc.label}>
+            {calcBody}
+          </BottomSheet>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+        {CALC_LIST.map((c) => (
+          <button key={c.key} className={`btn btn-sm ${calc === c.key ? 'btn-primary' : ''}`} onClick={() => setCalc(c.key)}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {calcBody}
     </>
   );
 }
@@ -103,8 +172,8 @@ function Calculators() {
 function ResultBox({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div style={{ padding: 16, background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', marginTop: 12 }}>
-      <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{label} = </span>
-      <strong style={{ fontSize: 18 }}>{value}</strong>
+      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{label} = </span>
+      <strong style={{ fontSize: 20, color: 'var(--accent)' }}>{value}</strong>
       {note && <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>{note}</div>}
     </div>
   );

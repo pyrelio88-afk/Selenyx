@@ -9,8 +9,9 @@
  * store.pendingNoteId 传到这里自动打开编辑器。
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
+import { useIsMobile } from '@lib/useIsMobile';
 import { Icon } from '@components/ui/Icon';
 import { PIPELINE_STAGES } from '@apptypes/project';
 import { NOTE_CATEGORIES, NOTE_MOODS } from '@apptypes/index';
@@ -50,6 +51,7 @@ export function NotesView() {
   const [filterCat, setFilterCat] = useState<string>('');
   const [filterTag, setFilterTag] = useState<string>('');
   const [sort, setSort] = useState<'updated' | 'created' | 'title'>('updated');
+  const isMobile = useIsMobile();
 
   // 编辑器草稿（与 store 解耦，保存时才写回）
   const [draft, setDraft] = useState<Note | null>(null);
@@ -178,6 +180,7 @@ export function NotesView() {
 
   return (
     <div>
+{(!isMobile || !selected) && (
       <div className="view-header">
         <h1 className="view-title">笔记区</h1>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -187,8 +190,9 @@ export function NotesView() {
           </button>
         </span>
       </div>
-
+)}
       {/* 工具栏：搜索 / 分类 / 标签 / 排序 */}
+{(!isMobile || !selected) && (
       <div className="notes-toolbar" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 14 }}>
         <div style={{ position: 'relative', flex: '1 1 220px', minWidth: 180 }}>
           <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', display: 'flex' }}>
@@ -216,10 +220,23 @@ export function NotesView() {
           <option value="title">标题排序</option>
         </select>
       </div>
-
-      <div className="notes-layout" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        {/* 左：列表 */}
-        <div className="notes-list" style={{ flex: '0 0 320px', maxWidth: 360 }}>
+)}
+      <div className="notes-layout" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexDirection: isMobile ? 'column' : 'row' }}>
+        {/* 移动端：选中笔记时显示返回栏（列表 ↔ 详情/编辑器互斥） */}
+        {isMobile && selected && (
+          <div className="mobile-back-bar">
+            <button
+              className="mobile-back-btn"
+              onClick={() => { setSelectedId(null); setEditing(false); setDraft(null); }}
+            >
+              <Icon name="chevronRight" size={18} style={{ transform: 'rotate(180deg)' }} /> 笔记列表
+            </button>
+            <span className="mobile-back-title">{selected.title || '无标题'}</span>
+          </div>
+        )}
+        {/* 左：列表（移动端未选中时全宽） */}
+        {(!isMobile || !selected) && (
+        <div className="notes-list" style={isMobile ? { flex: '1 1 auto', width: '100%', maxWidth: 'none' } : { flex: '0 0 320px', maxWidth: 360 }}>
           {filtered.length === 0 ? (
             <div className="empty-state" style={{ marginTop: 24, padding: 24 }}>
               <p style={{ fontSize: 13 }}>没有匹配的笔记</p>
@@ -262,9 +279,11 @@ export function NotesView() {
             </button>
           ))}
         </div>
+        )}
 
-        {/* 右：详情 / 编辑器 */}
-        <div className="notes-detail" style={{ flex: 1, minWidth: 0 }}>
+        {/* 右：详情 / 编辑器（移动端选中时全宽） */}
+        {(!isMobile || selected) && (
+        <div className="notes-detail" style={isMobile ? { flex: '1 1 auto', width: '100%', minWidth: 0 } : { flex: 1, minWidth: 0 }}>
           {!selected ? (
             <div className="empty-state" style={{ marginTop: 48 }}>
               <div className="icon"><Icon name="notes" size={44} strokeWidth={1.2} /></div>
@@ -293,6 +312,7 @@ export function NotesView() {
             />
           )}
         </div>
+        )}
       </div>
     </div>
   );
@@ -381,6 +401,32 @@ function EditorPanel({ draft, setDraft, preview, setPreview, references, toggleL
 }) {
   const [refSearch, setRefSearch] = useState('');
   const [tagInput, setTagInput] = useState(draft.tags.join(', '));
+  const isMobile = useIsMobile();
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  /** 在光标处插入 Markdown 语法（选中文字则包裹） */
+  function insertSyntax(before: string, after = '', placeholder = '') {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const sel = value.slice(s, e) || placeholder;
+    const next = value.slice(0, s) + before + sel + after + value.slice(e);
+    setDraft({ ...draft, body: next });
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(s + before.length, s + before.length + sel.length);
+    });
+  }
+
+  const FORMAT_ACTIONS: { label: string; title: string; run: () => void }[] = [
+    { label: 'H2', title: '小标题', run: () => insertSyntax('\n## ', '', '小标题') },
+    { label: 'B', title: '粗体', run: () => insertSyntax('**', '**', '粗体') },
+    { label: 'I', title: '斜体', run: () => insertSyntax('*', '*', '斜体') },
+    { label: '<>', title: '行内代码', run: () => insertSyntax('`', '`', '代码') },
+    { label: '•', title: '列表项', run: () => insertSyntax('\n- ', '', '列表项') },
+    { label: '引用', title: '引用', run: () => insertSyntax('\n> ', '', '引用') },
+    { label: '链接', title: '链接', run: () => insertSyntax('[', '](https://)', '链接文字') },
+  ];
 
   function commitTags(v: string) {
     setTagInput(v);
@@ -456,12 +502,24 @@ function EditorPanel({ draft, setDraft, preview, setPreview, references, toggleL
         />
       ) : (
         <textarea
+          ref={bodyRef}
           className="input note-editor-textarea"
           style={{ minHeight: 280, resize: 'vertical', fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 13.5, lineHeight: 1.7 }}
           placeholder={'支持 Markdown：\n## 小标题\n**粗体** *斜体* `代码`\n- 列表项\n> 引用\n[链接](https://...)'}
           value={draft.body}
           onChange={(e) => setDraft({ ...draft, body: e.target.value })}
         />
+      )}
+
+      {/* 移动端格式化工具栏：固定底部（键盘上方）、横滑、44px 热区 */}
+      {isMobile && !preview && (
+        <div className="notes-format-bar" role="toolbar" aria-label="格式化工具栏">
+          {FORMAT_ACTIONS.map((a) => (
+            <button key={a.title} type="button" className="notes-format-btn" title={a.title} onClick={a.run}>
+              {a.label}
+            </button>
+          ))}
+        </div>
       )}
 
       {/* 关联文献 */}
