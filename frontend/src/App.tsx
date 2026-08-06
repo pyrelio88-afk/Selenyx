@@ -17,7 +17,7 @@ import './styles/tokens.css';
 
 export type { ViewKey } from '@stores/appStore';
 
-const APP_VERSION = 'R101 · 2026-08-06';
+const APP_VERSION = 'R108 · 2026-08-07';
 
 // D5: ErrorBoundary — 渲染异常时显示可恢复的错误页而非白屏
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -95,6 +95,7 @@ export default function App() {
           {/* D4: 版本号 */}
           <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11, color: 'var(--text-muted)', opacity: 0.6 }}>
             Selenyx {APP_VERSION}
+            <span style={{ marginLeft: 8 }}>· 如功能未更新请按 Ctrl+Shift+R 强制刷新</span>
           </div>
         </main>
       </div>

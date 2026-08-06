@@ -515,6 +515,17 @@ function OnboardingChecklist() {
   );
 }
 
+/** R108 R7: 区块标题——强化信息层级（用户反馈"排版看不懂"） */
+function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '34px 0 14px' }}>
+      <span style={{ width: 4, height: 18, borderRadius: 2, background: 'var(--accent)', flexShrink: 0, alignSelf: 'center' }} />
+      <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: '0.02em' }}>{title}</h2>
+      {subtitle && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{subtitle}</span>}
+    </div>
+  );
+}
+
 export function DashboardView() {
   const { references, projects, tasks, tables, setView, currentProjectId } = useAppStore();
 
@@ -561,32 +572,20 @@ export function DashboardView() {
         ))}
       </div>
 
-      {/* 时钟 | 番茄钟 双列；时间线全宽一行（R86 修复右侧空白） */}
-      <div className="grid grid-2" style={{ gap: 16, marginBottom: 24, alignItems: 'stretch' }}>
+      {/* ===== 区块一：今日（时钟 + 番茄钟） ===== */}
+      <SectionTitle title="今日" subtitle="北京时间 · 专注节奏" />
+      <div className="grid grid-2" style={{ gap: 16, alignItems: 'stretch' }}>
         <ClockWidget />
         <PomodoroTimer />
       </div>
-      <TimelineWidget />
 
-      {/* 快捷操作 */}
-      <div className="card" style={{ marginBottom: 24, padding: 16 }}>
-        <h3 style={{ marginBottom: 12, fontSize: 15, fontWeight: 600 }}>快捷操作</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={() => setView('projects')}><Icon name="plus" size={16} /> 新建项目</button>
-          <button className="btn" onClick={() => setView('references')}><Icon name={NAV_ICONS.references} size={16} /> 管理文献</button>
-          <button className="btn" onClick={() => setView('tables')}><Icon name={NAV_ICONS.tables} size={16} /> 多维表格</button>
-          <button className="btn" onClick={() => setView('pipeline')}><Icon name={NAV_ICONS.pipeline} size={16} /> 科研流水线</button>
-          <button className="btn" onClick={() => setView('aiChat')}><Icon name={NAV_ICONS.aiChat} size={16} /> AI 对话</button>
-          <button className="btn" onClick={() => setView('skills')}><Icon name={NAV_ICONS.skills} size={16} /> 科研技能</button>
-          {useAppStore.getState().llmConfig == null && (
-            <button className="btn btn-danger-ghost" onClick={() => setView('settings')}>⚠ 先配置 LLM</button>
-          )}
-        </div>
-      </div>
+      {/* ===== 区块二：项目进展（流水线时间线 + 当前项目） ===== */}
+      <SectionTitle title="项目进展" subtitle="八段流水线 · 当前项目" />
+      <TimelineWidget />
 
       {/* 当前项目进度 */}
       {currentProject && (
-        <div className="card" style={{ marginBottom: 24, cursor: 'pointer' }} onClick={() => setView('pipeline')}>
+        <div className="card" style={{ marginTop: 16, cursor: 'pointer' }} onClick={() => setView('pipeline')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h3 style={{ fontSize: 15, fontWeight: 600 }}>{currentProject.name}</h3>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>点击进入流水线 →</span>
@@ -606,6 +605,24 @@ export function DashboardView() {
         </div>
       )}
 
+      {/* ===== 区块三：快捷操作 ===== */}
+      <SectionTitle title="快捷操作" />
+      <div className="card" style={{ padding: 16 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={() => setView('projects')}><Icon name="plus" size={16} /> 新建项目</button>
+          <button className="btn" onClick={() => setView('references')}><Icon name={NAV_ICONS.references} size={16} /> 管理文献</button>
+          <button className="btn" onClick={() => setView('tables')}><Icon name={NAV_ICONS.tables} size={16} /> 多维表格</button>
+          <button className="btn" onClick={() => setView('pipeline')}><Icon name={NAV_ICONS.pipeline} size={16} /> 科研流水线</button>
+          <button className="btn" onClick={() => setView('aiChat')}><Icon name={NAV_ICONS.aiChat} size={16} /> AI 对话</button>
+          <button className="btn" onClick={() => setView('skills')}><Icon name={NAV_ICONS.skills} size={16} /> 科研技能</button>
+          {useAppStore.getState().llmConfig == null && (
+            <button className="btn btn-danger-ghost" onClick={() => setView('settings')}><Icon name="warning" size={16} /> 先配置 LLM</button>
+          )}
+        </div>
+      </div>
+
+      {/* ===== 区块四：最近动态（文献 / 项目 / 表格） ===== */}
+      <SectionTitle title="最近动态" subtitle="文献 · 项目 · 表格" />
       <div className="grid grid-2">
         <div className="card">
           <h3 style={{ marginBottom: 12, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
