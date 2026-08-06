@@ -22,7 +22,7 @@ const APP_VERSION = 'R108 · 2026-08-07';
 // D6: 应用内版本自动校验 —— 单文件 SPA 浏览器强缓存，加载时比对远端最新构建标记，不一致弹 banner 自动刷新
 // 注意：字面量直接写入赋值（不经 const），确保 terser 不混淆、远端 HTML 正则可提取
 if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, string>).__SELENYX_BUILD__ = 'R108-r9-2026-08-07';
+  (window as unknown as Record<string, string>).__SELENYX_BUILD__ = 'R108-r10-2026-08-07';
 }
 
 function VersionChecker() {
@@ -65,7 +65,7 @@ function VersionChecker() {
       padding: '8px 16px', flexWrap: 'wrap',
       background: 'var(--accent, #1565c0)', color: '#fff', fontSize: 13,
     }}>
-      <span>检测到新版本，{countdown} 秒后自动刷新更新</span>
+      <span>检测到新版本，{countdown} 秒后自动刷新</span>
       <button onClick={() => location.reload()} style={{ background: 'rgba(255,255,255,.2)', color: '#fff', border: '1px solid rgba(255,255,255,.4)', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: 12 }}>立即刷新</button>
       <button onClick={() => setUpdateAvailable(false)} style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,.3)', borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontSize: 12 }}>稍后</button>
     </div>

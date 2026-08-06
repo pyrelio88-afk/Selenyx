@@ -40,9 +40,9 @@
 }
 [data-theme="paper-green"][data-mode="dark"] {
   --bg-canvas: #1a1916;
-  --bg-surface: #25241f;
-  --bg-elevated: #2f2d28;
-  --bg-hover: #383530;
+  --bg-surface: #2b2a25;
+  --bg-elevated: #353430;
+  --bg-hover: #3f3d38;
   --text-primary: #e8e4dc;
   --text-secondary: #a8a39a;
   --text-muted: #6e6a62;
