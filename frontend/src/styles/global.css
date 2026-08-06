@@ -2094,3 +2094,27 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   .notes-layout { flex-direction: column !important; }
   .notes-list { flex: 1 1 auto !important; max-width: 100% !important; width: 100% !important; }
 }
+/* ===== anydoc 文档转 Markdown ===== */
+.anydoc-modal { display: flex; flex-direction: column; }
+.anydoc-dropzone:hover { border-color: var(--accent) !important; }
+.anydoc-md-viewer h1,
+.anydoc-md-viewer h2,
+.anydoc-md-viewer h3 { margin: 14px 0 8px; line-height: 1.3; }
+.anydoc-md-viewer h1 { font-size: 19px; }
+.anydoc-md-viewer h2 { font-size: 16px; }
+.anydoc-md-viewer h3 { font-size: 14px; }
+.anydoc-md-viewer p { margin: 6px 0; }
+.anydoc-md-viewer ul,
+.anydoc-md-viewer ol { margin: 6px 0; padding-left: 22px; }
+.anydoc-md-viewer li { margin: 3px 0; }
+.anydoc-md-viewer table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12.5px; }
+.anydoc-md-viewer th,
+.anydoc-md-viewer td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; }
+.anydoc-md-viewer th { background: var(--bg-secondary); font-weight: 600; }
+.anydoc-md-viewer code { font-family: var(--font-mono); font-size: 12px; background: var(--bg-secondary); padding: 1px 4px; border-radius: 3px; }
+.anydoc-md-viewer pre { background: var(--bg-secondary); padding: 10px; border-radius: var(--radius-sm); overflow-x: auto; margin: 8px 0; }
+.anydoc-md-viewer pre code { background: none; padding: 0; }
+.anydoc-md-viewer blockquote { border-left: 3px solid var(--accent); margin: 8px 0; padding: 2px 12px; color: var(--text-secondary); }
+.anydoc-md-viewer a { color: var(--accent); }
+.anydoc-md-viewer img { max-width: 100%; height: auto; }
+.anydoc-md-viewer hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }

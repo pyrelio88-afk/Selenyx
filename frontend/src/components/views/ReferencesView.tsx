@@ -14,6 +14,8 @@ import type { Annotation } from '@apptypes/reference';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
+// anydoc 转换模态
+import { AnydocConvertModal } from '@components/anydoc/AnydocConvertModal';
 
 export function ReferencesView() {
   const { references, searchQuery, setSearchQuery, addReferences, updateReference, deleteReference } = useAppStore();
@@ -29,6 +31,8 @@ export function ReferencesView() {
   const [webViewerUrl, setWebViewerUrl] = useState<string | null>(null);
   const [pdfSource, setPdfSource] = useState<ArrayBuffer | null>(null);
   const [pdfRefId, setPdfRefId] = useState<string | null>(null);
+  const [anydocOpen, setAnydocOpen] = useState(false);
+  const [anydocRefId, setAnydocRefId] = useState<string | null>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -230,6 +234,17 @@ export function ReferencesView() {
     if (pdfRefId) updateReference(pdfRefId, { annotations: annos });
   }, [pdfRefId, updateReference]);
 
+  /** anydoc 转出的 Markdown 存入当前文献的笔记字段 */
+  const handleSaveMdToNotes = useCallback((markdown: string, filename: string) => {
+    if (!anydocRefId) { flashToast('已转换，但未关联文献——请先点开一篇文献再「存为笔记」'); return; }
+    const ref = references.find((r) => r.id === anydocRefId);
+    const stamp = new Date().toLocaleString('zh-CN', { hour12: false });
+    const head = `> 由 anydoc 从 \`${filename}\` 转换 · ${stamp}\n\n`;
+    const merged = ref?.notes ? `${head}${markdown}\n\n---\n${ref.notes}` : `${head}${markdown}`;
+    updateReference(anydocRefId, { notes: merged });
+    flashToast(`已存入「${ref?.title?.slice(0, 20) ?? '文献'}」笔记`);
+  }, [anydocRefId, references, updateReference, flashToast]);
+
   const pdfRef = pdfRefId ? references.find((r) => r.id === pdfRefId) : null;
 
   return (
@@ -245,6 +260,7 @@ export function ReferencesView() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
           />
           <button className="btn" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
+          <button className="btn" aria-label="文档转 Markdown" onClick={() => { setAnydocRefId(selectedId); setAnydocOpen(true); }} title="上传 PDF/Word/Excel 等文档，本地转为 Markdown 进入精读"><Icon name="download" size={16} /> 文档转MD</button>
           <button className="btn" onClick={() => {
             import('@data/seedReferences').then(({ getSeedReferences }) => {
               const refs = getSeedReferences();
@@ -394,7 +410,7 @@ export function ReferencesView() {
 
       {/* 详情侧滑面板（ONES/Mobbin 模式：点击行 → 右侧详情，不离开列表上下文） */}
       <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />
-      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => { if (confirm('确认删除该文献？此操作不可撤销。')) { deleteReference(id); closePanel(); flashToast('已删除文献'); } }} />}
+      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onConvertMd={(id) => { setAnydocRefId(id); setAnydocOpen(true); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => { if (confirm('确认删除该文献？此操作不可撤销。')) { deleteReference(id); closePanel(); flashToast('已删除文献'); } }} />}
 
       {/* 隐藏 PDF 文件输入 */}
       <input
@@ -450,6 +466,13 @@ export function ReferencesView() {
         </div>
       )}
 
+      {/* anydoc 文档转 Markdown 模态 */}
+      <AnydocConvertModal
+        open={anydocOpen}
+        onClose={() => setAnydocOpen(false)}
+        onSaveToNotes={anydocRefId ? handleSaveMdToNotes : undefined}
+      />
+
       {/* 操作反馈 toast */}
       {toast && (
         <div className="toast" role="status" aria-live="polite">{toast}</div>
@@ -459,7 +482,7 @@ export function ReferencesView() {
 }
 
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose, onOpenPdf, onOpenWeb, onDelete }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, onDelete }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void }) {
   const [copied, setCopied] = useState(false);
 
   function generateGBT7714(): string {
@@ -614,6 +637,7 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onOpenWeb, onDelete }: { r
 
         <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onOpenPdf(r.id)}><Icon name="download" size={15} /> 获取全文</button>
+          <button className="btn" style={{ flex: 1 }} onClick={() => onConvertMd(r.id)} title="上传该文献的 PDF/Word 等文件，本地转 Markdown"><Icon name="import" size={15} /> 转Markdown</button>
           {r.doi && (
             <button className="btn" style={{ flex: 1 }} onClick={() => onOpenWeb(`https://doi.org/${r.doi}`)}><Icon name="link" size={15} /> 在线阅读</button>
           )}
