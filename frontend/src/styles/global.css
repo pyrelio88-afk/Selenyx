@@ -3074,9 +3074,9 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   .ref-center-modal { display: none !important; }
   /* 文献卡操作行 icon 按钮 44px 热区 */
   .ref-card-act { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
-  /* 详情底部操作: 2 列网格 + 删除单列置底 */
+  /* 详情底部操作: 2 列网格 + 删除单列置底 (!important 覆盖文件尾默认 display:none) */
   .ref-detail-actions-mobile {
-    display: grid;
+    display: grid !important;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
