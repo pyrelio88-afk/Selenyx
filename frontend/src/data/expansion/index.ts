@@ -14,6 +14,7 @@ import type {
 } from '../disciplines';
 import { MEDICINE_EXTRA } from './medicine';
 import { MEDICINE_BATCH2 } from './medicine_batch2';
+import { MEDICINE_BATCH3 } from './medicine_batch3';
 import { SCIENCE_EXTRA } from './science';
 import { EDUCATION_EXTRA } from './education';
 import { ENGINEERING_EXTRA } from './engineering';
@@ -63,7 +64,7 @@ function withParamsOfficial(base: DisciplineExpansion, discId: string): Discipli
 
 export const DISCIPLINE_EXPANSIONS: Record<string, DisciplineExpansion> = {
   philosophy: withParamsOfficial({ glossary: [], parameters: [], formulas: [], standards: [] }, 'philosophy'),
-  medicine: withParamsOfficial(mergeExpansions(MEDICINE_EXTRA, MEDICINE_BATCH2), 'medicine'),
+  medicine: withParamsOfficial(mergeExpansions(MEDICINE_EXTRA, MEDICINE_BATCH2, MEDICINE_BATCH3), 'medicine'),
   science: withParamsOfficial(SCIENCE_EXTRA, 'science'),
   education: withParamsOfficial(EDUCATION_EXTRA, 'education'),
   engineering: withParamsOfficial(ENGINEERING_EXTRA, 'engineering'),
