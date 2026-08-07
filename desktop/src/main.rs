@@ -1,5 +1,4 @@
-// Selenyx 桌面端 — Tauri v2 入口
-// 桌面 (Windows/macOS/Linux) + 移动端 (Android/iOS) 共用
+// Selenyx Tauri entry point for desktop and mobile WebView shells.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 

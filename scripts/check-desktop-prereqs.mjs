@@ -3,11 +3,8 @@ import { existsSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { delimiter, join } from 'node:path';
 
-/**
- * Tauri Windows 打包需要 Rust MSVC 工具链。本脚本刻意不安装任何系统软件：
- * 它只在构建前给出准确、可操作的缺失项，避免 Python sidecar 已打包数分钟后
- * 才因为 rustc/link.exe 缺失而失败。
- */
+// Check only the native toolchain required by the static Tauri shell. This
+// script never installs system software and has no Python/service dependency.
 const environment = { ...process.env };
 if (platform() === 'win32') {
   const cargoBin = join(homedir(), '.cargo', 'bin');
@@ -24,8 +21,7 @@ function hasCommand(command, args = []) {
 }
 
 const missing = [];
-if (!hasCommand('rustc', ['-vV'])) missing.push('Rust stable toolchain（rustc / cargo）');
-if (!hasCommand('uv', ['--version'])) missing.push('uv（用于构建本机 Python sidecar）');
+if (!hasCommand('rustc', ['-vV'])) missing.push('Rust stable toolchain (rustc / cargo)');
 
 const msvcLinkerAvailable = process.platform !== 'win32' || (() => {
   const probe = spawnSync('where', ['link.exe'], { encoding: 'utf8', shell: false, env: environment });
@@ -33,9 +29,7 @@ const msvcLinkerAvailable = process.platform !== 'win32' || (() => {
   return (!probe.error && probe.status === 0 && /Microsoft Visual Studio/i.test(probe.stdout)) || existsSync(buildToolsRoot);
 })();
 
-if (!msvcLinkerAvailable) {
-  missing.push('Visual Studio C++ Build Tools（MSVC linker: link.exe）');
-}
+if (!msvcLinkerAvailable) missing.push('Visual Studio C++ Build Tools (MSVC linker: link.exe)');
 
 if (missing.length === 0) {
   console.log('Desktop prerequisites passed.');

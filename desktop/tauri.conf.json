@@ -6,8 +6,15 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npm run dev:local",
-    "beforeBuildCommand": "npm --prefix frontend run build"
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "..",
+      "wait": false
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": ".."
+    }
   },
   "app": {
     "withGlobalTauri": true,
@@ -25,20 +32,7 @@
       }
     ],
     "security": {
-      "csp": null,
-      "assetProtocol": {
-        "enable": true,
-        "scope": {
-          "allow": ["$HOME/.selenyx/**", "$DOCUMENT/**"],
-          "deny": [
-            "$HOME/.selenyx/.env.local",
-            "$HOME/.selenyx/selenyx.sqlite3",
-            "$HOME/.selenyx/selenyx.sqlite3-*",
-            "$HOME/.selenyx/selenyx-state-backup.json"
-          ],
-          "requireLiteralLeadingDot": true
-        }
-      }
+      "csp": null
     }
   },
   "bundle": {
@@ -57,7 +51,6 @@
       "icons/icon.ico"
     ],
     "resources": [],
-    "externalBin": ["binaries/selenyx-backend"],
     "linux": {
       "deb": {
         "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
@@ -81,8 +74,5 @@
       "frameworks": []
     }
   },
-  "plugins": {
-    "shell": { "open": true },
-    "fs": {}
-  }
+  "plugins": {}
 }
