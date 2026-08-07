@@ -1,42 +1,44 @@
+import { useEffect, useState } from 'react';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
+import { localApi } from '@services/api';
 
+/**
+ * 主导航按「证据门科研流水线」编排（Claude Scholar / nature-skills / Zotero 类工具对齐）：
+ * 立题 → 文献 → 阅读/证据 → 分析工具 → 对话与设置
+ * 禁止 skill 超市 / 飞书式平行功能墙做主入口。
+ */
 export interface NavGroup {
   label: string;
-  items: { key: ViewKey; label: string }[];
+  items: { key: ViewKey; label: string; hint?: string }[];
 }
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: '',
+    label: '科研闭环',
     items: [
-      { key: 'dashboard', label: '总览' },
-      { key: 'aiChat', label: 'AI 助手' },
+      { key: 'dashboard', label: '总览', hint: '进度与倒数日' },
+      { key: 'projects', label: '立题 · 项目', hint: '研究问题优先，框架可选' },
+      { key: 'pipeline', label: '八段流水线', hint: '问题→证据→写作' },
+      { key: 'references', label: '文献库', hint: '检索 · 导入 · 全文' },
+      { key: 'notes', label: '阅读笔记', hint: '摘录与批注' },
     ],
   },
   {
-    label: '项目',
+    label: '分析与资料',
     items: [
-      { key: 'projects', label: '项目管理' },
-      { key: 'references', label: '文献库' },
-      { key: 'notes', label: '笔记区' },
-      { key: 'pipeline', label: '科研流水线' },
+      { key: 'tables', label: '数据表格', hint: '筛选与对照' },
+      { key: 'statTools', label: '统计计算', hint: '检验与效应量' },
+      { key: 'clinicalData', label: '学科资料', hint: '名词 · 标准 · 公式' },
+      { key: 'tools', label: '工具箱', hint: 'DOI · 引用 · 设计' },
     ],
   },
   {
-    label: '数据',
+    label: '助手',
     items: [
-      { key: 'tables', label: '多维表格' },
-      { key: 'statTools', label: '统计工具' },
-      { key: 'clinicalData', label: '学科数据' },
-    ],
-  },
-  {
-    label: '工具',
-    items: [
-      { key: 'skills', label: '科研技能' },
-      { key: 'tools', label: '工具箱' },
-      { key: 'settings', label: '设置' },
+      { key: 'aiChat', label: 'AI 对话', hint: '本地网关 / BYOK' },
+      { key: 'skills', label: '科研能力', hint: 'Nature 级技能映射' },
+      { key: 'settings', label: '设置', hint: '后端 · 主题 · 备份' },
     ],
   },
 ];
@@ -48,6 +50,20 @@ export function Sidebar() {
   } = useAppStore();
   const isDark = mode === 'dark';
   const activeProject = projects.find((project) => project.id === currentProjectId) ?? projects[0] ?? null;
+  const [backendLabel, setBackendLabel] = useState('检测本地服务…');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const health = await localApi.health();
+        if (!cancelled) setBackendLabel(`后端在线 · v${health.version}`);
+      } catch {
+        if (!cancelled) setBackendLabel('后端离线 · 前端降级');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   function openProjects() {
     setView('projects');
@@ -67,7 +83,7 @@ export function Sidebar() {
         <span className="workspace-switcher-avatar">研</span>
         <span className="workspace-switcher-copy">
           <strong>{activeProject?.name || '未选择项目'}</strong>
-          <small>{activeProject ? '当前科研空间' : '创建项目后开始工作'}</small>
+          <small>{activeProject ? `流水线 · ${activeProject.currentStage || 'problem'}` : '先创建项目名称，框架可选'}</small>
         </span>
         <Icon name="chevronDown" size={15} />
       </button>
@@ -82,9 +98,13 @@ export function Sidebar() {
           <span>文献</span>
           <b>{references.length}</b>
         </button>
+        <button className="workspace-quick-action" onClick={() => setView('pipeline')} title="进入八段流水线">
+          <Icon name="pipeline" size={16} />
+          <span>流水线</span>
+        </button>
       </div>
 
-      <nav className="sidebar-nav" aria-label="主导航">
+      <nav className="sidebar-nav" aria-label="科研工作台导航">
         {NAV_GROUPS.map((group, gi) => (
           <section key={gi} className="workspace-nav-group" aria-label={group.label || '工作台'}>
             {group.label && (
@@ -96,6 +116,7 @@ export function Sidebar() {
                 className={`nav-item ${currentView === item.key ? 'active' : ''}`}
                 onClick={() => setView(item.key)}
                 aria-current={currentView === item.key ? 'page' : undefined}
+                title={item.hint}
               >
                 <span className="icon">
                   <Icon name={NAV_ICONS[item.key]} size={18} />
@@ -108,9 +129,9 @@ export function Sidebar() {
       </nav>
 
       <div className="workspace-sidebar-footer">
-        <div className="workspace-local-status">
+        <div className="workspace-local-status" title="数据默认留在本机；后端提供 RAG/学术 API/密钥网关">
           <span className="workspace-status-dot" aria-hidden="true" />
-          本地数据空间
+          {backendLabel}
         </div>
         <button
           className="icon-btn"
