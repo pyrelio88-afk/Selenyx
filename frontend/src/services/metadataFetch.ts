@@ -68,6 +68,50 @@ export async function fetchByDOI(doi: string): Promise<FetchedReference | null> 
   }
 }
 
+/**
+ * Crossref 关键词检索。仅请求文献卡片实际需要的少量结果；导入前仍由用户逐条确认，
+ * 这样不会把远端检索结果自动写入本地文献库。
+ */
+export async function searchCrossref(query: string, maxResults = 12): Promise<FetchedReference[]> {
+  const normalized = query.trim();
+  if (!normalized) return [];
+
+  const url = new URL('https://api.crossref.org/works');
+  url.searchParams.set('query.bibliographic', normalized);
+  url.searchParams.set('rows', String(Math.min(Math.max(maxResults, 1), 20)));
+  url.searchParams.set('select', 'DOI,title,author,type,container-title,published,volume,issue,page,abstract,ISSN,publisher,license');
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Selenyx/2.0 (mailto:research@selenyx.app)' },
+    });
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const items = Array.isArray(data?.message?.items) ? data.message.items : [];
+    return items.map((work: any) => ({
+      title: work.title?.[0] || '[Untitled]',
+      creators: (work.author || []).map((author: any) => ({
+        firstName: author.given || '',
+        lastName: author.family || '',
+      })),
+      type: mapCrossrefType(work.type || 'journal-article'),
+      doi: work.DOI || '',
+      publication: work['container-title']?.[0] || '',
+      year: work.published?.['date-parts']?.[0]?.[0] || new Date().getFullYear(),
+      volume: work.volume || '',
+      issue: work.issue || '',
+      pages: work.page || '',
+      abstract: work.abstract ? work.abstract.replace(/<[^>]+>/g, '') : '',
+      issn: work.ISSN?.[0] || '',
+      publisher: work.publisher || '',
+      openAccess: Boolean(work.license?.length),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function mapCrossrefType(type: string): string {
   const map: Record<string, string> = {
     'journal-article': 'journalArticle',

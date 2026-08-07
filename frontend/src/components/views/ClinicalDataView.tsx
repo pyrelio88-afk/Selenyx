@@ -75,6 +75,11 @@ interface DetailTarget {
   customIndex?: number; // 自定义条目在列表中的下标（可删除）
 }
 
+interface SourcePreview {
+  title: string;
+  url: string;
+}
+
 function paramCount(d: Discipline): number {
   return d.parameters?.length ?? 0;
 }
@@ -85,6 +90,7 @@ export function ClinicalDataView() {
   const [tab, setTab] = useState<Tab>('glossary');
   const [glossaryCategory, setGlossaryCategory] = useState<string>('');
   const [detail, setDetail] = useState<DetailTarget | null>(null);
+  const [sourcePreview, setSourcePreview] = useState<SourcePreview | null>(null);
   const [customEntries, setCustomEntries] = useState<CustomEntry[]>(loadCustomEntries);
   const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(0);
@@ -124,7 +130,7 @@ export function ClinicalDataView() {
         <div className="view-header" style={{ marginBottom: 16 }}>
           <h1 className="view-title">学科数据</h1>
           <p className="cd-header-desc" style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-            覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 名词 / {totalParams} 数值参数 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 标准规范 / {DISCIPLINES.reduce((a, d) => a + (d.officialDocs?.length ?? 0), 0)} 红头文件
+            覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 名词 / {totalParams} 数值参数 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 标准规范 / {DISCIPLINES.reduce((a, d) => a + (d.officialDocs?.length ?? 0), 0)} 官方源文件
             {customEntries.length > 0 && ` · ${customEntries.length} 条自定义`}
           </p>
         </div>
@@ -162,7 +168,7 @@ export function ClinicalDataView() {
                 <span>{paramCount(d)} 数值</span>
                 <span>{d.formulas.length} 公式</span>
                 <span>{d.standards.length} 标准</span>
-                {(d.officialDocs?.length ?? 0) > 0 && <span style={{ color: '#c3272b' }}>{d.officialDocs!.length} 红头文件</span>}
+                {(d.officialDocs?.length ?? 0) > 0 && <span>{d.officialDocs!.length} 官方源文件</span>}
               </div>
             </button>
           ))}
@@ -249,7 +255,7 @@ export function ClinicalDataView() {
     { key: 'parameters', label: '数值参数', count: mergedParams.length },
     { key: 'formulas', label: '公式', count: mergedFormulas.length },
     { key: 'standards', label: '标准规范', count: mergedStandards.length },
-    { key: 'officialDocs', label: '红头文件', count: mergedOfficialDocs.length },
+    { key: 'officialDocs', label: '官方源文件', count: mergedOfficialDocs.length },
   ];
 
   return (
@@ -455,14 +461,14 @@ export function ClinicalDataView() {
               key={`doc-${s.code}-${i}`}
               className="card cd-entry-row"
               onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}
-              style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', borderLeft: '4px solid #c3272b', background: 'var(--bg-surface)' }}
+              style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', borderLeft: `4px solid ${selected.color}`, background: 'var(--bg-surface)' }}
             >
               <div style={{
                 fontSize: 9, padding: '2px 6px', borderRadius: 'var(--radius-sm)',
-                background: '#c3272b', color: '#fff', fontWeight: 700, flexShrink: 0, marginTop: 2, whiteSpace: 'nowrap',
-              }}>{s.code || '红头文件'}</div>
+                background: selected.color, color: '#fff', fontWeight: 700, flexShrink: 0, marginTop: 2, whiteSpace: 'nowrap',
+              }}>{s.code || '官方文件'}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#c3272b' }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
                   {s.name}
                   {s.__customIdx !== undefined && (
                     <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
@@ -476,7 +482,7 @@ export function ClinicalDataView() {
           ))}
           {filteredOfficialDocs.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>
-              暂无红头文件数据
+              暂无官方源文件数据
             </div>
           )}
         </div>
@@ -497,7 +503,7 @@ export function ClinicalDataView() {
       )}
 
       {/* ===== 词典级详情弹窗 ===== */}
-      {detail && (
+      {detail && !isMobile && (
         <div className="modal-overlay cd-detail-modal" onClick={() => setDetail(null)}>
           <div
             className="modal-card"
@@ -507,8 +513,8 @@ export function ClinicalDataView() {
             {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
             {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
             {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
-            {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} />}
-            {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} />}
+            {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
+            {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} color={selected.color} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, position: 'sticky', bottom: -24, background: 'var(--bg-surface)', padding: '12px 24px', margin: '20px -24px -24px', borderTop: '1px solid var(--border)', zIndex: 1 }}>
               {detail.customIndex !== undefined && (
                 <button
@@ -527,8 +533,8 @@ export function ClinicalDataView() {
           {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
           {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
           {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
-          {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} />}
-          {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} />}
+          {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
+          {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} color={selected.color} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
             {detail.customIndex !== undefined && (
               <button
@@ -540,6 +546,37 @@ export function ClinicalDataView() {
             <button className="btn btn-primary" style={{ height: 48 }} onClick={() => setDetail(null)}>关闭</button>
           </div>
         </BottomSheet>
+      )}
+
+      {sourcePreview && (
+        <div className="modal-overlay" onClick={() => setSourcePreview(null)}>
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            style={{ width: 'min(1100px, 96vw)', height: 'min(780px, 92vh)', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>原始发布文件</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sourcePreview.title}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <a href={sourcePreview.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm">外部打开</a>
+                <button className="btn btn-primary btn-sm" onClick={() => setSourcePreview(null)}>关闭</button>
+              </div>
+            </div>
+            <div style={{ padding: '8px 18px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border)' }}>
+              正在应用内加载官网原始页面；若发布机构禁止嵌入，可使用“外部打开”。
+            </div>
+            <iframe
+              src={sourcePreview.url}
+              title={`${sourcePreview.title} 原始发布文件`}
+              sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
+              referrerPolicy="no-referrer"
+              style={{ flex: 1, width: '100%', border: 0, background: '#fff' }}
+            />
+          </div>
+        </div>
       )}
 
       {/* ===== 自定义添加弹窗 ===== */}
@@ -635,7 +672,7 @@ function FormulaDetail({ f, color, discipline }: { f: DisciplineFormula; color: 
   );
 }
 
-function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color: string; discipline: string }) {
+function StandardDetail({ s, color, discipline, onPreviewSource }: { s: DisciplineStandard; color: string; discipline: string; onPreviewSource: (url: string, title: string) => void }) {
   return (
     <div>
       <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
@@ -656,17 +693,17 @@ function StandardDetail({ s, color, discipline }: { s: DisciplineStandard; color
       {/* R108: 官方原文链接 */}
       {s.docUrl && (
         <div style={{ marginTop: 12 }}>
-          <a href={s.docUrl} target="_blank" rel="noopener noreferrer" className="cd-official-link"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent)' }}>
-            <Icon name="link" size={14} /> 查看官方原文 ↗
-          </a>
+          <button type="button" className="cd-official-link" onClick={() => onPreviewSource(s.docUrl!, s.name)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent)', background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}>
+            <Icon name="link" size={14} /> 在应用内查看原始发布文件
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-/** 原文条文展开块（标准规范 / 红头文件共用） */
+/** 原文条文展开块（标准规范 / 官方源文件共用） */
 function FullTextBlock({ text }: { text: string }) {
   const [show, setShow] = useState(false);
   return (
@@ -676,7 +713,7 @@ function FullTextBlock({ text }: { text: string }) {
         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'var(--accent-light)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--accent)', width: '100%', textAlign: 'left' }}
       >
         <Icon name="chevronRight" size={14} style={{ transform: show ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
-        {show ? '收起原文条文' : '查看原文条文'}
+        {show ? '收起内置原文摘录' : '查看内置原文摘录'}
       </button>
       {show && (
         <div style={{ marginTop: 8, padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxHeight: 400, overflow: 'auto' }}>
@@ -687,33 +724,33 @@ function FullTextBlock({ text }: { text: string }) {
   );
 }
 
-function OfficialDocDetail({ doc, discipline }: { doc: DisciplineStandard; discipline: string }) {
+function OfficialDocDetail({ doc, discipline, color, onPreviewSource }: { doc: DisciplineStandard; discipline: string; color: string; onPreviewSource: (url: string, title: string) => void }) {
   return (
     <div>
-      <div style={{ borderBottom: '3px solid #c3272b', paddingBottom: 12, marginBottom: 16 }}>
+      <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
         <div style={{
           display: 'inline-block', fontSize: 12, padding: '3px 10px', borderRadius: 'var(--radius-sm)',
-          background: '#c3272b', color: '#fff', fontWeight: 700, marginBottom: 8,
-        }}>{doc.code || '红头文件'}</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#c3272b' }}>{doc.name}</div>
+          background: color, color: '#fff', fontWeight: 700, marginBottom: 8,
+        }}>{doc.code || '官方文件'}</div>
+        <div style={{ fontSize: 20, fontWeight: 700 }}>{doc.name}</div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
-          {doc.issuer && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: '#fef0f0', color: '#c3272b' }}>颁布机构：{doc.issuer}</span>}
+          {doc.issuer && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)' }}>颁布机构：{doc.issuer}</span>}
           {doc.year && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{doc.year}年</span>}
         </div>
       </div>
       <DetailRow label="文件内容">{doc.description}</DetailRow>
       {doc.source && <DetailRow label="来源"><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{doc.source}</span></DetailRow>}
-      {/* R108 R5: 红头文件嵌入原文条文 + 官方原文链接 */}
+      {/* R108 R5: 官方源文件嵌入可公开原文摘录 + 原始发布文件链接 */}
       {doc.fullText && (
         <FullTextBlock text={doc.fullText} />
       )}
       {doc.docUrl && (
         <div style={{ marginTop: 12 }}>
-          <a href={doc.docUrl} target="_blank" rel="noopener noreferrer" className="cd-official-link"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#c3272b', fontWeight: 500 }}>
-            <Icon name="link" size={14} /> 查看官方原文 ↗
-          </a>
+          <button type="button" className="cd-official-link" onClick={() => onPreviewSource(doc.docUrl!, doc.name)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--accent)', fontWeight: 500, background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}>
+            <Icon name="link" size={14} /> 在应用内查看原始发布文件
+          </button>
         </div>
       )}
     </div>

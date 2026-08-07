@@ -5,7 +5,7 @@ import type { Reference } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
 import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
-import { fetchByDOI } from '@services/metadataFetch';
+import { fetchByDOI, searchCrossref, type FetchedReference } from '@services/metadataFetch';
 import { ViewSwitcher, type ViewMode } from '@components/datagrid/ViewSwitcher';
 import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
 import { GalleryView } from '@components/datagrid/GalleryView';
@@ -18,6 +18,55 @@ import { BottomSheet } from '@components/layout/BottomSheet';
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
 // anydoc 转换模态
 import { AnydocConvertModal } from '@components/anydoc/AnydocConvertModal';
+
+function createReferenceFromFetched(ref: FetchedReference): Reference {
+  const timestamp = new Date().toISOString();
+  const identifier = ref.doi || ref.title;
+  return {
+    id: `ref_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    title: ref.title,
+    creators: ref.creators.map((creator, index) => ({ id: `c_${index}`, firstName: creator.firstName, lastName: creator.lastName, type: 'author' as const, order: index })),
+    type: ref.type as Reference['type'],
+    doi: ref.doi,
+    publication: ref.publication,
+    year: String(ref.year),
+    volume: ref.volume,
+    issue: ref.issue,
+    pages: ref.pages,
+    abstract: ref.abstract,
+    tags: [],
+    readStatus: 'unread',
+    importance: 3,
+    citeKey: identifier.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'reference',
+    openAccess: ref.openAccess,
+    annotations: [],
+    shortTitle: '',
+    publisher: ref.publisher,
+    place: '',
+    date: '',
+    accessionDate: '',
+    isbn: '',
+    issn: ref.issn,
+    pmid: '',
+    pmcid: '',
+    arxivId: '',
+    url: ref.doi ? `https://doi.org/${encodeURIComponent(ref.doi)}` : '',
+    uri: '',
+    collections: [],
+    language: '',
+    rights: '',
+    attachments: [],
+    notes: '',
+    impactFactor: null,
+    jcrQuartile: null,
+    pageCharge: null,
+    reviewWeeks: null,
+    pipelineStage: null,
+    source: 'api',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
 
 export function ReferencesView() {
   const { references, searchQuery, setSearchQuery, addReferences, updateReference, deleteReference } = useAppStore();
@@ -35,8 +84,13 @@ export function ReferencesView() {
   const [pdfRefId, setPdfRefId] = useState<string | null>(null);
   const [anydocOpen, setAnydocOpen] = useState(false);
   const [anydocRefId, setAnydocRefId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [literatureQuery, setLiteratureQuery] = useState('');
+  const [literatureResults, setLiteratureResults] = useState<FetchedReference[]>([]);
+  const [literatureSearching, setLiteratureSearching] = useState(false);
+  const [literatureSearched, setLiteratureSearched] = useState(false);
   // A1 导出预览弹窗（先在应用内展示，支持复制或另存）
-  const [exportPreview, setExportPreview] = useState<{ format: string; content: string } | null>(null);
+  const [exportPreview, setExportPreview] = useState<{ format: string; content: string; referenceCount: number } | null>(null);
   // A2 删除二次确认（使用应用内确认弹窗）
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // A3 开放获取 PDF 链接（Unpaywall 查询结果）
@@ -76,6 +130,11 @@ export function ReferencesView() {
     }
     return result;
   }, [references, searchQuery, filterType, sortField, sortDir]);
+
+  const savedDois = useMemo(
+    () => new Set(references.map((reference) => reference.doi.toLowerCase()).filter(Boolean)),
+    [references],
+  );
 
   function toggleSort(field: 'title' | 'year' | 'doi' | 'readStatus') {
     if (sortField === field) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -190,6 +249,18 @@ export function ReferencesView() {
     }
   }
 
+  const handleLiteratureSearch = useCallback(async () => {
+    const query = literatureQuery.trim();
+    if (!query) return;
+    setLiteratureSearching(true);
+    setLiteratureSearched(true);
+    try {
+      setLiteratureResults(await searchCrossref(query));
+    } finally {
+      setLiteratureSearching(false);
+    }
+  }, [literatureQuery]);
+
   const selected = useMemo(() => references.find((r) => r.id === selectedId) ?? null, [references, selectedId]);
   const closePanel = useCallback(() => setSelectedId(null), []);
 
@@ -197,6 +268,16 @@ export function ReferencesView() {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  const handleAddSearchResult = useCallback((result: FetchedReference) => {
+    const duplicate = result.doi && references.some((reference) => reference.doi.toLowerCase() === result.doi.toLowerCase());
+    if (duplicate) {
+      flashToast('该 DOI 已在本地文献库中');
+      return;
+    }
+    addReferences([createReferenceFromFetched(result)]);
+    flashToast(`已加入本地文献库：${result.title.slice(0, 40)}`);
+  }, [addReferences, flashToast, references]);
 
   /** 导入文件：读取 → 嗅探格式 → 批量入库 */
   const handleImport = useCallback(async (file: File) => {
@@ -216,7 +297,7 @@ export function ReferencesView() {
     const target = searchQuery ? filtered : references;
     if (target.length === 0) { flashToast('没有可导出的文献'); return; }
     const content = format === 'bibtex' ? exportBibTeX(target) : exportRIS(target);
-    setExportPreview({ format: format.toUpperCase(), content });
+    setExportPreview({ format: format.toUpperCase(), content, referenceCount: target.length });
   }, [searchQuery, filtered, references, flashToast]);
 
   /** A1 导出复制：优先 clipboard API，降级 execCommand 选中文本框（webview 兼容） */
@@ -232,6 +313,28 @@ export function ReferencesView() {
       if (ta) { ta.focus(); ta.select(); flashToast('剪贴板不可用，已全选文本，请按 Ctrl+C 复制'); }
       else { flashToast('剪贴板不可用'); }
     }
+  }, [exportPreview, flashToast]);
+
+  /**
+   * 真实导出文件，而不仅是展示一段可复制文本。Blob URL 同时适用于浏览器和
+   * Tauri WebView；下载失败时保留预览窗口，用户仍可复制内容。
+   */
+  const handleExportDownload = useCallback(() => {
+    if (!exportPreview) return;
+    const extension = exportPreview.format.toLowerCase() === 'ris' ? 'ris' : 'bib';
+    const mime = extension === 'ris' ? 'application/x-research-info-systems' : 'application/x-bibtex';
+    const stamp = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([exportPreview.content], { type: `${mime};charset=utf-8` });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `selenyx-references-${stamp}.${extension}`;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(href), 0);
+    flashToast(`已下载 ${link.download}`);
   }, [exportPreview, flashToast]);
 
   /** 打开 PDF 阅读器：读取文件 → ArrayBuffer → 渲染 */
@@ -289,7 +392,7 @@ export function ReferencesView() {
           }}><Icon name="references" size={16} /> 导入精读文献</button>
           <button className="btn ref-desktop-only" aria-label="导出 BibTeX" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
           <button className="btn ref-desktop-only" aria-label="导出 RIS" onClick={() => handleExport('ris')}><Icon name="download" size={16} /> 导出 RIS</button>
-          <button className="btn ref-desktop-only" aria-label="在线检索"><Icon name="search" size={16} /> 检索</button>
+          <button className="btn ref-desktop-only" aria-label="在线检索" onClick={() => setSearchOpen(true)}><Icon name="search" size={16} /> 检索</button>
           {/* 移动端: 更多操作(桌面隐藏) */}
           <button className="btn ref-more-btn" aria-label="更多操作" onClick={() => setShowMoreMenu(true)}><Icon name="more" size={16} /> 更多</button>
           <button className="btn btn-primary" aria-label="新建文献"><Icon name="plus" size={16} /> 新建</button>
@@ -398,7 +501,7 @@ export function ReferencesView() {
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
-                <button className="btn ref-card-act" style={{ fontSize: 12 }} onClick={() => setExportPreview({ format: 'BibTeX', content: exportBibTeX([r]) })} title="导出此条"><Icon name="download" size={15} /> 导出</button>
+                <button className="btn ref-card-act" style={{ fontSize: 12 }} onClick={() => setExportPreview({ format: 'BibTeX', content: exportBibTeX([r]), referenceCount: 1 })} title="导出此条"><Icon name="download" size={15} /> 导出</button>
                 <button className="btn ref-card-act" style={{ fontSize: 12, color: 'var(--danger, #c3272b)' }} onClick={() => setConfirmDeleteId(r.id)} title="删除"><Icon name="close" size={15} /> 删除</button>
               </div>
             </div>
@@ -522,6 +625,27 @@ export function ReferencesView() {
         </div>
       )}
 
+      {searchOpen && !isMobile && (
+        <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setSearchOpen(false)}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, width: 'min(760px, 100%)', maxHeight: '82vh', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(event) => event.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600 }}>文献在线检索</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>检索结果不会自动保存，需逐条确认加入本地库。</p>
+              </div>
+              <button className="icon-btn" onClick={() => setSearchOpen(false)} aria-label="关闭"><Icon name="close" size={18} /></button>
+            </div>
+            <LiteratureSearchContent query={literatureQuery} onQueryChange={setLiteratureQuery} results={literatureResults} searching={literatureSearching} searched={literatureSearched} onSearch={handleLiteratureSearch} onAdd={handleAddSearchResult} savedDois={savedDois} />
+          </div>
+        </div>
+      )}
+
+      {searchOpen && isMobile && (
+        <BottomSheet open onClose={() => setSearchOpen(false)} title="文献在线检索">
+          <LiteratureSearchContent query={literatureQuery} onQueryChange={setLiteratureQuery} results={literatureResults} searching={literatureSearching} searched={literatureSearched} onSearch={handleLiteratureSearch} onAdd={handleAddSearchResult} savedDois={savedDois} />
+        </BottomSheet>
+      )}
+
       {/* anydoc 文档转 Markdown 模态 */}
       <AnydocConvertModal
         open={anydocOpen}
@@ -547,6 +671,7 @@ export function ReferencesView() {
           }}><Icon name="references" size={18} /> 导入精读文献</button>
           <button className="mobile-drawer-item" onClick={() => { setShowMoreMenu(false); handleExport('bibtex'); }}><Icon name="download" size={18} /> 导出 BibTeX</button>
           <button className="mobile-drawer-item" onClick={() => { setShowMoreMenu(false); handleExport('ris'); }}><Icon name="download" size={18} /> 导出 RIS</button>
+          <button className="mobile-drawer-item" onClick={() => { setShowMoreMenu(false); setSearchOpen(true); }}><Icon name="search" size={18} /> 在线检索</button>
         </BottomSheet>
       )}
 
@@ -584,10 +709,11 @@ export function ReferencesView() {
       {/* 移动端: 导出预览 BottomSheet */}
       {isMobile && exportPreview && (
         <BottomSheet open onClose={() => setExportPreview(null)} title={`导出 ${exportPreview.format}`}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>{exportPreview.content.split('\n').filter((l) => l.trim()).length} 条文献</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>共 {exportPreview.referenceCount} 条文献</p>
           <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ width: '100%', height: 280, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.6, resize: 'none' }} />
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button className="btn btn-primary" style={{ flex: 1, height: 48 }} onClick={handleExportCopy}><Icon name="import" size={18} /> 复制全部</button>
+            <button className="btn" style={{ height: 48 }} onClick={handleExportDownload}><Icon name="download" size={18} /> 下载</button>
             <button className="btn" style={{ height: 48 }} onClick={() => setExportPreview(null)}>关闭</button>
           </div>
         </BottomSheet>
@@ -614,16 +740,17 @@ export function ReferencesView() {
       )}
 
       {/* A1 导出预览弹窗（应用内展示与复制） */}
-      {exportPreview && (
+      {!isMobile && exportPreview && (
         <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setExportPreview(null)}>
           <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 640, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600 }}>导出 {exportPreview.format} · {exportPreview.content.split('\n').filter(l=>l.trim()).length} 条</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 600 }}>导出 {exportPreview.format} · {exportPreview.referenceCount} 条文献</h3>
               <button className="icon-btn" onClick={() => setExportPreview(null)} aria-label="关闭"><Icon name="close" size={18} /></button>
             </div>
             <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ flex: 1, margin: 16, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.6, resize: 'none', minHeight: 200 }} />
             <div style={{ display: 'flex', gap: 8, padding: '0 20px 16px', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" onClick={handleExportCopy}><Icon name="import" size={15} /> 复制全部</button>
+              <button className="btn" onClick={handleExportDownload}><Icon name="download" size={15} /> 下载 .{exportPreview.format === 'RIS' ? 'ris' : 'bib'}</button>
               <button className="btn" onClick={() => setExportPreview(null)}>关闭</button>
             </div>
           </div>
@@ -631,7 +758,7 @@ export function ReferencesView() {
       )}
 
       {/* A2 删除二次确认弹窗 */}
-      {confirmDeleteId && (
+      {!isMobile && confirmDeleteId && (
         <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setConfirmDeleteId(null)}>
           <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 360, width: '100%', padding: 24, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
@@ -648,9 +775,77 @@ export function ReferencesView() {
   );
 }
 
+function LiteratureSearchContent({
+  query,
+  onQueryChange,
+  results,
+  searching,
+  searched,
+  onSearch,
+  onAdd,
+  savedDois,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+  results: FetchedReference[];
+  searching: boolean;
+  searched: boolean;
+  onSearch: () => void;
+  onAdd: (result: FetchedReference) => void;
+  savedDois: Set<string>;
+}) {
+  return (
+    <div style={{ padding: 20 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          className="input"
+          autoFocus
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') onSearch(); }}
+          placeholder="输入题名、作者、期刊或关键词"
+          aria-label="Crossref 文献检索"
+          style={{ flex: 1 }}
+        />
+        <button className="btn btn-primary" onClick={onSearch} disabled={!query.trim() || searching}>
+          <Icon name="search" size={16} /> {searching ? '检索中…' : '检索'}
+        </button>
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.55, margin: '10px 0 14px' }}>
+        数据来自 Crossref 元数据服务。结果仅用于发现与导入；题名、作者、DOI 与开放获取状态请以原始出版页面为准。
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {results.map((result, index) => {
+          const saved = Boolean(result.doi && savedDois.has(result.doi.toLowerCase()));
+          return (
+            <article key={`${result.doi || result.title}-${index}`} className="card" style={{ padding: 14, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, lineHeight: 1.45 }}>{result.title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>
+                    {result.creators.slice(0, 4).map((creator) => [creator.firstName, creator.lastName].filter(Boolean).join(' ')).filter(Boolean).join(', ') || '作者信息待补充'}
+                    {result.creators.length > 4 && ' et al.'}
+                    {result.year ? ` · ${result.year}` : ''}{result.publication ? ` · ${result.publication}` : ''}
+                  </div>
+                  {result.doi && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>DOI: {result.doi}</div>}
+                </div>
+                <button className="btn btn-sm" disabled={saved} onClick={() => onAdd(result)}>{saved ? '已在库中' : '加入本地库'}</button>
+              </div>
+            </article>
+          );
+        })}
+        {searched && !searching && results.length === 0 && (
+          <div className="empty-state" style={{ padding: '28px 12px' }}>未找到可用结果，请改用更具体的题名、作者或 DOI。</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _onOpenWeb, onDelete, oaPdfUrl, oaLoading, onLookupOa, asSheet }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void; oaPdfUrl: string | null; oaLoading: boolean; onLookupOa: (doi: string) => void; asSheet?: boolean }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, onDelete, oaPdfUrl, oaLoading, onLookupOa, asSheet }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void; oaPdfUrl: string | null; oaLoading: boolean; onLookupOa: (doi: string) => void; asSheet?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const onlineUrl = r.url || r.uri || (r.doi ? `https://doi.org/${encodeURIComponent(r.doi)}` : '');
 
   function generateGBT7714(): string {
     const authors = r.creators.map((c) => `${c.lastName}${c.firstName}`).join(', ');
@@ -768,8 +963,11 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _o
           {r.doi && (
             <button className="btn" onClick={() => onLookupOa(r.doi)} disabled={oaLoading}><Icon name="link" size={18} /> {oaLoading ? '查询中…' : '查找OA全文'}</button>
           )}
-          {r.doi && (
-            <a className="btn" href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="link" size={18} /> 在线阅读</a>
+          {onlineUrl && (
+            <button className="btn" onClick={() => onOpenWeb(onlineUrl)}><Icon name="globe" size={18} /> 应用内预览</button>
+          )}
+          {onlineUrl && (
+            <a className="btn" href={onlineUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="link" size={18} /> 在线阅读</a>
           )}
           <button className="btn"><Icon name="tag" size={18} /> 编辑标签</button>
           <button className="btn ref-act-delete" style={{ color: 'var(--danger, #c3272b)' }} onClick={() => onDelete(r.id)}><Icon name="close" size={18} /> 删除</button>
@@ -913,7 +1111,10 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb: _o
                   <Icon name="download" size={15} /> 打开OA PDF
                 </a>
               )}
-              <a className="btn" style={{ flex: '1 1 120px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" title="在新窗口打开出版商页面">
+              <button className="btn" style={{ flex: '1 1 120px' }} onClick={() => onOpenWeb(onlineUrl)} title="在应用内预览网页；如期刊拒绝嵌入，可用旁边的新窗口打开">
+                <Icon name="globe" size={15} /> 应用内预览
+              </button>
+              <a className="btn" style={{ flex: '1 1 120px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} href={onlineUrl} target="_blank" rel="noopener noreferrer" title="在新窗口打开出版商页面">
                 <Icon name="link" size={15} /> 在线阅读
               </a>
             </>

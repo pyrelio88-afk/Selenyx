@@ -104,7 +104,7 @@ function PomodoroTimer() {
   }
 
   return (
-    <div className="card" style={{ padding: 16, height: '100%' }}>
+    <div className="card dashboard-focus-card" style={{ padding: 16, height: '100%', minHeight: 370, boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h3 style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Icon name="pipeline" size={18} /> 番茄钟
@@ -219,6 +219,32 @@ function PomodoroTimer() {
 }
 
 // === 实时时钟 + 倒数日 ===
+interface BeijingDateParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+}
+
+/**
+ * 不能把 toLocaleString 再喂给 Date：后者会按设备时区重新解释字符串，
+ * 在非东八区设备上会让倒数日跨天。这里显式读取北京时间的日历字段。
+ */
+function getBeijingDateParts(date: Date): BeijingDateParts {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return { year: get('year'), month: get('month'), day: get('day'), hour: get('hour') };
+}
+
+function parseDateOnly(value: string): { year: number; month: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  return { year: Number(year), month: Number(month), day: Number(day) };
+}
+
 function ClockWidget() {
   const [now, setNow] = useState(new Date());
 
@@ -229,8 +255,8 @@ function ClockWidget() {
 
   const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-  // 锁定北京时间（UTC+8），不跟随系统时区——倒数日按北京日历计算
-  const nowBJ = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+  // 锁定北京时间（UTC+8），不跟随系统时区——倒数日按北京日历计算。
+  const nowBJ = getBeijingDateParts(now);
 
   // 倒数日 — 从 store 读取用户自定义，空态显示引导
   const countdowns = useAppStore((s) => s.customCountdowns);
@@ -241,15 +267,20 @@ function ClockWidget() {
   const [newCountdownDate, setNewCountdownDate] = useState('');
 
   function daysLeft(dateStr: string): number {
-    const target = new Date(dateStr);
-    const diff = target.getTime() - nowBJ.getTime();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    const target = parseDateOnly(dateStr);
+    if (!target) return 0;
+    const currentCalendarDay = Date.UTC(nowBJ.year, nowBJ.month - 1, nowBJ.day);
+    const targetCalendarDay = Date.UTC(target.year, target.month - 1, target.day);
+    return Math.round((targetCalendarDay - currentCalendarDay) / (24 * 60 * 60 * 1000));
   }
 
   function hoursLeft(dateStr: string): number {
-    const target = new Date(dateStr);
-    const diff = target.getTime() - nowBJ.getTime();
-    return Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const target = parseDateOnly(dateStr);
+    if (!target) return 0;
+    // 日期型截止日解释为北京时间当天 00:00，避免浏览器把 YYYY-MM-DD 当成设备本地零点。
+    const targetTimestamp = Date.UTC(target.year, target.month - 1, target.day) - 8 * 60 * 60 * 1000;
+    const remaining = targetTimestamp - now.getTime();
+    return remaining > 0 ? Math.floor((remaining / (60 * 60 * 1000)) % 24) : 0;
   }
 
   function getUrgencyColor(days: number, baseColor: string): string {
@@ -269,7 +300,7 @@ function ClockWidget() {
   ];
 
   return (
-    <div className="card" style={{ padding: 16, height: '100%' }}>
+    <div className="card dashboard-time-card" style={{ padding: 16, height: '100%', minHeight: 370, boxSizing: 'border-box' }}>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-primary)', lineHeight: 1.2 }}>
           {timeStr}

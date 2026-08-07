@@ -11,7 +11,7 @@ import { Icon, NAV_ICONS, STAGE_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
-import { RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
+import { CORE_RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
 
 const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
   { label: '全部', match: [] },
@@ -40,8 +40,8 @@ export function ProjectsView() {
   const isMobile = useIsMobile();
 
   const visibleFrameworks = disciplineFilter.match.length === 0
-    ? RESEARCH_FRAMEWORKS
-    : RESEARCH_FRAMEWORKS.filter((fw) => fw.disciplines.some((d) => disciplineFilter.match.includes(d)));
+    ? CORE_RESEARCH_FRAMEWORKS
+    : CORE_RESEARCH_FRAMEWORKS.filter((fw) => fw.disciplines.some((d) => disciplineFilter.match.includes(d)));
 
   function startCreate() {
     setShowFrameworks(false);
@@ -200,7 +200,7 @@ export function ProjectsView() {
                   {showFrameworks && (
                     <div style={{ padding: '0 14px 14px' }}>
                       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                        覆盖 13 个学科门类的研究设计框架，不一定都按框架走——选了帮你生成字段，不选也可以直接创建项目
+                        提供 10 个跨学科常用研究框架；完全可选——选了会生成字段，不选也可以直接创建项目
                       </p>
                       {/* 学科筛选 */}
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -220,23 +220,6 @@ export function ProjectsView() {
                         ))}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflow: 'auto' }}>
-                {/* 学科筛选 */}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                  {DISCIPLINE_FILTERS.map((f) => (
-                    <button
-                      key={f.label}
-                      onClick={() => setDisciplineFilter(f)}
-                      style={{
-                        fontSize: 12, padding: '3px 12px', borderRadius: 12, cursor: 'pointer',
-                        border: `1px solid ${disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--border)'}`,
-                        background: disciplineFilter.label === f.label ? 'var(--accent-light)' : 'transparent',
-                        color: disciplineFilter.label === f.label ? 'var(--accent)' : 'var(--text-muted)',
-                      }}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
                         {visibleFrameworks.map((fw) => (
                           <div
                             key={fw.id}
@@ -331,7 +314,7 @@ export function ProjectsView() {
                   {showFrameworks && (
                     <div style={{ padding: '0 14px 14px' }}>
                       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-                        覆盖 13 个学科门类的研究设计框架，不一定都按框架走——选了帮你生成字段，不选也可以直接创建项目
+                        提供 10 个跨学科常用研究框架；完全可选——选了会生成字段，不选也可以直接创建项目
                       </p>
                       {/* 学科筛选 */}
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>

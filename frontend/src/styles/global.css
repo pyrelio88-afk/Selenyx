@@ -3575,3 +3575,151 @@ tr:hover .row-delete-btn { opacity: 0.6; }
     width: 100%;
   }
 }
+
+/* 工具箱：图标不依赖字体或外部图像，给 inline SVG 固定可见容器。
+   旧版只在移动媒体查询中定义这些规则，桌面工具箱会退化为无尺寸的细线图标。 */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 12px;
+}
+.tools-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 156px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.tools-card:hover,
+.tools-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: none;
+}
+.tools-card:active { transform: translateY(1px); }
+.tools-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  color: var(--accent);
+  background: var(--accent-light);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 12px;
+}
+.tools-card-icon > svg { display: block; }
+.tools-card-name { font-size: 14px; font-weight: 650; color: var(--text-primary); }
+.tools-card-desc { font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+
+/* R110 · 本地工作台侧边栏：采用项目空间 + 分组导航的桌面信息架构。
+   保留响应式抽屉的同一份 NAV_GROUPS 数据，让 Windows 桌面和 Android
+   后续版本不会出现两套功能入口逐渐漂移的问题。 */
+.workspace-sidebar {
+  padding: 14px 10px 10px;
+  gap: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sidebar-bg) 88%, var(--bg-surface)), var(--sidebar-bg) 42%);
+}
+.workspace-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px 14px;
+}
+.workspace-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 66%, #102a43));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.workspace-brand-name { font-size: 16px; font-weight: 720; letter-spacing: .2px; color: var(--text-primary); line-height: 1.15; }
+.workspace-brand-subtitle { margin-top: 2px; font-size: 10.5px; color: var(--text-muted); letter-spacing: .2px; }
+.workspace-switcher {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 7px 9px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-surface) 76%, transparent);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.workspace-switcher:hover,
+.workspace-switcher:focus-visible { background: var(--bg-surface); border-color: color-mix(in srgb, var(--accent) 44%, var(--border)); box-shadow: 0 3px 10px rgba(0,0,0,.05); outline: none; }
+.workspace-switcher-avatar {
+  display: inline-flex;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+}
+.workspace-switcher-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.workspace-switcher-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 650; }
+.workspace-switcher-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: var(--text-muted); }
+.workspace-actions { display: grid; grid-template-columns: minmax(0, 1fr) 68px; gap: 7px; margin-bottom: 12px; }
+.workspace-primary-action,
+.workspace-quick-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 620;
+}
+.workspace-primary-action { border: 1px solid var(--accent); color: #fff; background: var(--accent); }
+.workspace-primary-action:hover { filter: brightness(.96); }
+.workspace-quick-action { position: relative; border: 1px solid var(--border); color: var(--text-secondary); background: var(--bg-surface); }
+.workspace-quick-action:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, var(--border)); }
+.workspace-quick-action b { position: absolute; right: 4px; top: 3px; min-width: 13px; padding: 0 3px; border-radius: 8px; font-size: 9px; line-height: 14px; color: var(--accent); background: var(--accent-light); }
+.workspace-sidebar .sidebar-nav { gap: 12px; padding: 0; }
+.workspace-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.workspace-sidebar .nav-group-label { padding: 3px 10px 5px; color: var(--text-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .75px; text-transform: uppercase; }
+.workspace-sidebar .nav-item { min-height: 34px; padding: 7px 10px; border-radius: 8px; font-size: 13px; gap: 9px; }
+.workspace-sidebar .nav-item .icon { width: 19px; height: 19px; color: var(--text-muted); }
+.workspace-sidebar .nav-item:hover .icon { color: var(--text-primary); }
+.workspace-sidebar .nav-item.active { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent-light) 86%, transparent); }
+.workspace-sidebar .nav-item.active .icon { color: var(--accent); }
+.workspace-sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 12px 4px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+.workspace-local-status { min-width: 0; flex: 1; display: flex; align-items: center; gap: 6px; padding-left: 5px; font-size: 10.5px; color: var(--text-muted); }
+.workspace-status-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 999px; background: var(--success, #218739); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success, #218739) 14%, transparent); }
+.workspace-sidebar-footer .icon-btn { width: 32px; height: 32px; border: 1px solid transparent; border-radius: 8px; color: var(--text-secondary); }
+.workspace-sidebar-footer .icon-btn:hover { border-color: var(--border); color: var(--accent); background: var(--bg-surface); }

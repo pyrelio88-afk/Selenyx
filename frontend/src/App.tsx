@@ -107,7 +107,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-const VIEWS: Record<ViewKey, () => React.ReactNode> = {
+const VIEWS: Record<ViewKey, () => ReactNode> = {
   dashboard: () => <DashboardView />,
   projects: () => <ProjectsView />,
   references: () => <ReferencesView />,
@@ -138,7 +138,7 @@ export default function App() {
     }
   }, [currentView]);
 
-  const CurrentView = VIEWS[currentView] ?? VIEWS.dashboard;
+  const renderView = VIEWS[currentView] ?? VIEWS.dashboard;
 
   return (
     <ThemeProvider>
@@ -148,7 +148,7 @@ export default function App() {
           <MobileShell />
           <VersionChecker />
           <ErrorBoundary>
-            {CurrentView()}
+            {renderView()}
           </ErrorBoundary>
           {/* D4: 版本号 */}
           <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11, color: 'var(--text-muted)', opacity: 0.6 }}>

@@ -18,14 +18,16 @@
     "backend:test": "cd backend && uv run --extra dev pytest -q",
     "backend:bundle": "cd backend && uv run --extra package python -m PyInstaller --noconfirm --clean --onefile --name selenyx-backend --distpath dist --workpath build/pyinstaller --specpath build/pyinstaller sidecar.py && cd .. && node scripts/prepare-backend-sidecar.mjs",
     "dev:local": "concurrently --kill-others-on-fail --names api,web \"npm run backend:dev\" \"npm run dev\"",
-    "desktop:dev": "cd desktop && cargo tauri dev",
-    "desktop:build": "npm run backend:bundle && cd desktop && cargo tauri build",
+    "desktop:dev": "node scripts/dev-desktop.mjs",
+    "desktop:doctor": "node scripts/check-desktop-prereqs.mjs",
+    "desktop:build": "node scripts/build-desktop.mjs",
     "lint": "npm --workspace @selenyx/frontend run lint"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "concurrently": "^10.0.4"
   }
 }

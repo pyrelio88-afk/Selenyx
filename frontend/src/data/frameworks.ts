@@ -954,6 +954,21 @@ export const RESEARCH_FRAMEWORKS: ResearchFramework[] = [
   },
 ];
 
+/**
+ * 新建项目时优先展示的 10 个跨学科入口。
+ * 这不是强制研究路径：完整模板库仍保留给后续扩展；这里仅避免首次创建
+ * 项目时被几十个方法学名称淹没。选择依据是主流期刊常见的研究设计/报告
+ * 结构，并覆盖自然科学、临床、循证、观察性、质性、社科、工程、经管和法学。
+ */
+const CORE_FRAMEWORK_IDS = [
+  'imrad', 'pico', 'prisma', 'consort', 'strobe',
+  'coreq', 'jars', 'doe', 'econometric', 'doctrinal',
+] as const;
+
+export const CORE_RESEARCH_FRAMEWORKS: ResearchFramework[] = CORE_FRAMEWORK_IDS
+  .map((id) => RESEARCH_FRAMEWORKS.find((framework) => framework.id === id))
+  .filter((framework): framework is ResearchFramework => Boolean(framework));
+
 /** 根据学科推荐框架（按适用度排序，学科未匹配时返回全部通用优先） */
 export function getFrameworksByDiscipline(discipline: string): ResearchFramework[] {
   const map: Record<string, string[]> = {

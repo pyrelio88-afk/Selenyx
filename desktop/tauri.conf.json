@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npm --prefix .. run dev:local",
-    "beforeBuildCommand": "npm --prefix ../frontend run build"
+    "beforeDevCommand": "npm run dev:local",
+    "beforeBuildCommand": "npm --prefix frontend run build"
   },
   "app": {
     "withGlobalTauri": true,
@@ -73,7 +73,6 @@
   },
   "plugins": {
     "shell": { "open": true },
-    "fs": { "scope": ["$HOME/.selenyx/**", "$DOCUMENT/**", "$APPDATA/**"] },
-    "store": {}
+    "fs": {}
   }
 }
