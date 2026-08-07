@@ -2,6 +2,71 @@
 
 Selenyx 按「自迭代轮次（R<N>）」推进，本文件记录每轮主要变化。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 精神，以轮次代替语义化版本号。
 
+## [R110] - 2026-08-07
+
+### 新增
+- 统计-图表深度融合：公式库（15 公式双向跳转）+ Logistic 森林图 + 卡方列联表热力图 + 全局文字对齐修复
+- AI 助手技能推荐横向滚动卡（研究框架驱动 → nature-* 技能映射 → 点击注入 prompt）
+### 优化
+- AI 助手深度优化 v2：消息气泡 + 日期分隔 + 流式状态 + 滚动按钮 + 空状态动画 + 键盘导航 + 复制反馈 + 错误重试
+- 移动端技能 chip 触控 36px → 44px（UI 设计师走查反馈）
+- 安全加固（代码审查官评审 2 项黄建议）；冒烟信噪比 / Icon fallback / anydoc 加载态文案打磨
+
+## [R109] - 2026-08-07
+
+### 新增
+- 笔记区：新建 / Markdown 编辑 / 分类标签 / 搜索 / 关联文献与流水线段 + 持久化迁移 v4
+- anydoc 文档转 Markdown 集成（@firecrawl/anydoc-wasm，WASM 本地转换，文献库全文段）
+- 工具箱「图表」标签页：ECharts 8 类科研图 + CSV 导入 + PNG/SVG 导出 + 主题自适应
+### 优化
+- AI 助手深度优化（参照 Hermes WebUI）：多会话管理 / Markdown 渲染 / 代码高亮 / 流式动效 / 快捷指令 / 会话分支 / 模型切换 / 响应式
+- AI 助手移动端互斥全屏 + 气泡精确宽度 + AI 头像 + 斜杠面板 fixed
+
+## [R108] - 2026-08-06 ~ 2026-08-07
+
+### 新增
+- 工具箱独特图标 + 项目创建重构（名称优先 / 框架可选可折叠）+ 框架扩展至 30（Science/Nature 标准）
+- 红头文件 fullText/docUrl 接口 + ClinicalDataView 可展开原文 + 倒数日优化（预设/紧迫色/小时）
+- AI 助手重构（Codex 命令面板 + Hermes 上下文）
+- 内置 OCR（Tesseract.js chi_sim+eng，扫描版 PDF/图片文字识别）
+### 迭代（r3–r19）
+- r3：AI 助手对话持久化 + 命令分类别名 / 框架 46 个（EQUATOR 扩展）
+- r4：界面密度切换修复（CSS 级联 bug）+ 密度响应覆盖面扩展
+- r5：红头文件 39 条注入 docUrl 官方原文链接 + OfficialDocDetail 渲染原文/链接
+- r6：医学 +55 参数 +54 公式（全学科数据首批）
+- r7：总览页信息分组重构 + emoji 换 Icon + footer 强刷提示
+- r8：应用内版本自动校验机制（fetch no-store 比对构建标记 + 8s 倒计时自动刷新 banner）
+- r9：医学数据第四批（+26 数值 +22 公式，唯一值 101/103 双破百）
+- r10：夜间卡片层级梯度加宽 + banner 文案去冗余
+- r11：医学释义重写试点批次 50 条入库（L2 抽检 0% 同义反复通过）+ source 字段
+- r12：暗色主题梯度修复（minimal-white/ink-classic dark CIE L* Δ≥7）
+- r13：移动端批一（TopBar + Drawer 导航 + V1 总览 + V9 番茄钟 + 全局触控）
+- r14：文献库三修复（A1 导出弹窗 + A2 删除确认 + A3 OA 查找 + 在线阅读新窗口）
+- r15：stat-card icon tofu 修复 + drawer toolbox icon
+- r16：移动端批二 V6/V2/V5 组件级适配（BottomSheet 详情 + 2 列网格 + chips 横滑 + safe-area）
+- r17：anydoc wasm 外置 public/ + 运行时 fetch 按需加载（gzip 6.27MB → 2.55MB，-59%）
+- r18：wasm 加载多源回退（相对路径 → jsDelivr CDN）+ 魔数校验防 HTML 兜底页
+- r19：移动端批三 V3/V4/V7/V8 组件级适配 + 批二 P2 尾修 + R90 看板空态/番茄钟/统计表单收口
+- Tauri v2 原生打包工程（桌面三平台 + Android）
+
+## [R107] - 2026-08-06
+
+### 新增
+- P0 统计计算器：Logistic 回归 / ROC 曲线 / 生存分析（统计工具 15 → 18）
+
+## [R106] - 2026-08-06
+
+### 变更
+- discipline params + official docs，toolbox icons，skills GitHub URL，nature-skills 32k stars
+
+## [R105] - 2026-08-06
+
+### 新增
+- 文献删除 + 导出剪贴板兜底 + 在线预览提示
+- 北京时间时钟 + 宽度对齐 + Agnes 预设 + 技能卡图标
+- 3 个统计计算器：Cronbach α / 线性回归 / Mann-Whitney U
+
+
 ## [R104] - 2026-08-06
 
 ### 核实（R100 评审挂起项关闭）
