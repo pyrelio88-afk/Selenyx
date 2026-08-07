@@ -30,5 +30,6 @@ Thumbs.db
 # Tauri
 desktop/gen/
 desktop/Cargo.lock
+desktop/binaries/
 *.tsbuildinfo
 *.bak

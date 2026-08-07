@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { THEME_OPTIONS } from '@hooks/useTheme';
 import type { LLMProvider } from '@apptypes/index';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { DensityToggle } from '@components/ui/StatusChip';
 import { testConnection, PROVIDER_DEFAULTS, type TestResult } from '@services/llm';
+import { localApi } from '@services/api';
 
 type SettingsTab = 'appearance' | 'llm' | 'data' | 'shortcuts' | 'about';
 
@@ -85,6 +86,22 @@ export function SettingsView() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [saved, setSaved] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [backendStorage, setBackendStorage] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    void localApi.health()
+      .then((health) => {
+        if (!active) return;
+        setBackendStatus('online');
+        setBackendStorage(health.storage);
+      })
+      .catch(() => {
+        if (active) setBackendStatus('offline');
+      });
+    return () => { active = false; };
+  }, []);
 
   function onProviderChange(p: LLMProvider) {
     setProvider(p);
@@ -443,6 +460,7 @@ export function SettingsView() {
                 <p>版本：R80 (multi-dim tables + clinical data + stat tools)</p>
                 <p>技术栈：React 19 + Vite + TypeScript + Zustand</p>
                 <p>运行：本地单文件 HTML、Tauri 桌面端与 Android 应用</p>
+                <p>本地后端：{backendStatus === 'checking' ? '连接检测中…' : backendStatus === 'online' ? `已连接（${backendStorage}）` : '未运行或不可达'}</p>
                 <p>许可：开源（GitHub push 待用户授权）</p>
               </div>
             </div>

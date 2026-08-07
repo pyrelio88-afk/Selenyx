@@ -34,8 +34,14 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Bundle local backend sidecar
+        run: npm run backend:bundle
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2

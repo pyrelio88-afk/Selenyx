@@ -101,6 +101,7 @@
 ## 技术栈
 
 - **前端**：React 19 + TypeScript + Vite + Zustand
+- **本地后端**：FastAPI + SQLModel + SQLite（数据保存至 `~/.selenyx/selenyx.sqlite3`）
 - **PDF**：PDF.js 全文阅读器 + 五色批注层 + textLayer 选区高亮
 - **可视化**：ECharts（tree-shaken）
 - **OCR**：Tesseract.js（chi_sim + eng）
@@ -112,13 +113,23 @@
 
 ### 前提条件
 - Node.js ≥ 20（内置 npm）
+- Python 3.11+ 与 [uv](https://docs.astral.sh/uv/)（需要本地后端时）
 
 ### 开发模式
 
 ```bash
+# 终端 1：复制私有配置并启动本地 FastAPI 服务
+Copy-Item backend/.env.example backend/.env.local   # PowerShell；填入 LLM Key 后勿提交
+npm run backend:dev                                 # http://127.0.0.1:8770/api/health
+
+# 终端 2：启动前端；/api 会代理给上述本地服务
 npm install
 npm run dev       # http://127.0.0.1:5173
 ```
+
+桌面端开发使用 `npm run desktop:dev`，它会同时启动 Vite 与本地 FastAPI。发布版桌面安装包会把 FastAPI 打成 sidecar，在应用启动时只监听本机 `127.0.0.1:8770`；无需用户另外安装 Python。
+
+Android APK 不运行桌面可执行文件。需要从手机访问后端时，在可信网络为电脑端服务配置 HTTPS，再在 `frontend/.env.local` 设置 `VITE_API_BASE_URL=https://你的电脑地址/api` 后构建 APK；API Key 始终只放在电脑的 `~/.selenyx/.env.local`，不要写入 Android 前端环境变量。
 
 ### 构建
 

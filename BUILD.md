@@ -16,7 +16,19 @@ npm run dev               # 等价 cd frontend && vite（仅前端，浏览器 5
 cd desktop && cargo tauri dev
 ```
 
-`cargo tauri dev` 会自动跑 `beforeDevCommand`（`npm --prefix ../frontend run dev`）拉起 Vite，再用系统 webview 打开桌面窗口，Rust 改动自动重编译。
+`cargo tauri dev` 会自动跑 `beforeDevCommand`（`npm --prefix .. run dev:local`）同时拉起 Vite 与 FastAPI，再用系统 webview 打开桌面窗口，Rust 改动自动重编译。
+
+### 本地 FastAPI 服务与私有 Key
+
+```powershell
+# 首次：仅复制模板；真实 API Key 只写入这个被 Git 忽略的文件
+Copy-Item backend/.env.example backend/.env.local
+
+# 浏览器开发时可单独启动后端；访问 http://127.0.0.1:8770/api/health 验证
+npm run backend:dev
+```
+
+文献与项目数据保存在 `~/.selenyx/selenyx.sqlite3`。LLM Key 由后端从 `backend/.env.local`（开发）或 `~/.selenyx/.env.local`（桌面安装包）读取，绝不进入前端构建产物。
 
 ---
 
@@ -38,7 +50,7 @@ Rust 工具链：`curl https://sh.rustup.rs -sSf | sh`（stable）。Tauri CLI�
 # 仓库根目录
 npm install
 cd desktop
-cargo tauri build          # 产出当前平台全部包
+npm run desktop:build      # 先冻结 FastAPI sidecar，再产出当前平台全部包
 # 指定包类型：
 cargo tauri build --bundles deb,appimage      # Linux
 cargo tauri build --bundles msi,nsis          # Windows（msi=WiX, nsis=传统安装器）
@@ -46,6 +58,8 @@ cargo tauri build --bundles dmg,app           # macOS
 ```
 
 产物路径：`desktop/target/release/bundle/`
+
+`npm run desktop:build` 会使用 PyInstaller 生成与当前平台匹配的 FastAPI sidecar，再由 Tauri 一并打入安装包。CI 会在 Windows、macOS、Linux 三个原生 runner 分别构建对应 sidecar；不能用一个 Windows 生成的 sidecar 跨平台打包。
 
 | 平台 | 产物 | 安装方式 |
 |------|------|----------|
@@ -97,6 +111,8 @@ cd desktop
 cargo tauri android init          # 首次：生成 gen/android 工程骨架
 cargo tauri android build --apk --split-per-abi   # 产出 APK
 ```
+
+Android 不会执行桌面 Python sidecar。移动端的本地资料仍保存在设备内；如需让 APK 调用电脑上的 FastAPI，必须将电脑服务置于可信网络的 HTTPS 地址，并在构建前向 `frontend/.env.local` 写入 `VITE_API_BASE_URL=https://<电脑地址>/api`。不要为此开启通用明文 HTTP：Android WebView 对现代 target 默认拒绝明文流量。
 
 产物：`desktop/gen/android/app/build/outputs/apk/<abi>/release/app-<abi>-release-unsigned.apk`
 

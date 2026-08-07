@@ -1,81 +1,72 @@
-"""
-AI 路由 — BYOK LLM 聊天 + Agent 配方编排
-借鉴 HydraLab: agents behind gates, extractive retrieval, audit ledger
+"""Local-only OpenAI-compatible LLM gateway.
+
+The API key is read from backend/.env.local. The frontend never needs to embed
+or persist it, which keeps a packaged desktop or mobile client free of secrets.
 """
 
-from fastapi import APIRouter, HTTPException
 from datetime import datetime
+
 import httpx
+from fastapi import APIRouter, HTTPException
+
+from selenyx_backend.settings import get_settings
 
 router = APIRouter()
 
-# 内存中的 LLM 配置（实际应存 OS keychain）
-_llm_config: dict | None = None
+
+def _llm_settings():
+    settings = get_settings()
+    if not settings.llm_api_key:
+        raise HTTPException(503, "LLM is not configured. Set SELENYX_LLM_API_KEY in backend/.env.local.")
+    return settings
 
 
-@router.post("/config")
-async def set_llm_config(config: dict):
-    """设置 LLM 配置 (BYOK)"""
-    global _llm_config
-    _llm_config = config
-    return {"ok": True}
+@router.get("/config")
+def config_status():
+    settings = get_settings()
+    return {
+        "configured": bool(settings.llm_api_key),
+        "baseUrl": settings.llm_base_url,
+        "model": settings.llm_model,
+    }
 
 
 @router.get("/test")
 async def test_connection():
-    """测试 LLM 连接"""
-    if not _llm_config:
-        return {"ok": False, "error": "未配置 LLM"}
+    settings = _llm_settings()
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{_llm_config.get('baseUrl', 'https://api.openai.com/v1')}/chat/completions",
-                headers={"Authorization": f"Bearer {_llm_config['apiKey']}"},
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                f"{settings.llm_base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.llm_api_key}"},
                 json={
-                    "model": _llm_config.get("model", "gpt-4o"),
-                    "messages": [{"role": "user", "content": "Say 'Selenyx connection OK' in 3 words."}],
+                    "model": settings.llm_model,
+                    "messages": [{"role": "user", "content": "Reply with: Selenyx OK"}],
                     "max_tokens": 10,
                 },
-                timeout=15,
             )
-        if resp.status_code == 200:
-            return {"ok": True, "model": _llm_config.get("model", "")}
-        return {"ok": False, "error": f"HTTP {resp.status_code}"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"LLM connection failed: {exc}") from exc
+    if response.status_code != 200:
+        raise HTTPException(response.status_code, "LLM rejected the local backend request")
+    return {"ok": True, "model": settings.llm_model}
 
 
 @router.post("/chat")
 async def chat(messages: list[dict], project_id: str | None = None):
-    """
-    LLM 聊天 — 支持 extractive retrieval 注入上下文
-    所有请求记录审计日志
-    """
-    if not _llm_config:
-        raise HTTPException(400, "未配置 LLM，请先在设置中配置 API Key")
-
-    # TODO: 1. extractive retrieval 检索相关文献段落
-    #       2. 将检索结果注入 system prompt
-    #       3. 调用 LLM
-    #       4. 记录审计日志 + token 消耗
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{_llm_config.get('baseUrl', 'https://api.openai.com/v1')}/chat/completions",
-            headers={"Authorization": f"Bearer {_llm_config['apiKey']}"},
-            json={
-                "model": _llm_config.get("model", "gpt-4o"),
-                "messages": messages,
-                "temperature": _llm_config.get("temperature", 0.3),
-                "max_tokens": _llm_config.get("maxTokens", 4096),
-            },
-            timeout=60,
-        )
-
-    if resp.status_code != 200:
-        raise HTTPException(resp.status_code, f"LLM API 错误: {resp.text}")
-
-    data = resp.json()
+    settings = _llm_settings()
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"{settings.llm_base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {settings.llm_api_key}"},
+                json={"model": settings.llm_model, "messages": messages, "temperature": 0.3, "max_tokens": 4096},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"LLM connection failed: {exc}") from exc
+    if response.status_code != 200:
+        raise HTTPException(response.status_code, response.text[:300])
+    data = response.json()
     return {
         "id": f"msg-{datetime.now().timestamp()}",
         "role": "assistant",
@@ -84,17 +75,10 @@ async def chat(messages: list[dict], project_id: str | None = None):
         "referenceIds": [],
         "annotationIds": [],
         "timestamp": datetime.now().isoformat(),
+        "projectId": project_id,
     }
 
 
 @router.post("/recipes/run")
-async def run_recipe(recipe_id: str, input: str, project_id: str):
-    """
-    执行 Agent 研究配方
-    借鉴 HydraLab: staged, traceable, gated by approvals
-    """
-    # TODO: 1. 加载配方定义
-    #       2. 审批门控检查
-    #       3. 执行（可能多步）
-    #       4. 记录审计日志
-    return {"runId": f"run-{datetime.now().timestamp()}", "status": "staged"}
+def run_recipe(recipe_id: str, input: str, project_id: str):
+    return {"runId": f"run-{datetime.now().timestamp()}", "status": "staged", "recipeId": recipe_id, "projectId": project_id}

@@ -1,148 +1,151 @@
-"""
-文献管理路由 — CRUD / 搜索 / 去重 / 导入导出 / DOI/PMID 检索
-"""
+"""Persistent local reference library routes."""
 
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
-import json
+from datetime import datetime
+
 import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session, col, func, select
 
+from selenyx_backend.database import get_session
 from selenyx_backend.models import Reference
 
 router = APIRouter()
 
-# 内存存储（后续替换为 SQLite）
-_refs: list[Reference] = []
-_ref_counter = 0
 
-
-def _next_cite_key() -> str:
-    global _ref_counter
-    _ref_counter += 1
-    return f"Selenyx-{_ref_counter:04d}"
+def _next_cite_key(session: Session) -> str:
+    count = session.exec(select(func.count()).select_from(Reference)).one()
+    return f"Selenyx-{count + 1:04d}"
 
 
 @router.get("")
-async def list_references(
-    q: Optional[str] = None,
-    collection: Optional[str] = None,
-    tag: Optional[str] = None,
-    stage: Optional[str] = None,
+def list_references(
+    q: str | None = None,
+    collection: str | None = None,
+    tag: str | None = None,
+    stage: str | None = None,
+    session: Session = Depends(get_session),
 ):
-    """列出/搜索文献"""
-    result = _refs
+    statement = select(Reference)
     if q:
-        ql = q.lower()
-        result = [r for r in result if ql in r.title.lower() or ql in r.doi.lower() or ql in r.publication.lower()]
+        pattern = f"%{q.lower()}%"
+        statement = statement.where(
+            func.lower(col(Reference.title)).like(pattern)
+            | func.lower(col(Reference.doi)).like(pattern)
+            | func.lower(col(Reference.publication)).like(pattern)
+        )
     if stage:
-        result = [r for r in result if r.pipeline_stage == stage]
-    return result
+        statement = statement.where(Reference.pipeline_stage == stage)
+    if collection:
+        statement = statement.where(Reference.collections_json.contains(collection))
+    if tag:
+        statement = statement.where(Reference.tags_json.contains(tag))
+    return session.exec(statement.order_by(Reference.updated_at.desc())).all()
 
 
 @router.get("/{ref_id}")
-async def get_reference(ref_id: str):
-    for r in _refs:
-        if r.id == ref_id:
-            return r
-    raise HTTPException(404, "文献不存在")
+def get_reference(ref_id: str, session: Session = Depends(get_session)):
+    reference = session.get(Reference, ref_id)
+    if not reference:
+        raise HTTPException(404, "Reference not found")
+    return reference
 
 
 @router.post("")
-async def create_reference(ref: dict):
-    """新建文献"""
-    r = Reference(**{k: v for k, v in ref.items() if k in Reference.model_fields})
-    r.cite_key = _next_cite_key()
-    _refs.append(r)
-    return r
+def create_reference(payload: dict, session: Session = Depends(get_session)):
+    fields = {key: value for key, value in payload.items() if key in Reference.model_fields and key != "id"}
+    reference = Reference(**fields)
+    reference.cite_key = _next_cite_key(session)
+    session.add(reference)
+    session.commit()
+    session.refresh(reference)
+    return reference
 
 
 @router.patch("/{ref_id}")
-async def update_reference(ref_id: str, patch: dict):
-    for i, r in enumerate(_refs):
-        if r.id == ref_id:
-            for k, v in patch.items():
-                if k in Reference.model_fields and k != "id":
-                    setattr(r, k, v)
-            from datetime import datetime
-            r.updated_at = datetime.now().isoformat()
-            return r
-    raise HTTPException(404, "文献不存在")
+def update_reference(ref_id: str, patch: dict, session: Session = Depends(get_session)):
+    reference = session.get(Reference, ref_id)
+    if not reference:
+        raise HTTPException(404, "Reference not found")
+    for key, value in patch.items():
+        if key in Reference.model_fields and key not in {"id", "cite_key", "created_at"}:
+            setattr(reference, key, value)
+    reference.updated_at = datetime.now().isoformat()
+    session.add(reference)
+    session.commit()
+    session.refresh(reference)
+    return reference
 
 
 @router.delete("/{ref_id}")
-async def delete_reference(ref_id: str):
-    global _refs
-    _refs = [r for r in _refs if r.id != ref_id]
+def delete_reference(ref_id: str, session: Session = Depends(get_session)):
+    reference = session.get(Reference, ref_id)
+    if not reference:
+        raise HTTPException(404, "Reference not found")
+    session.delete(reference)
+    session.commit()
     return {"deleted": ref_id}
 
 
 @router.post("/import")
-async def import_references(format: str, data: str):
-    """导入 BibTeX/RIS/CSV"""
-    # TODO: 解析对应格式
-    return {"imported": 0, "format": format}
+def import_references(format: str, data: str):
+    # Format parsers will be added on top of the persistent store.
+    return {"imported": 0, "format": format, "received": len(data)}
 
 
 @router.post("/export")
-async def export_references(ids: list[str], format: str):
-    """导出 BibTeX/RIS/CSV/JSON"""
-    # TODO: 生成对应格式
+def export_references(ids: list[str], format: str):
+    # Keeping the response contract while parser/export writers are introduced.
     return {"data": "", "format": format, "count": len(ids)}
 
 
 @router.post("/deduplicate")
-async def deduplicate_references():
-    """三策略去重: DOI / PMID / 标题+年份"""
-    seen_doi: dict[str, str] = {}
-    seen_pmid: dict[str, str] = {}
-    seen_title_year: dict[str, str] = {}
-    merged = 0
-
-    for r in _refs:
-        if r.doi and r.doi in seen_doi:
-            merged += 1
-        elif r.pmid and r.pmid in seen_pmid:
-            merged += 1
+def deduplicate_references(session: Session = Depends(get_session)):
+    references = session.exec(select(Reference)).all()
+    seen: set[tuple[str, str]] = set()
+    duplicate_ids: list[str] = []
+    for reference in references:
+        normalized_title = "".join(char for char in reference.title.lower() if char.isalnum())
+        key = (reference.doi.lower() or reference.pmid.lower() or normalized_title, reference.year)
+        if key in seen and key[0]:
+            duplicate_ids.append(reference.id)
         else:
-            normalized = "".join(c for c in r.title.lower() if c.isalnum())
-            key = f"{normalized}_{r.year}"
-            if key in seen_title_year:
-                merged += 1
-            else:
-                if r.doi:
-                    seen_doi[r.doi] = r.id
-                if r.pmid:
-                    seen_pmid[r.pmid] = r.id
-                seen_title_year[key] = r.id
-
-    return {"merged": merged, "remaining": len(_refs) - merged}
+            seen.add(key)
+    for ref_id in duplicate_ids:
+        reference = session.get(Reference, ref_id)
+        if reference:
+            session.delete(reference)
+    session.commit()
+    return {"merged": len(duplicate_ids), "remaining": len(references) - len(duplicate_ids)}
 
 
-@router.get("/lookup/doi/{doi}")
+@router.get("/lookup/doi/{doi:path}")
 async def lookup_doi(doi: str):
-    """通过 DOI 从 Crossref 检索文献元数据"""
     async with httpx.AsyncClient() as client:
-        resp = await client.get(f"https://api.crossref.org/works/{doi}", headers={"User-Agent": "Selenyx/2.0"})
-        if resp.status_code != 200:
-            raise HTTPException(404, f"Crossref 未找到 DOI: {doi}")
-        work = resp.json()["message"]
-        return {
-            "title": work.get("title", [""])[0],
-            "creators": [{"firstName": a.get("given", ""), "lastName": a.get("family", ""), "type": "author"} for a in work.get("author", [])],
-            "publication": work.get("container-title", [""])[0],
-            "year": str(work.get("published-print", work.get("published-online", {}).get("date-parts", [[""]])[0][0], "")),
-            "doi": doi,
-            "volume": str(work.get("volume", "")),
-            "issue": str(work.get("issue", "")),
-            "pages": work.get("page", ""),
-            "issn": work.get("ISSN", [""])[0] if work.get("ISSN") else "",
-            "url": work.get("URL", ""),
-            "abstract": work.get("abstract", ""),
-        }
+        response = await client.get(
+            f"https://api.crossref.org/works/{doi}",
+            headers={"User-Agent": "Selenyx/2.0"},
+        )
+    if response.status_code != 200:
+        raise HTTPException(404, f"Crossref could not find DOI: {doi}")
+    work = response.json()["message"]
+    return {
+        "title": work.get("title", [""])[0],
+        "creators": [
+            {"firstName": author.get("given", ""), "lastName": author.get("family", ""), "type": "author"}
+            for author in work.get("author", [])
+        ],
+        "publication": work.get("container-title", [""])[0],
+        "year": str(work.get("published-print", work.get("published-online", {}).get("date-parts", [[""]])[0][0], "")),
+        "doi": doi,
+        "volume": str(work.get("volume", "")),
+        "issue": str(work.get("issue", "")),
+        "pages": work.get("page", ""),
+        "issn": work.get("ISSN", [""])[0] if work.get("ISSN") else "",
+        "url": work.get("URL", ""),
+        "abstract": work.get("abstract", ""),
+    }
 
 
 @router.get("/lookup/pmid/{pmid}")
-async def lookup_pmid(pmid: str):
-    """通过 PMID 从 PubMed 检索"""
-    # TODO: 使用 NCBI E-utilities
-    raise HTTPException(501, "PubMed 检索待实现")
+def lookup_pmid(pmid: str):
+    raise HTTPException(501, f"PubMed lookup is not implemented for PMID {pmid}")

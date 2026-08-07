@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "beforeDevCommand": "npm --prefix .. run dev:local",
     "beforeBuildCommand": "npm --prefix ../frontend run build"
   },
   "app": {
@@ -48,7 +48,7 @@
       "icons/icon.ico"
     ],
     "resources": [],
-    "externalBin": [],
+    "externalBin": ["binaries/selenyx-backend"],
     "linux": {
       "deb": {
         "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]

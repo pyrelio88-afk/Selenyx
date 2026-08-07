@@ -5,7 +5,10 @@
 
 import type { Reference, ResearchProject, RetrievalResult, ChatMessage } from '@apptypes/index';
 
-const API_BASE = '/api';
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
+const isMobileRuntime = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const isDesktopTauri = !isMobileRuntime && '__TAURI_INTERNALS__' in window;
+const API_BASE = (configuredApiBase || (isDesktopTauri ? 'http://127.0.0.1:8770/api' : '/api')).replace(/\/$/, '');
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -69,4 +72,8 @@ export const clinicalApi = {
 export const citationApi = {
   format: (refIds: string[], style: string) => request<{ citations: string[] }>('/citations/format', { method: 'POST', body: JSON.stringify({ refIds, style }) }),
   styles: () => request<{ id: string; name: string }[]>('/citations/styles'),
+};
+
+export const localApi = {
+  health: () => request<{ status: string; version: string; storage: 'local-sqlite'; llmConfigured: boolean }>('/health'),
 };

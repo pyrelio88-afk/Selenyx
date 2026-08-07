@@ -1,36 +1,50 @@
-"""
-Selenyx 后端入口 — FastAPI 应用
-"""
+"""Selenyx local FastAPI application."""
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from selenyx_backend.routers import references, projects, search, ai, clinical, citations
+from selenyx_backend.database import init_db
+from selenyx_backend.routers import ai, citations, clinical, projects, references, search
+from selenyx_backend.settings import get_settings
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+settings = get_settings()
 app = FastAPI(
     title="Selenyx API",
     version="2.0.0-alpha",
-    description="本地优先科研工作台后端 — 文献管理 / 检索 / AI / 临床数据",
+    description="Local-first research workspace backend.",
+    lifespan=lifespan,
 )
 
-# CORS — 允许前端 Vite dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "tauri://localhost"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# === 路由挂载 ===
-app.include_router(references.router, prefix="/api/references", tags=["文献"])
-app.include_router(projects.router, prefix="/api/projects", tags=["项目"])
-app.include_router(search.router, prefix="/api/search", tags=["检索"])
-app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
-app.include_router(clinical.router, prefix="/api/clinical", tags=["临床数据"])
-app.include_router(citations.router, prefix="/api/citations", tags=["引用格式化"])
+app.include_router(references.router, prefix="/api/references", tags=["references"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
+app.include_router(clinical.router, prefix="/api/clinical", tags=["clinical"])
+app.include_router(citations.router, prefix="/api/citations", tags=["citations"])
 
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0-alpha"}
+    return {
+        "status": "ok",
+        "version": app.version,
+        "storage": "local-sqlite",
+        "llmConfigured": bool(settings.llm_api_key),
+    }

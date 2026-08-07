@@ -10,6 +10,24 @@
 use std::fs;
 use tauri::Manager;
 
+#[cfg(all(not(mobile), not(debug_assertions))]
+use tauri_plugin_shell::ShellExt;
+
+/// Production desktop bundles include a frozen FastAPI sidecar. Development
+/// starts the same service through `npm run dev:local`, while mobile clients
+/// deliberately do not attempt to spawn desktop executables.
+#[cfg(all(not(mobile), not(debug_assertions))]
+fn start_local_backend(app: &tauri::AppHandle) -> Result<(), String> {
+    let command = app
+        .shell()
+        .sidecar("selenyx-backend")
+        .map_err(|error| format!("Unable to prepare local backend: {error}"))?;
+    let (_events, _child) = command
+        .spawn()
+        .map_err(|error| format!("Unable to start local backend: {error}"))?;
+    Ok(())
+}
+
 /// 取数据目录 ~/.selenyx/
 fn data_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
     let home = app
@@ -71,6 +89,9 @@ pub fn run() {
             fs::create_dir_all(data_dir.join("projects")).ok();
             fs::create_dir_all(data_dir.join("attachments")).ok();
             fs::create_dir_all(data_dir.join("exports")).ok();
+
+            #[cfg(all(not(mobile), not(debug_assertions))]
+            start_local_backend(app.handle())?;
 
             #[cfg(debug_assertions)]
             {

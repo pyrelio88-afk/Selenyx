@@ -1,55 +1,68 @@
-"""项目路由"""
+"""Persistent research project routes."""
 
-from fastapi import APIRouter, HTTPException
-from selenyx_backend.models import ResearchProject
 from datetime import datetime
 
-router = APIRouter()
-_projects: list[ResearchProject] = []
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, select
 
-PIPELINE_ORDER = ['problem', 'literature', 'fulltext', 'screening', 'reading', 'evidence', 'synthesis', 'writing']
+from selenyx_backend.database import get_session
+from selenyx_backend.models import ResearchProject
+
+router = APIRouter()
+PIPELINE_ORDER = ["problem", "literature", "fulltext", "screening", "reading", "evidence", "synthesis", "writing"]
 
 
 @router.get("")
-async def list_projects():
-    return _projects
+def list_projects(session: Session = Depends(get_session)):
+    return session.exec(select(ResearchProject).order_by(ResearchProject.updated_at.desc())).all()
 
 
-@router.get("/{pid}")
-async def get_project(pid: str):
-    for p in _projects:
-        if p.id == pid:
-            return p
-    raise HTTPException(404, "项目不存在")
+@router.get("/{project_id}")
+def get_project(project_id: str, session: Session = Depends(get_session)):
+    project = session.get(ResearchProject, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    return project
 
 
 @router.post("")
-async def create_project(p: dict):
-    proj = ResearchProject(**{k: v for k, v in p.items() if k in ResearchProject.model_fields})
-    _projects.append(proj)
-    return proj
+def create_project(payload: dict, session: Session = Depends(get_session)):
+    fields = {key: value for key, value in payload.items() if key in ResearchProject.model_fields and key != "id"}
+    project = ResearchProject(**fields)
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+    return project
 
 
-@router.patch("/{pid}")
-async def update_project(pid: str, patch: dict):
-    for p in _projects:
-        if p.id == pid:
-            for k, v in patch.items():
-                if k in ResearchProject.model_fields and k != "id":
-                    setattr(p, k, v)
-            p.updated_at = datetime.now().isoformat()
-            return p
-    raise HTTPException(404, "项目不存在")
+@router.patch("/{project_id}")
+def update_project(project_id: str, patch: dict, session: Session = Depends(get_session)):
+    project = session.get(ResearchProject, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    for key, value in patch.items():
+        if key in ResearchProject.model_fields and key not in {"id", "created_at"}:
+            setattr(project, key, value)
+    project.updated_at = datetime.now().isoformat()
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+    return project
 
 
-@router.post("/{pid}/advance")
-async def advance_stage(pid: str):
-    """推进流水线阶段"""
-    for p in _projects:
-        if p.id == pid:
-            idx = PIPELINE_ORDER.index(p.current_stage)
-            if idx < len(PIPELINE_ORDER) - 1:
-                p.current_stage = PIPELINE_ORDER[idx + 1]
-                p.updated_at = datetime.now().isoformat()
-            return p
-    raise HTTPException(404, "项目不存在")
+@router.post("/{project_id}/advance")
+def advance_stage(project_id: str, session: Session = Depends(get_session)):
+    project = session.get(ResearchProject, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    try:
+        index = PIPELINE_ORDER.index(project.current_stage)
+    except ValueError:
+        raise HTTPException(409, f"Unknown pipeline stage: {project.current_stage}") from None
+    if index < len(PIPELINE_ORDER) - 1:
+        project.current_stage = PIPELINE_ORDER[index + 1]
+        project.updated_at = datetime.now().isoformat()
+        session.add(project)
+        session.commit()
+        session.refresh(project)
+    return project
