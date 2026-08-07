@@ -3,7 +3,7 @@
  * API 文档: https://www.pexels.com/api/documentation/
  */
 
-const PEXELS_API_KEY = '8ybkGp9CghyJQBBkeclDqMhCGCaSWq85nj05g0wO7HkgRmEGHJH64jdD';
+const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY || '';
 const PEXELS_BASE = 'https://api.pexels.com/v1';
 
 export interface PexelsPhoto {
