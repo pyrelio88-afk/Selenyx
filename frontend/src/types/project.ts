@@ -31,6 +31,7 @@ export interface ResearchProject {
   name: string;
   description: string;
   currentStage: PipelineStageKey;
+  frameworkId?: string;   // 研究框架 ID（对齐 RESEARCH_FRAMEWORKS），驱动 AI 助手技能推荐
   pico?: PICO;
   tags: string[];
   sbar?: SBARInfo;

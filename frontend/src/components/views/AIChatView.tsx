@@ -21,7 +21,7 @@ import { useIsMobile } from '@lib/useIsMobile';
 import { streamChat, LLMError, PROVIDER_DEFAULTS, type LLMMessage } from '@services/llm';
 import { Icon } from '@components/ui/Icon';
 import { MarkdownView } from '@components/chat/MarkdownView';
-import { RESEARCH_SKILLS } from '@data/skills';
+import { RESEARCH_SKILLS, getRecommendedSkills } from '@data/skills';
 
 /* ============ 类型 ============ */
 
@@ -447,6 +447,14 @@ export function AIChatView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input]);
 
+  /** 框架驱动技能推荐——横向滚动卡数据源 */
+  const recommendedSkills = useMemo(() => {
+    const ids = getRecommendedSkills(project?.frameworkId);
+    return ids
+      .map((id) => RESEARCH_SKILLS.find((s) => s.id === id))
+      .filter(Boolean) as typeof RESEARCH_SKILLS;
+  }, [project?.frameworkId]);
+
   function onInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const v = e.target.value;
     setInput(v);
@@ -614,6 +622,25 @@ export function AIChatView() {
                   <span className="aichat-slash-desc">{it.desc}</span>
                 </button>
               ))}
+            </div>
+          )}
+          {/* 框架驱动技能推荐——横向滚动卡 */}
+          {recommendedSkills.length > 0 && !showSlash && (
+            <div className="aichat-skill-bar">
+              <span className="aichat-skill-bar-label">{project?.frameworkId ? '推荐技能' : '常用技能'}</span>
+              <div className="aichat-skill-scroll">
+                {recommendedSkills.map((sk) => (
+                  <button
+                    key={sk.id}
+                    className="aichat-skill-chip"
+                    onClick={() => { setInput(sk.prompt ?? `[${sk.name}] `); setTimeout(() => inputRef.current?.focus(), 20); }}
+                    title={sk.description}
+                  >
+                    <Icon name="sparkles" size={13} strokeWidth={1.6} />
+                    <span>{sk.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <div className="aichat-input-row">

@@ -77,6 +77,7 @@ export function ProjectsView() {
       name: form.name.trim(),
       description: form.description.trim() || selectedFramework?.description || '',
       currentStage: 'problem' as PipelineStageKey,
+      frameworkId: selectedFramework?.id || undefined,
       pico: selectedFramework?.id === 'pico' ? {
         population: fieldValues['population'] || '',
         intervention: fieldValues['intervention'] || '',

@@ -476,6 +476,70 @@ export const RESEARCH_SKILLS: ResearchSkill[] = [
 ];
 
 
+/**
+ * 框架 → 推荐技能映射（基于 EQUATOR 框架体系）
+ * 深度研究写手交付的描述性技能名已映射到实际 nature-* skill_id；
+ * 无对应实际技能的能力（如偏倚风险评估、样本量计算等）暂不展示，待新增技能后补充。
+ * AI 助手输入框上方横向滚动卡读取此映射 → 展示推荐技能 → 点击注入 prompt 前缀。
+ */
+export const SKILL_RECOMMENDATIONS: Record<string, string[]> = {
+  // A. 医学/RCT 类
+  consort: ['nature-statistics', 'nature-reviewer', 'nature-data', 'nature-figure'],
+  'consort-npt': ['nature-statistics', 'nature-reviewer', 'nature-data'],
+  tidier: ['nature-reviewer', 'nature-data', 'nature-statistics'],
+  // B. 系统综述/Meta 类
+  prisma: ['nature-academic-search', 'nature-literature-pipeline', 'nature-statistics', 'nature-figure', 'nature-data'],
+  'meta-analysis': ['nature-academic-search', 'nature-statistics', 'nature-figure', 'nature-data'],
+  'scoping-review': ['nature-academic-search', 'nature-literature-pipeline', 'nature-figure'],
+  moose: ['nature-statistics', 'nature-figure', 'nature-data'],
+  // C. 观察性研究类
+  strobe: ['nature-statistics', 'nature-data', 'nature-figure', 'nature-reviewer'],
+  record: ['nature-statistics', 'nature-data', 'nature-academic-search'],
+  strega: ['nature-statistics', 'nature-data', 'nature-figure'],
+  // D. 诊断/预测类
+  stard: ['nature-statistics', 'nature-figure', 'nature-data'],
+  tripod: ['nature-statistics', 'nature-figure', 'nature-data', 'nature-reviewer'],
+  // E. 定性研究类
+  coreq: ['nature-reader', 'nature-data', 'nature-writing'],
+  // F. 卫生经济类
+  cheers: ['nature-statistics', 'nature-figure', 'nature-data'],
+  // G. 动物实验类
+  arrive: ['nature-statistics', 'nature-experiment-log', 'nature-data'],
+  // H. 通用/跨学科
+  imrad: ['nature-writing', 'nature-citation', 'nature-figure', 'nature-reviewer'],
+  pico: ['nature-academic-search', 'nature-reader', 'nature-statistics', 'nature-writing'],
+  jars: ['nature-writing', 'nature-citation', 'nature-statistics', 'nature-figure'],
+  squire: ['nature-writing', 'nature-statistics', 'nature-data'],
+  right: ['nature-academic-search', 'nature-reviewer', 'nature-citation'],
+  // 社科/质性类
+  spider: ['nature-reader', 'nature-data', 'nature-writing'],
+  'grounded-theory': ['nature-reader', 'nature-data', 'nature-writing'],
+  survey: ['nature-statistics', 'nature-data', 'nature-figure'],
+  'case-study': ['nature-reader', 'nature-writing', 'nature-data'],
+  'mixed-methods': ['nature-statistics', 'nature-data', 'nature-reader'],
+  'content-analysis': ['nature-reader', 'nature-data', 'nature-writing'],
+  'action-research': ['nature-data', 'nature-writing', 'nature-reviewer'],
+  phenomenology: ['nature-reader', 'nature-data', 'nature-writing'],
+  ethnography: ['nature-reader', 'nature-data', 'nature-writing'],
+  'narrative-analysis': ['nature-reader', 'nature-data', 'nature-writing'],
+  // 理工/实验类
+  doe: ['nature-statistics', 'nature-experiment-log', 'nature-figure'],
+  econometric: ['nature-statistics', 'nature-data', 'nature-figure'],
+  'panel-data': ['nature-statistics', 'nature-data', 'nature-figure'],
+  did: ['nature-statistics', 'nature-data', 'nature-figure'],
+};
+
+/** 默认推荐技能（项目无框架或框架未配置映射时） */
+export const DEFAULT_RECOMMENDED_SKILLS: string[] = [
+  'nature-academic-search', 'nature-reader', 'nature-statistics', 'nature-writing',
+];
+
+/** 根据框架 ID 获取推荐技能列表 */
+export function getRecommendedSkills(frameworkId?: string): string[] {
+  if (!frameworkId) return DEFAULT_RECOMMENDED_SKILLS;
+  return SKILL_RECOMMENDATIONS[frameworkId] ?? DEFAULT_RECOMMENDED_SKILLS;
+}
+
 /** 技能分类元数据（SkillsView 筛选器使用） */
 export const SKILL_CATEGORIES: { key: ResearchSkill['category'] | 'all'; label: string }[] = [
   { key: 'all', label: '全部' },
