@@ -252,6 +252,6 @@ export function exportRIS(refs: Reference[]): string {
 /** 统一导入入口：自动嗅探格式 */
 export function importReferences(src: string): { format: 'bibtex' | 'ris'; refs: Reference[] } {
   const head = src.slice(0, 2000);
-  if (/^TY  - /m.test(head)) return { format: 'ris', refs: importRIS(src) };
+  if (/^TY {2}- /m.test(head)) return { format: 'ris', refs: importRIS(src) };
   return { format: 'bibtex', refs: importBibTeX(src) };
 }

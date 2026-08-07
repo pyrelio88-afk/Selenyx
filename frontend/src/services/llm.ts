@@ -10,8 +10,6 @@
  */
 
 import type { LLMConfig } from '@apptypes/index';
-import { streamLocalAI } from './api';
-import { isDesktopTauri } from './nativeRuntime';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -91,7 +89,7 @@ interface PreparedRequest {
 }
 
 function isOpenAICompat(p: LLMConfig['provider']): boolean {
-  return p === 'openai' || p === 'openrouter' || p === 'ollama' || p === 'custom';
+  return p === 'openai' || p === 'openrouter' || p === 'ollama' || p === 'agnes' || p === 'custom';
 }
 
 function prepare(config: LLMConfig, messages: LLMMessage[], stream: boolean): PreparedRequest {
@@ -177,14 +175,6 @@ function prepare(config: LLMConfig, messages: LLMMessage[], stream: boolean): Pr
 // ============================================================
 
 export async function chat(config: LLMConfig, messages: LLMMessage[]): Promise<LLMResult> {
-  if (isDesktopTauri()) {
-    const content = await streamLocalAI(messages, () => undefined);
-    return {
-      content,
-      tokensUsed: estimateTokens(messages.map((message) => message.content).join('') + content),
-      estimated: true,
-    };
-  }
   const req = prepare(config, messages, false);
   let res: Response;
   try {
@@ -213,14 +203,6 @@ export async function streamChat(
   onDelta: (accumulated: string) => void,
   signal?: AbortSignal,
 ): Promise<LLMResult> {
-  if (isDesktopTauri()) {
-    const content = await streamLocalAI(messages, onDelta, signal);
-    return {
-      content,
-      tokensUsed: estimateTokens(messages.map((message) => message.content).join('') + content),
-      estimated: true,
-    };
-  }
   const req = prepare(config, messages, true);
   let res: Response;
   try {
@@ -325,5 +307,6 @@ export const PROVIDER_DEFAULTS: Record<LLMConfig['provider'], { baseUrl: string;
   anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5', hint: '已自动加浏览器直连头' },
   google: { baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-2.0-flash', hint: '免费额度友好' },
   ollama: { baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b', hint: '本地运行；桌面版通过本机网关连接' },
+  agnes: { baseUrl: 'https://apihub.agnes-ai.com/v1', model: 'agnes-2.5-flash', hint: 'Agnes OpenAI 兼容网关（推荐走本地后端密钥）' },
   custom: { baseUrl: '', model: '', hint: '任何 OpenAI 兼容端点（/chat/completions）' },
 };

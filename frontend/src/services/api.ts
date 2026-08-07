@@ -84,10 +84,35 @@ export const projectApi = {
   advanceStage: (id: string) => request<ResearchProject>(`/projects/${id}/advance`, { method: 'POST' }),
 };
 
-// === 检索 API (extractive retrieval, 借鉴 HydraLab) ===
+// === 检索 API (extractive retrieval + scholarly connectors) ===
+export interface SemanticHit extends RetrievalResult {
+  title?: string;
+  chunkId?: string;
+  source?: string;
+}
+
 export const searchApi = {
-  semantic: (query: string, projectId?: string) => request<RetrievalResult[]>('/search/semantic', { method: 'POST', body: JSON.stringify({ query, projectId }) }),
-  scholarly: (query: string, sources: string[]) => request<Reference[]>('/search/scholarly', { method: 'POST', body: JSON.stringify({ query, sources }) }),
+  semantic: (query: string, projectId?: string) =>
+    request<{ results: SemanticHit[]; count: number; query: string }>('/search/semantic', {
+      method: 'POST',
+      body: JSON.stringify({ query, projectId, topK: 8 }),
+    }),
+  scholarly: (query: string, sources: string[]) =>
+    request<{ results: unknown[]; count: number; diagnostics: unknown[] }>('/search/scholarly', {
+      method: 'POST',
+      body: JSON.stringify({ query, sources }),
+    }),
+  reindex: () => request<{ references: number; chunksTotal: number }>('/search/reindex', { method: 'POST' }),
+  related: (payload: { pmid?: string; doi?: string }) =>
+    request<{ results: unknown[]; count: number }>('/search/related', { method: 'POST', body: JSON.stringify(payload) }),
+};
+
+export const evidenceApi = {
+  list: (projectId?: string) => request<unknown[]>(`/evidence${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+  summary: (projectId?: string) => request<Record<string, number>>(`/evidence/summary${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+  create: (body: Record<string, unknown>) => request<unknown>('/evidence', { method: 'POST', body: JSON.stringify(body) }),
+  patch: (id: string, body: Record<string, unknown>) => request<unknown>(`/evidence/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  outline: (projectId: string) => request<{ bullets: string[]; acceptedCount: number }>(`/evidence/writing-outline/${projectId}`),
 };
 
 // === AI / LLM API ===

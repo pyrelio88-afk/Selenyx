@@ -23,8 +23,8 @@ from selenyx_backend.settings import Settings, get_settings
 
 router = APIRouter()
 
-_CHAT_TIMEOUT = 60.0
-_STREAM_TIMEOUT = httpx.Timeout(connect=15.0, read=120.0, write=60.0, pool=15.0)
+_CHAT_TIMEOUT = 120.0
+_STREAM_TIMEOUT = httpx.Timeout(connect=15.0, read=180.0, write=60.0, pool=15.0)
 
 
 class ChatRequest(BaseModel):

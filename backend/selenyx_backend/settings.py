@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
+    # Optional OpenAI-compatible embeddings (Ollama nomic-embed-text etc.)
+    embed_base_url: str = ""
+    embed_api_key: str = ""
+    embed_model: str = ""
+    # OpenAlex polite pool
+    openalex_mailto: str = "selenyx@research.local"
+    openalex_api_key: str = ""
 
     @property
     def database_path(self) -> Path:

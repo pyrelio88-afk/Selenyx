@@ -18,12 +18,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { useIsMobile } from '@lib/useIsMobile';
-import { streamChat, LLMError, PROVIDER_DEFAULTS, type LLMMessage } from '@services/llm';
+import { streamChat, LLMError, type LLMMessage } from '@services/llm';
 import { Icon } from '@components/ui/Icon';
 import { MarkdownView } from '@components/chat/MarkdownView';
 import { RESEARCH_SKILLS, getRecommendedSkills } from '@data/skills';
-import { isDesktopTauri } from '@services/nativeRuntime';
-import { queueNativeWorkspaceSnapshot } from '@services/workspaceBackup';
 import { persistChatSessions } from '@services/chatSessionStorage';
 
 /* ============ 类型 ============ */
@@ -131,7 +129,6 @@ export function AIChatView() {
     setCurrentProject, setView,
   } = useAppStore();
   const isMobile = useIsMobile();
-  const desktopRuntime = isDesktopTauri();
   const project = projects.find((p) => p.id === currentProjectId);
   // A stale project id must not create an orphaned chat-storage scope.
   const activeProjectId = project?.id ?? null;
@@ -148,14 +145,12 @@ export function AIChatView() {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSlash, setShowSlash] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const modelTriggerRef = useRef<HTMLButtonElement>(null);
   const scopeRef = useRef(scope);
   const stickBottomRef = useRef(true);
   const rafRef = useRef<number | null>(null);
@@ -177,9 +172,7 @@ export function AIChatView() {
   /* ---- 持久化副作用 ---- */
   useEffect(() => {
     try {
-      if (persistChatSessions(localStorage, sessionScope, scope, sessions, activeId)) {
-        queueNativeWorkspaceSnapshot();
-      }
+      persistChatSessions(localStorage, sessionScope, scope, sessions, activeId);
     } catch { /* quota */ }
   }, [sessions, activeId, scope, sessionScope]);
 
@@ -539,20 +532,6 @@ export function AIChatView() {
   const configured = !!llmConfig;
   const tokensUsed = llmConfig?.tokensUsed ?? 0;
 
-  const closeModelMenu = useCallback(() => {
-    setShowModelMenu(false);
-    requestAnimationFrame(() => modelTriggerRef.current?.focus());
-  }, []);
-
-  function toggleModelMenu() {
-    if (desktopRuntime) {
-      setView('settings');
-      return;
-    }
-    if (showModelMenu) closeModelMenu();
-    else setShowModelMenu(true);
-  }
-
   /* ============ 渲染 ============ */
 
   return (
@@ -625,28 +604,15 @@ export function AIChatView() {
             {/* 模型切换器 */}
             <div className="aichat-model-wrap">
               <button
-                ref={modelTriggerRef}
                 type="button"
                 className={`aichat-model-chip ${configured ? 'ok' : 'warn'}`}
-                onClick={toggleModelMenu}
-                aria-label={desktopRuntime
-                  ? '在设置中管理 AI 模型和本机密钥'
-                  : configured ? `切换模型，当前为 ${llmConfig!.provider} ${llmConfig!.model}` : '配置 AI 模型'}
-                aria-haspopup={desktopRuntime ? undefined : 'dialog'}
-                aria-expanded={desktopRuntime ? undefined : showModelMenu}
-                aria-controls={desktopRuntime ? undefined : 'aichat-model-dialog'}
+                onClick={() => setView('settings')}
+                aria-label={configured ? `在设置中管理 AI 模型；当前为 ${llmConfig!.provider} ${llmConfig!.model}` : '前往设置配置 AI 模型'}
               >
                 <span className="pdf-tool-dot" style={{ background: 'currentColor' }} />
                 {configured ? `${llmConfig!.provider} / ${llmConfig!.model}` : '未配置'}
                 <Icon name="chevronDown" size={13} />
               </button>
-              {showModelMenu && !desktopRuntime && (
-                <ModelMenu
-                  config={llmConfig}
-                  onPick={(model) => { if (llmConfig) setLLMConfig({ ...llmConfig, model }); closeModelMenu(); }}
-                  onClose={closeModelMenu}
-                />
-              )}
             </div>
             {configured && tokensUsed > 0 && (
               <span className="aichat-tokens" title="累计 token 用量（估算）">
@@ -842,76 +808,6 @@ export function AIChatView() {
 }
 
 /* ============ 模型切换菜单 ============ */
-
-function ModelMenu({ config, onPick, onClose }: { config: ReturnType<typeof useAppStore.getState>['llmConfig']; onPick: (model: string) => void; onClose: () => void }) {
-  const [val, setVal] = useState(config?.model ?? '');
-  const panelRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const provider = config?.provider ?? 'openai';
-  const preset = PROVIDER_DEFAULTS[provider];
-  const presets = [preset.model, 'gpt-4o', 'gpt-4.1-mini', 'claude-sonnet-4-5', 'claude-opus-4-1', 'gemini-2.0-flash', 'gemini-2.5-pro', 'deepseek-chat', 'qwen2.5:7b']
-    .filter((v, i, a) => v && a.indexOf(v) === i);
-
-  useEffect(() => {
-    const panel = panelRef.current;
-    inputRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab' || !panel) return;
-      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ));
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  return (
-    <div className="aichat-model-menu" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div ref={panelRef} id="aichat-model-dialog" className="aichat-model-panel" role="dialog" aria-modal="true" aria-labelledby="aichat-model-dialog-title" aria-describedby="aichat-model-dialog-hint">
-        <div className="aichat-model-heading">
-          <div className="aichat-model-provider">
-            <span className="pdf-tool-dot" style={{ background: 'var(--success)' }} />
-            <span id="aichat-model-dialog-title">当前服务：{provider}</span>
-            <span id="aichat-model-dialog-hint" className="aichat-model-hint">{preset.hint}</span>
-          </div>
-          <button type="button" className="aichat-model-close" onClick={onClose} aria-label="关闭模型选择器" title="关闭">
-            <Icon name="close" size={15} />
-          </button>
-        </div>
-        <input
-          ref={inputRef}
-          className="aichat-model-input"
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
-          placeholder="模型名，如 gpt-4o-mini"
-          aria-label="输入模型名称"
-          onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) onPick(val.trim()); }}
-        />
-        <div className="aichat-model-presets">
-          {presets.map((m) => (
-            <button type="button" key={m} className="aichat-model-preset" onClick={() => onPick(m)}>{m}</button>
-          ))}
-        </div>
-        <button type="button" className="btn btn-primary aichat-model-apply" disabled={!val.trim()} onClick={() => onPick(val.trim())}>应用</button>
-      </div>
-    </div>
-  );
-}
 
 /* ============ 空态 ============ */
 

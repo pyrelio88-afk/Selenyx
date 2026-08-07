@@ -59,64 +59,66 @@ export function ToolsView() {
   }
 
   return (
-    <div>
-      <div className="view-header">
-        <h1 className="view-title">工具箱</h1>
-      </div>
-
-      {/* 移动端：返回工具网格 */}
-      {isMobile && (
-        <div className="mobile-back-bar">
-          <button className="mobile-back-btn" onClick={() => setPickerOpen(true)}>
-            <Icon name="chevronRight" size={18} style={{ transform: 'rotate(180deg)' }} /> 工具箱
-          </button>
-          <span className="mobile-back-title">{active.label}</span>
+      <div>
+        <div className="view-header">
+          <h1 className="view-title">工具箱</h1>
         </div>
-      )}
 
-      {!isMobile && (
-      <div style={{ display: 'flex', gap: 2, marginBottom: 16, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`btn ${tab === t.key ? 'btn-primary' : ''}`}
-            onClick={() => setTab(t.key)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, borderRadius: '0', borderBottom: tab === t.key ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: '-1px', padding: '8px 14px', fontSize: 13 }}
-          >
-            <Icon name={t.icon} size={16} strokeWidth={1.8} /> {t.label}
-          </button>
-        ))}
-      </div>
-      )}
-      {/* 活动工具标题栏（移动端由返回栏替代） */}
-      {!isMobile && (() => {
-        return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '10px 14px', background: 'var(--accent-light)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-            <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent)', borderRadius: 10, color: '#fff', flexShrink: 0 }}>
-              <Icon name={active.icon} size={22} strokeWidth={1.8} />
-            </div>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{active.label}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Selenyx 科研工具箱</div>
-            </div>
+        {/* 移动端：返回工具网格 */}
+        {isMobile && (
+          <div className="mobile-back-bar">
+            <button className="mobile-back-btn" onClick={() => setPickerOpen(true)}>
+              <Icon name="chevronRight" size={18} style={{ transform: 'rotate(180deg)' }} /> 工具箱
+            </button>
+            <span className="mobile-back-title">{active.label}</span>
           </div>
-        );
-      })()}
+        )}
 
-      {tab === 'chart' && <ChartTool />}
-      {tab === 'browser' && <WebBrowser />}
-      {tab === 'doi' && <DOILookup />}
-      {tab === 'cite' && <CiteFormatter />}
-      {tab === 'pico' && <PICOBuilder />}
-      {tab === 'design' && <DesignChecker />}
-      {tab === 'ethics' && <EthicsChecklist />}
-      {tab === 'matrix' && <LiteratureMatrix />}
-      {tab === 'grant' && <GrantOutline />}
-      {tab === 'count' && <WordCounter />}
-      {tab === 'models' && <LocalModels />}
-    </div>
-  );
-}
+        {/* 桌面：图标网格入口（解决「工具箱没有图标」）；点击后下方展开对应工具 */}
+        {!isMobile && (
+          <div className="tools-grid" style={{ marginBottom: 18 }} role="tablist" aria-label="工具箱入口">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.key}
+                className={`tools-card ${tab === t.key ? 'tools-card-active' : ''}`}
+                onClick={() => setTab(t.key)}
+                style={tab === t.key ? { borderColor: 'var(--accent)', boxShadow: '0 6px 18px color-mix(in srgb, var(--accent) 14%, transparent)' } : undefined}
+              >
+                <span className="tools-card-icon"><Icon name={t.icon} size={28} strokeWidth={1.6} /></span>
+                <span className="tools-card-name">{t.label}</span>
+                <span className="tools-card-desc">{t.desc}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '10px 14px', background: 'var(--accent-light)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+          <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent)', borderRadius: 10, color: '#fff', flexShrink: 0 }}>
+            <Icon name={active.icon} size={22} strokeWidth={1.8} />
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{active.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Selenyx 科研工具箱 · 本地运行</div>
+          </div>
+        </div>
+
+        {tab === 'chart' && <ChartTool />}
+        {tab === 'browser' && <WebBrowser />}
+        {tab === 'doi' && <DOILookup />}
+        {tab === 'cite' && <CiteFormatter />}
+        {tab === 'pico' && <PICOBuilder />}
+        {tab === 'design' && <DesignChecker />}
+        {tab === 'ethics' && <EthicsChecklist />}
+        {tab === 'matrix' && <LiteratureMatrix />}
+        {tab === 'grant' && <GrantOutline />}
+        {tab === 'count' && <WordCounter />}
+        {tab === 'models' && <LocalModels />}
+      </div>
+    );
+  }
 
 /** DOI 查询工具 — 输入 DOI 自动抓取元数据 */
 function DOILookup() {
@@ -548,10 +550,11 @@ function DesignChecker() {
   ];
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const toggle = (id: string) => {
-    const next = new Set(checked);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setChecked(next);
-  };
+      const next = new Set(checked);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setChecked(next);
+    };
   const pct = Math.round((checked.size / checks.length) * 100);
 
   return (

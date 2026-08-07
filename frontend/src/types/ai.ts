@@ -2,7 +2,7 @@
  * Selenyx AI/LLM 模型 — BYOK + MCP + Agent 编排 + 知识图谱
  */
 
-export type LLMProvider = 'openai' | 'openrouter' | 'anthropic' | 'google' | 'ollama' | 'custom';
+export type LLMProvider = 'openai' | 'openrouter' | 'anthropic' | 'google' | 'ollama' | 'agnes' | 'custom';
 
 export interface LLMConfig {
   provider: LLMProvider;

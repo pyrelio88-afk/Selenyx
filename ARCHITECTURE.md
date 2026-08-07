@@ -1,47 +1,65 @@
-# Selenyx 架构决策：一个本地优先的前端产品
+# Selenyx 架构：前端交互 + 本地后端服务
 
-> 2026-08-07 定稿。目标是让同一份科研工作区在浏览器、桌面壳和移动 WebView 中保持一致，而不引入常驻服务。
+> 2026-08-07 修订。纠正「纯静态」偏航：完整科研工作台需要本地后端承担 RAG、学术 API、数据库与密钥网关；前端负责交互与离线降级。
 
 ## 决策
 
-**Selenyx 是一个纯前端单页应用。** 业务状态保存在当前设备的浏览器存储中：结构化工作区以 \`localStorage\` 持久化，适合使用 \`IndexedDB\` 的浏览器功能仅使用本地缓存。导入、导出、OCR、PDF 阅读、统计和研究流程都在客户端完成。
+**Selenyx = 本地优先的前后端一体工作台。**
 
-本项目只有一个产品和一套前端实现。可选的原生壳只负责分发和设备能力，不拥有另一套业务数据模型，也不启动独立服务。
-
-| 功能层 | 技术 | 选择理由 |
+| 层 | 技术 | 职责 |
 |---|---|---|
-| 应用界面与业务逻辑 | TypeScript + React 19 + Vite + Zustand | 适合交互密集的文献、表格、看板和科研流程；拥有成熟的 PDF、表格与可视化生态。 |
-| 本地数据 | 浏览器 \`localStorage\` / \`IndexedDB\` | 无账号、无网络依赖，数据默认留在用户设备；通过 JSON 导出获得可移植备份。 |
-| PDF、OCR 与文档转换 | 浏览器 Worker、WASM 与随包资源 | 让文件在设备本地处理，避免上传到远程计算环境。 |
-| 可选桌面/移动壳 | Rust + Tauri v2 | 复用同一份静态前端产物，并在需要时提供原生窗口、文件选择与本机备份能力。 |
+| 前端 | React 19 + TypeScript + Vite + Zustand | 交互、文献/项目 UI、PDF/OCR、统计图、流水线；浏览器存储作缓存与降级 |
+| 后端 | FastAPI + SQLModel + SQLite | 持久化、RAG 向量/混合检索、学术连接器、证据链、Zotero 本地 API、LLM 密钥网关 |
+| 桌面壳 | Tauri v2 + Python sidecar (`127.0.0.1:8770`) | 分发、拉起本机后端、原生文件能力 |
 
-## 为什么不拆成多套应用
+## 科研闭环（证据门）
 
-科研工作区最重要的是数据模型和交互的一致性。将文献、项目、笔记、表格和流水线分拆为平行版本，会使导入导出、关系一致性与离线体验迅速失控。Selenyx 因此以一套 TypeScript 状态模型为中心，所有平台只复用它。
+```text
+立题 → 真检索(API) → 获取全文 → 导入 PDF → 阅读批注
+→ 证据链(accept) → 综合 → 写作(仅 accepted 证据)
+```
 
-Java、Python 或其他语言可以在独立研究工具中表现优秀，但本项目的核心体验依赖 \`pdfjs-dist\`、浏览器 Worker、React 表格和本地 Web 存储；为它们新增第二套业务实现只会增加迁移和测试成本。
+本地 RAG（hybrid）：
 
-## 目录结构
+- 默认 **hashing embedding**（无模型下载，永远可用）
+- 可选 **OpenAI 兼容 /embeddings**（Ollama `nomic-embed-text` 等）
+- 检索结果带 `page` / `charOffset` / `excerpt`，禁止编造引用
 
-\`\`\`text
+学术连接器（抄 OpenScience/Runcell 的诚实性）：
+
+- OpenAlex（mailto 礼貌池）/ Crossref / PubMed / arXiv
+- 宿主级 rate limit；429 与 0 结果如实上报
+- 相关文献：PubMed ELink
+
+## 目录
+
+```text
 selenyx/
-  frontend/       TypeScript + React + Vite + Zustand（应用与静态资源）
-  desktop/        Rust + Tauri v2（可选原生壳，复用 frontend 产物）
-  scripts/        构建、离线资源校验和本地验证脚本
-  ARCHITECTURE.md 本文件
-\`\`\`
+  frontend/     React 交互层
+  backend/      FastAPI 服务（selenyx_backend）
+  desktop/      Tauri 壳 + sidecar
+  docs/         需求账本与流水线说明
+  scripts/      构建与校验
+```
 
-## 数据与联网边界
+## 数据与密钥边界
 
-1. 数据的默认归属是当前设备，不存在账号同步或后台上传。
-2. 所有联网访问必须由用户显式动作触发，例如检索公开元数据或调用用户配置的 AI 服务。
-3. 第三方配置只能从 \`.env.local\` 经 \`import.meta.env\` 注入；源码和提交记录不得出现真实密钥。
-4. \`VITE_*\` 变量会进入浏览器产物，不能被当作秘密存储；长期或高权限密钥不属于静态客户端配置。
-5. JSON 导出/导入是跨设备迁移的正式路径；若需要同步，应另行设计可审计的用户授权与冲突处理机制。
+1. SQLite 默认 `~/.selenyx/selenyx.sqlite3`
+2. 密钥只进 `backend/.env.local` 或 `~/.selenyx/.env.local`（`SELENYX_LLM_*`），**永不**进前端构建产物的长期分发
+3. 开发可用 Vite proxy：`/api` → `127.0.0.1:8770`
+4. 后端不可用时前端仍可读本地 Zustand/localStorage，功能降级而不是白屏
+
+## 开发命令
+
+```powershell
+npm run dev:local     # 同时起后端 + 前端
+npm run backend:test
+npm run verify:local
+```
 
 ## 工程规则
 
-1. 新功能进入同一前端产品，不再开平行语言版本。
-2. 优先保持离线可用；浏览器不支持的能力必须明确降级，而不是悄悄依赖网络。
-3. 每轮迭代保留可复现的 Git 提交和验证记录；评测使用外部项目或工具标准，不自评。
-4. GitHub push 需用户明确授权。
+1. 空壳 UI = Critical（按钮必须有真实 handler 与可验证结果）
+2. 写作提纲只能来自 `review=accepted` 的证据
+3. GitHub push 需用户明确授权
+4. 不把 skill 超市做成主导航；能力折叠进八段流水线

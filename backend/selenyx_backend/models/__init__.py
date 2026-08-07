@@ -3,7 +3,7 @@ Selenyx 数据模型 — SQLModel
 对齐前端 TypeScript 类型定义
 """
 
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field
 from typing import Optional
 from datetime import datetime
 import uuid
@@ -130,3 +130,39 @@ class AgentRun(SQLModel, table=True):
     tokens_used: int = 0
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+
+
+class DocumentChunk(SQLModel, table=True):
+    """RAG 文本块（带页码/字符偏移，extractive 引用）"""
+    __tablename__ = "document_chunks"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    reference_id: str = Field(index=True, default="")
+    source: str = "metadata"  # metadata | pdf | note | paste
+    page: Optional[int] = None
+    section: Optional[str] = None
+    char_start: int = 0
+    char_end: int = 0
+    text: str = ""
+    embedding_json: str = "[]"
+    embedding_backend: str = "hash"  # hash | dense
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class EvidenceItem(SQLModel, table=True):
+    """证据链条目（写作只允许 accepted）"""
+    __tablename__ = "evidence_items"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    project_id: str = Field(index=True, default="")
+    reference_id: str = Field(index=True, default="")
+    claim: str = ""
+    excerpt: str = ""
+    relation: str = "supports"  # supports | contradicts | qualifies
+    review: str = "pending"  # pending | accepted | rejected
+    confidence: str = "medium"  # high | medium | low — user-set only
+    page: Optional[int] = None
+    chunk_id: Optional[str] = None
+    notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())

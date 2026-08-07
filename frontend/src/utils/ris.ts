@@ -65,13 +65,13 @@ export function parseRIS(src: string): RISEntry[] {
   const entries: RISEntry[] = [];
   let cur: RISEntry | null = null;
 
-  const text = src.replace(/^﻿/, ''); // 去 BOM
+  const text = src.replace(/^\uFEFF/, ''); // 去 BOM
   const lines = text.split(/\r\n|\r|\n/);
   let lastTag = '';
 
   for (const rawLine of lines) {
     // 续行：以空格/制表开头且非 "TAG  - " 格式 → 追加到上一标签
-    const tagMatch = rawLine.match(/^([A-Z][A-Z0-9])  - (.*)$/);
+    const tagMatch = rawLine.match(/^([A-Z][A-Z0-9]) {2}- (.*)$/);
     if (!tagMatch) {
       if (cur && lastTag && rawLine.trim() !== '' && /^[\s\t]/.test(rawLine)) {
         const arr = cur.tags[lastTag];

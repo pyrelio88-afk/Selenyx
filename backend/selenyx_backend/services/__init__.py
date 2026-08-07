@@ -1,1 +1,1 @@
-"""Selenyx 服务层"""
+"""Selenyx backend services package."""

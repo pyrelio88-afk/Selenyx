@@ -19,9 +19,6 @@ import { CalendarView } from '@components/datagrid/CalendarView';
 import type { Annotation } from '@apptypes/reference';
 import { useIsMobile } from '@lib/useIsMobile';
 import { BottomSheet } from '@components/layout/BottomSheet';
-import { zoteroApi } from '@services/api';
-import { isDesktopTauri } from '@services/nativeRuntime';
-import { referenceFromZotero } from '@utils/zoteroReference';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
@@ -193,12 +190,6 @@ export function ReferencesView() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showManualCreate, setShowManualCreate] = useState(false);
   const [manualForm, setManualForm] = useState<ManualReferenceForm>(emptyManualReferenceForm);
-  const [zoteroImporting, setZoteroImporting] = useState(false);
-  const [zoteroPreview, setZoteroPreview] = useState<{
-    references: Reference[];
-    duplicateCount: number;
-    sourceSkipped: number;
-  } | null>(null);
   // A3 开放获取 PDF 链接（Unpaywall 查询结果）
   const [oaPdfLink, setOaPdfLink] = useState<{ referenceId: string; url: string } | null>(null);
   const [oaLoading, setOaLoading] = useState(false);
@@ -482,55 +473,11 @@ export function ReferencesView() {
     }
   }, [addReferences, flashToast, references]);
 
-  /** Explicit one-way import through the desktop sidecar; Selenyx never writes to Zotero. */
-  const handleZoteroImport = useCallback(async () => {
-    if (!isDesktopTauri()) {
-      flashToast('Zotero 本机导入仅在 Selenyx 桌面应用中可用');
-      return;
-    }
-    setZoteroImporting(true);
-    try {
-      await zoteroApi.status();
-      const result = await zoteroApi.items();
-      const { accepted, skipped } = dedupeIncomingReferences(
-        references,
-        result.items.map(referenceFromZotero),
-      );
-      if (accepted.length === 0) {
-        flashToast(`Zotero 中没有可导入的新文献（已跳过 ${skipped} 条重复记录）`);
-        return;
-      }
-      setZoteroPreview({ references: accepted, duplicateCount: skipped, sourceSkipped: result.skipped });
-      flashToast(`已读取 ${accepted.length} 条 Zotero 文献；请预览后确认导入`);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : '';
-      if (detail.includes('403')) {
-        flashToast('Zotero 本机 API 未启用：请在 Zotero 设置 → 高级中允许本机应用通信');
-      } else if (detail.includes('503')) {
-        flashToast('未检测到正在运行的 Zotero；请启动 Zotero 后重试');
-      } else {
-        flashToast('读取本机 Zotero 文献失败；请确认 Zotero 已启动且本机 API 可用');
-      }
-    } finally {
-      setZoteroImporting(false);
-    }
-  }, [flashToast, references]);
-
-  const confirmZoteroImport = useCallback(() => {
-    if (!zoteroPreview) return;
-    // Re-run de-duplication at commit time in case local data changed while
-    // the user was reviewing the preview.
-    const { accepted, skipped } = dedupeIncomingReferences(references, zoteroPreview.references);
-    setZoteroPreview(null);
-    if (accepted.length === 0) {
-      flashToast('预览中的文献已全部存在于本地库，未写入新条目');
-      return;
-    }
-    addReferences(accepted);
-    const ignored = zoteroPreview.sourceSkipped ? `，${zoteroPreview.sourceSkipped} 个附件/笔记已跳过` : '';
-    const newlySkipped = skipped - zoteroPreview.duplicateCount;
-    flashToast(`已复制 ${accepted.length} 条 Zotero 文献到 Selenyx${newlySkipped > 0 ? `，另有 ${newlySkipped} 条在确认前重复` : ''}${ignored}`);
-  }, [addReferences, flashToast, references, zoteroPreview]);
+  /** Imports an explicit Zotero export without connecting to a local API service. */
+  const handleZoteroFileImport = useCallback(() => {
+    flashToast('请先在 Zotero 中导出 BibTeX 或 RIS 文件，再选择文件导入；Selenyx 不会连接或读取 Zotero 本地服务。');
+    fileInputRef.current?.click();
+  }, [flashToast]);
 
   /** A1 导出修复：生成 BibTeX/RIS 文本 → 应用内弹窗展示 + 复制按钮。 */
   const handleExport = useCallback((format: 'bibtex' | 'ris') => {
@@ -666,8 +613,8 @@ export function ReferencesView() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
           />
           <button className="btn ref-desktop-only" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
-          <button className="btn ref-desktop-only" aria-label="从本机 Zotero 导入文献" disabled={zoteroImporting || Boolean(zoteroPreview)} onClick={handleZoteroImport} title="仅读取本机 Zotero；预览确认后才复制到 Selenyx，不会写回或修改 Zotero 数据">
-            <Icon name="references" size={16} /> {zoteroImporting ? '读取 Zotero…' : '导入 Zotero'}
+          <button className="btn ref-desktop-only" aria-label="从 Zotero 导出文件导入文献" onClick={handleZoteroFileImport} title="请先在 Zotero 中导出 BibTeX 或 RIS；Selenyx 不会连接本机 Zotero 服务">
+            <Icon name="references" size={16} /> 从 Zotero 文件导入
           </button>
           <button className="btn ref-desktop-only" aria-label="文档转 Markdown" onClick={() => { setAnydocRefId(selectedId); setAnydocOpen(true); }} title="上传 PDF/Word/Excel 等文档，本地转为 Markdown 进入精读"><Icon name="download" size={16} /> 文档转MD</button>
           <button className="btn ref-desktop-only" onClick={() => {
@@ -688,29 +635,6 @@ export function ReferencesView() {
           <button className="btn btn-primary" aria-label="新建文献" onClick={openManualCreate}><Icon name="plus" size={16} /> 新建</button>
         </div>
       </div>
-
-      {zoteroPreview && (
-        <section className="card" role="region" aria-label="Zotero 导入预览" style={{ marginBottom: 16, padding: 16, border: '1px solid var(--accent)', background: 'var(--accent-light)' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <strong>已从本机 Zotero 读取 {zoteroPreview.references.length} 条候选文献，尚未写入 Selenyx</strong>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>只读复制，不会写回 Zotero</span>
-          </div>
-          <ol style={{ margin: '10px 0', paddingLeft: 20, color: 'var(--text-secondary)', fontSize: 13 }}>
-            {zoteroPreview.references.slice(0, 5).map((reference) => <li key={reference.id}>{reference.title}</li>)}
-          </ol>
-          {zoteroPreview.references.length > 5 && <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>另有 {zoteroPreview.references.length - 5} 条候选文献。</p>}
-          {(zoteroPreview.duplicateCount > 0 || zoteroPreview.sourceSkipped > 0) && (
-            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>
-              {zoteroPreview.duplicateCount > 0 ? `已过滤 ${zoteroPreview.duplicateCount} 条重复记录。` : ''}
-              {zoteroPreview.sourceSkipped > 0 ? `已跳过 ${zoteroPreview.sourceSkipped} 个附件或笔记。` : ''}
-            </p>
-          )}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            <button className="btn" onClick={() => setZoteroPreview(null)}>取消</button>
-            <button className="btn btn-primary" onClick={confirmZoteroImport}>确认复制 {zoteroPreview.references.length} 条到 Selenyx</button>
-          </div>
-        </section>
-      )}
 
       <div className="ref-search-row" style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <input

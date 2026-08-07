@@ -34,7 +34,7 @@ function fmtTime(iso: string): string {
 }
 
 function snippet(body: string, max = 80): string {
-  const t = body.replace(/[#*`>\-\[\]()]/g, '').replace(/\s+/g, ' ').trim();
+  const t = body.replace(/[#*`>\-()[\]]/g, '').replace(/\s+/g, ' ').trim();
   return t.length > max ? t.slice(0, max) + '…' : t;
 }
 

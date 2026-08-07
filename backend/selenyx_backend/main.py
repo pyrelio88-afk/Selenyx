@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from selenyx_backend.database import init_db
-from selenyx_backend.routers import ai, citations, clinical, projects, references, search, zotero
+from selenyx_backend.routers import ai, citations, clinical, evidence, projects, references, search, zotero
 from selenyx_backend.settings import get_settings
 
 
@@ -23,7 +23,7 @@ startup_settings = get_settings()
 app = FastAPI(
     title="Selenyx API",
     version="0.0.1",
-    description="Local-first research workspace backend.",
+    description="Local-first research workspace backend (SQLite + RAG + scholarly connectors).",
     lifespan=lifespan,
 )
 
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(references.router, prefix="/api/references", tags=["references"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(search.router, prefix="/api/search", tags=["search"])
+app.include_router(evidence.router, prefix="/api/evidence", tags=["evidence"])
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(clinical.router, prefix="/api/clinical", tags=["clinical"])
 app.include_router(citations.router, prefix="/api/citations", tags=["citations"])
@@ -52,4 +53,6 @@ async def health():
         "version": app.version,
         "storage": "local-sqlite",
         "llmConfigured": ai.llm_is_configured(settings),
+        "rag": "hybrid-hash+optional-dense",
+        "features": ["references", "projects", "rag", "scholarly", "evidence", "zotero", "ai-gateway"],
     }

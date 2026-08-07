@@ -1,5 +1,4 @@
 import { useAppStore } from '@stores/appStore';
-import { exportNativeState, isDesktopTauri } from './nativeRuntime';
 
 export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2;
 const CHAT_PREFIX = 'selenyx_chat_';
@@ -434,66 +433,4 @@ export function clearSelenyxBrowserStorage(storage: StorageLike | null = browser
     if (key && (key === 'selenyx-v2' || key.startsWith('selenyx-') || key.startsWith('selenyx_'))) keys.push(key);
   }
   for (const key of keys) storage.removeItem(key);
-}
-
-let requestNativeSnapshot: (() => void) | null = null;
-
-/** Keeps an additional, debounced native snapshot on installed desktop builds. */
-export function startNativeWorkspaceSnapshots(): () => void {
-  if (!isDesktopTauri() || typeof window === 'undefined') return () => undefined;
-
-  let timeout: number | undefined;
-  let writing = false;
-  let pending = false;
-  let lastSnapshot = '';
-
-  const flush = async () => {
-    if (timeout !== undefined) {
-      window.clearTimeout(timeout);
-      timeout = undefined;
-    }
-    if (writing) {
-      pending = true;
-      return;
-    }
-    const snapshot = createWorkspaceBackupJson();
-    if (snapshot === lastSnapshot) return;
-    writing = true;
-    try {
-      await exportNativeState(snapshot);
-      lastSnapshot = snapshot;
-    } catch {
-      // Browser storage remains the immediate local-first cache when a native
-      // snapshot cannot be written (for example, a read-only profile).
-    } finally {
-      writing = false;
-      if (pending) {
-        pending = false;
-        queue();
-      }
-    }
-  };
-  const queue = () => {
-    if (timeout !== undefined) window.clearTimeout(timeout);
-    timeout = window.setTimeout(() => { void flush(); }, 750);
-  };
-  const onVisibility = () => {
-    if (document.visibilityState === 'hidden') void flush();
-  };
-  const unsubscribe = useAppStore.subscribe(queue);
-  window.addEventListener('visibilitychange', onVisibility);
-  requestNativeSnapshot = queue;
-  queue();
-
-  return () => {
-    if (timeout !== undefined) window.clearTimeout(timeout);
-    window.removeEventListener('visibilitychange', onVisibility);
-    unsubscribe();
-    if (requestNativeSnapshot === queue) requestNativeSnapshot = null;
-  };
-}
-
-/** Lets localStorage-only features such as chat request the same native mirror. */
-export function queueNativeWorkspaceSnapshot(): void {
-  requestNativeSnapshot?.();
 }

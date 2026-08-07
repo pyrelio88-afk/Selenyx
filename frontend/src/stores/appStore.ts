@@ -86,7 +86,7 @@ interface AppState {
 
   // === AI 配置 ===
   llmConfig: LLMConfig | null;
-  setLLMConfig: (c: LLMConfig) => void;
+  setLLMConfig: (c: LLMConfig | null) => void;
 
   // === R79：八段流水线执行态 ===
   // key = `${projectId}::${stageKey}`

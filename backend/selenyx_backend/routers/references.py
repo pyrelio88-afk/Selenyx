@@ -39,7 +39,7 @@ def list_references(
         statement = statement.where(Reference.collections_json.contains(collection))
     if tag:
         statement = statement.where(Reference.tags_json.contains(tag))
-    return session.exec(statement.order_by(Reference.updated_at.desc())).all()
+    return [row.model_dump() for row in session.exec(statement.order_by(Reference.updated_at.desc())).all()]
 
 
 @router.get("/{ref_id}")
@@ -47,22 +47,30 @@ def get_reference(ref_id: str, session: Session = Depends(get_session)):
     reference = session.get(Reference, ref_id)
     if not reference:
         raise HTTPException(404, "Reference not found")
-    return reference
+    return reference.model_dump()
 
 
 @router.post("")
-def create_reference(payload: dict, session: Session = Depends(get_session)):
+async def create_reference(payload: dict, session: Session = Depends(get_session)):
     fields = {key: value for key, value in payload.items() if key in Reference.model_fields and key != "id"}
     reference = Reference(**fields)
     reference.cite_key = _next_cite_key(session)
     session.add(reference)
     session.commit()
     session.refresh(reference)
-    return reference
+    # Snapshot before optional RAG work — session expiry must not empty the HTTP body.
+    data = reference.model_dump()
+    try:
+        from selenyx_backend.services.rag import index_reference_record
+
+        await index_reference_record(session, reference)
+    except Exception:
+        pass
+    return data
 
 
 @router.patch("/{ref_id}")
-def update_reference(ref_id: str, patch: dict, session: Session = Depends(get_session)):
+async def update_reference(ref_id: str, patch: dict, session: Session = Depends(get_session)):
     reference = session.get(Reference, ref_id)
     if not reference:
         raise HTTPException(404, "Reference not found")
@@ -73,7 +81,15 @@ def update_reference(ref_id: str, patch: dict, session: Session = Depends(get_se
     session.add(reference)
     session.commit()
     session.refresh(reference)
-    return reference
+    data = reference.model_dump()
+    if any(key in patch for key in ("title", "abstract", "notes")):
+        try:
+            from selenyx_backend.services.rag import index_reference_record
+
+            await index_reference_record(session, reference)
+        except Exception:
+            pass
+    return data
 
 
 @router.delete("/{ref_id}")
@@ -81,6 +97,11 @@ def delete_reference(ref_id: str, session: Session = Depends(get_session)):
     reference = session.get(Reference, ref_id)
     if not reference:
         raise HTTPException(404, "Reference not found")
+    from selenyx_backend.models import DocumentChunk
+    from sqlmodel import select
+
+    for chunk in session.exec(select(DocumentChunk).where(DocumentChunk.reference_id == ref_id)).all():
+        session.delete(chunk)
     session.delete(reference)
     session.commit()
     return {"deleted": ref_id}
@@ -120,32 +141,21 @@ def deduplicate_references(session: Session = Depends(get_session)):
 
 @router.get("/lookup/doi/{doi:path}")
 async def lookup_doi(doi: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://api.crossref.org/works/{doi}",
-            headers={"User-Agent": "Selenyx/2.0"},
-        )
-    if response.status_code != 200:
+    from selenyx_backend.services.scholarly import lookup_doi as scholarly_lookup_doi
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        work, meta = await scholarly_lookup_doi(client, doi)
+    if not work:
         raise HTTPException(404, f"Crossref could not find DOI: {doi}")
-    work = response.json()["message"]
-    return {
-        "title": work.get("title", [""])[0],
-        "creators": [
-            {"firstName": author.get("given", ""), "lastName": author.get("family", ""), "type": "author"}
-            for author in work.get("author", [])
-        ],
-        "publication": work.get("container-title", [""])[0],
-        "year": str(work.get("published-print", work.get("published-online", {}).get("date-parts", [[""]])[0][0], "")),
-        "doi": doi,
-        "volume": str(work.get("volume", "")),
-        "issue": str(work.get("issue", "")),
-        "pages": work.get("page", ""),
-        "issn": work.get("ISSN", [""])[0] if work.get("ISSN") else "",
-        "url": work.get("URL", ""),
-        "abstract": work.get("abstract", ""),
-    }
+    return {**work, "diagnostics": meta}
 
 
 @router.get("/lookup/pmid/{pmid}")
-def lookup_pmid(pmid: str):
-    raise HTTPException(501, f"PubMed lookup is not implemented for PMID {pmid}")
+async def lookup_pmid(pmid: str):
+    from selenyx_backend.services.scholarly import search_pubmed
+
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        items, meta = await search_pubmed(client, f"{pmid}[uid]", retmax=1)
+    if not items:
+        raise HTTPException(404, f"PubMed could not find PMID: {pmid}")
+    return {**items[0], "diagnostics": meta}
