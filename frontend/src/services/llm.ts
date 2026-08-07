@@ -129,7 +129,7 @@ function prepare(config: LLMConfig, messages: LLMMessage[], stream: boolean): Pr
       url: `${root}/v1/messages`,
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
+        ...(apiKey ? { 'x-api-key': apiKey } : {}),
         'anthropic-version': '2023-06-01',
         // 允许浏览器直连（Anthropic 官方 CORS 开关）
         'anthropic-dangerous-direct-browser-access': 'true',
@@ -158,7 +158,7 @@ function prepare(config: LLMConfig, messages: LLMMessage[], stream: boolean): Pr
   const action = stream ? 'streamGenerateContent?alt=sse' : 'generateContent';
   return {
     url: `${root}/v1beta/models/${encodeURIComponent(model)}:${action}`,
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    headers: { 'Content-Type': 'application/json', ...(apiKey ? { 'x-goog-api-key': apiKey } : {}) },
     body: JSON.stringify({
       contents,
       ...(sysText ? { systemInstruction: { parts: [{ text: sysText }] } } : {}),

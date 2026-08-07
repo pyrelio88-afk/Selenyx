@@ -110,8 +110,10 @@ export const MarkdownView = memo(function MarkdownView({ content }: Props) {
             return <code className="aichat-md-inline" {...props}>{children}</code>;
           },
           a({ children, href }) {
+            // 纵深防御：显式协议白名单，防止 LLM 输出 javascript: 等恶意协议
+            const safe = /^(https?:|mailto:|tel:|\/|#)/.test(href ?? '') ? href : undefined;
             return (
-              <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+              <a href={safe} target="_blank" rel="noopener noreferrer">{children}</a>
             );
           },
           table({ children }) {
