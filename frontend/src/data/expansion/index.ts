@@ -28,6 +28,19 @@ import { AGRICULTURE_EXTRA } from './agriculture';
 import { HISTORY_EXTRA } from './history';
 import { LITERATURE_EXTRA } from './literature';
 import { PARAMS_OFFICIAL_REGISTRY } from './parameters_official';
+import { FILL_PHILOSOPHY } from './fill_philosophy';
+import { FILL_ECONOMICS } from './fill_economics';
+import { FILL_LAW } from './fill_law';
+import { FILL_EDUCATION } from './fill_education';
+import { FILL_LITERATURE } from './fill_literature';
+import { FILL_HISTORY } from './fill_history';
+import { FILL_SCIENCE } from './fill_science';
+import { FILL_ENGINEERING } from './fill_engineering';
+import { FILL_AGRICULTURE } from './fill_agriculture';
+import { FILL_MEDICINE } from './fill_medicine';
+import { FILL_MANAGEMENT } from './fill_management';
+import { FILL_ART } from './fill_art';
+import { FILL_MILITARY } from './fill_military';
 
 export interface DisciplineExpansion {
   glossary?: DisciplineGlossary[];
@@ -64,17 +77,17 @@ function withParamsOfficial(base: DisciplineExpansion, discId: string): Discipli
 }
 
 export const DISCIPLINE_EXPANSIONS: Record<string, DisciplineExpansion> = {
-  philosophy: withParamsOfficial({ glossary: [], parameters: [], formulas: [], standards: [] }, 'philosophy'),
-  medicine: withParamsOfficial(mergeExpansions(MEDICINE_EXTRA, MEDICINE_BATCH2, MEDICINE_BATCH3, MEDICINE_BATCH4), 'medicine'),
-  science: withParamsOfficial(SCIENCE_EXTRA, 'science'),
-  education: withParamsOfficial(EDUCATION_EXTRA, 'education'),
-  engineering: withParamsOfficial(ENGINEERING_EXTRA, 'engineering'),
-  economics: withParamsOfficial(ECONOMICS_EXTRA, 'economics'),
-  law: withParamsOfficial(LAW_EXTRA, 'law'),
-  military: withParamsOfficial(MILITARY_EXTRA, 'military'),
-  art: withParamsOfficial(ART_EXTRA, 'art'),
-  management: withParamsOfficial(MANAGEMENT_EXTRA, 'management'),
-  agriculture: withParamsOfficial(AGRICULTURE_EXTRA, 'agriculture'),
-  history: withParamsOfficial(HISTORY_EXTRA, 'history'),
-  literature: withParamsOfficial(LITERATURE_EXTRA, 'literature'),
+  philosophy: withParamsOfficial(FILL_PHILOSOPHY, 'philosophy'),
+  medicine: withParamsOfficial(mergeExpansions(MEDICINE_EXTRA, MEDICINE_BATCH2, MEDICINE_BATCH3, MEDICINE_BATCH4, FILL_MEDICINE), 'medicine'),
+  science: withParamsOfficial(mergeExpansions(SCIENCE_EXTRA, FILL_SCIENCE), 'science'),
+  education: withParamsOfficial(mergeExpansions(EDUCATION_EXTRA, FILL_EDUCATION), 'education'),
+  engineering: withParamsOfficial(mergeExpansions(ENGINEERING_EXTRA, FILL_ENGINEERING), 'engineering'),
+  economics: withParamsOfficial(mergeExpansions(ECONOMICS_EXTRA, FILL_ECONOMICS), 'economics'),
+  law: withParamsOfficial(mergeExpansions(LAW_EXTRA, FILL_LAW), 'law'),
+  military: withParamsOfficial(mergeExpansions(MILITARY_EXTRA, FILL_MILITARY), 'military'),
+  art: withParamsOfficial(mergeExpansions(ART_EXTRA, FILL_ART), 'art'),
+  management: withParamsOfficial(mergeExpansions(MANAGEMENT_EXTRA, FILL_MANAGEMENT), 'management'),
+  agriculture: withParamsOfficial(mergeExpansions(AGRICULTURE_EXTRA, FILL_AGRICULTURE), 'agriculture'),
+  history: withParamsOfficial(mergeExpansions(HISTORY_EXTRA, FILL_HISTORY), 'history'),
+  literature: withParamsOfficial(mergeExpansions(LITERATURE_EXTRA, FILL_LITERATURE), 'literature'),
 };
