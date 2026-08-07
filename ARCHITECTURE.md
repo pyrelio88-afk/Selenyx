@@ -1,42 +1,47 @@
-# Selenyx 架构决策：一个项目，按功能选最适配的语言
+# Selenyx 架构决策：一个本地优先的前端产品
 
-> 2026-08-06 定稿。响应用户指示：「一个完整项目，那个功能最适配那个语言用哪个，但是不能是乱七八糟的这一个哪一个的」。
+> 2026-08-07 定稿。目标是让同一份科研工作区在浏览器、桌面壳和移动 WebView 中保持一致，而不引入常驻服务。
 
 ## 决策
 
-**Selenyx 只有这一个项目（selenyx-next）。** 旧版 JS 单文件版（17,238 行）与 Java/JavaFX 版（11,072 行）已归档为参考实现（`_archive/`），不再迭代。所有新功能只在本仓库落地。
+**Selenyx 是一个纯前端单页应用。** 业务状态保存在当前设备的浏览器存储中：结构化工作区以 \`localStorage\` 持久化，适合使用 \`IndexedDB\` 的浏览器功能仅使用本地缓存。导入、导出、OCR、PDF 阅读、统计和研究流程都在客户端完成。
 
-本项目是一个**连贯的单一产品**，不是多个语言各做一个。语言按功能层选择，每层一个最适配的语言，层间以明确契约（HTTP/JSON、Tauri IPC）衔接：
+本项目只有一个产品和一套前端实现。可选的原生壳只负责分发和设备能力，不拥有另一套业务数据模型，也不启动独立服务。
 
-| 功能层 | 语言 / 框架 | 为什么是它（GitHub 证据） |
+| 功能层 | 技术 | 选择理由 |
 |---|---|---|
-| 前端 UI（多维表格、PDF 阅读、批注、看板） | TypeScript + React 19 + Vite | 交互密集型桌面级 UI 的最成熟生态。Zotero（JS）、JabRef 之外几乎所有现代文献/知识工具（Logseq TS、AFFiNE TS、Outline TS）均用 TS；`pdfjs-dist`、`react-*` 拖拽/表格生态只存在于 JS/TS 世界 |
-| 后端服务（LLM 编排、文献 API 聚合、持久化） | Python + FastAPI + SQLModel | 科研与 LLM 工具链生态在 Python：Crossref/OpenAlex 客户端、PDF 解析（pypdf/pdfminer）、LLM SDK 官方支持最全。HydraLab（微软开源移动测试平台）生产验证了「TS 前端 + Python 后端 + Rust 端侧」同构栈 |
-| 桌面/移动端壳（分发、原生能力） | Rust + Tauri v2 | Tauri 以 Rust 核心 + 系统 WebView 复用前端产物，安装包与内存占用比 Electron 小一个数量级；同一套 TS 前端零改动进壳 |
+| 应用界面与业务逻辑 | TypeScript + React 19 + Vite + Zustand | 适合交互密集的文献、表格、看板和科研流程；拥有成熟的 PDF、表格与可视化生态。 |
+| 本地数据 | 浏览器 \`localStorage\` / \`IndexedDB\` | 无账号、无网络依赖，数据默认留在用户设备；通过 JSON 导出获得可移植备份。 |
+| PDF、OCR 与文档转换 | 浏览器 Worker、WASM 与随包资源 | 让文件在设备本地处理，避免上传到远程计算环境。 |
+| 可选桌面/移动壳 | Rust + Tauri v2 | 复用同一份静态前端产物，并在需要时提供原生窗口、文件选择与本机备份能力。 |
 
-## 为什么不是全 Java
+## 为什么不拆成多套应用
 
-JabRef（GitHub 3k+ stars，JavaFX 文献管理器）证明 Java **可以**做这类工具，我们认真评估过（2026-08-06 深度检索 JabRef 官方架构文档：model/logic/gui 分层、事件总线、BibTeX 文本库）。但整条产品线全押 Java 的代价：
+科研工作区最重要的是数据模型和交互的一致性。将文献、项目、笔记、表格和流水线分拆为平行版本，会使导入导出、关系一致性与离线体验迅速失控。Selenyx 因此以一套 TypeScript 状态模型为中心，所有平台只复用它。
 
-- 切断 `pdfjs-dist`（PDF 渲染/文本层/批注坐标）这一不可替代依赖——Java 侧 PDFBox 无等价交互层
-- 切断 React 表格/看板/画廊视图生态，多维表格需从零自绘
-- LLM SDK 与科研数据源客户端在 Java 生态更新滞后于 Python
+Java、Python 或其他语言可以在独立研究工具中表现优秀，但本项目的核心体验依赖 \`pdfjs-dist\`、浏览器 Worker、React 表格和本地 Web 存储；为它们新增第二套业务实现只会增加迁移和测试成本。
 
-结论：Java 不是本项目的最适配语言，Java 版归档保留为功能对照参考（BibTeX/RIS 导入导出、护理学数据库内容已反向移植进主线）。
+## 目录结构
 
-## 目录结构（单一项目，单一 git 历史）
+\`\`\`text
+selenyx/
+  frontend/       TypeScript + React + Vite + Zustand（应用与静态资源）
+  desktop/        Rust + Tauri v2（可选原生壳，复用 frontend 产物）
+  scripts/        构建、离线资源校验和本地验证脚本
+  ARCHITECTURE.md 本文件
+\`\`\`
 
-```
-selenyx-next/
-  frontend/    TypeScript + React + Vite + Zustand   （唯一 UI）
-  backend/     Python + FastAPI + SQLModel           （唯一服务）
-  desktop/     Rust + Tauri v2                        （唯一壳，复用 frontend 产物）
-  ARCHITECTURE.md   本文件
-```
+## 数据与联网边界
+
+1. 数据的默认归属是当前设备，不存在账号同步或后台上传。
+2. 所有联网访问必须由用户显式动作触发，例如检索公开元数据或调用用户配置的 AI 服务。
+3. 第三方配置只能从 \`.env.local\` 经 \`import.meta.env\` 注入；源码和提交记录不得出现真实密钥。
+4. \`VITE_*\` 变量会进入浏览器产物，不能被当作秘密存储；长期或高权限密钥不属于静态客户端配置。
+5. JSON 导出/导入是跨设备迁移的正式路径；若需要同步，应另行设计可审计的用户授权与冲突处理机制。
 
 ## 工程规则
 
-1. 新功能只进 selenyx-next；禁止再开平行语言版本。
-2. 每层只用一个语言，跨层只走契约（OpenAPI/JSON、Tauri IPC），不互相渗透。
-3. 每轮迭代 git tag 快照；评测只用外部项目/工具标准，不自评。
-4. GitHub push 锁死，等用户明示「允许发布」。
+1. 新功能进入同一前端产品，不再开平行语言版本。
+2. 优先保持离线可用；浏览器不支持的能力必须明确降级，而不是悄悄依赖网络。
+3. 每轮迭代保留可复现的 Git 提交和验证记录；评测使用外部项目或工具标准，不自评。
+4. GitHub push 需用户明确授权。
