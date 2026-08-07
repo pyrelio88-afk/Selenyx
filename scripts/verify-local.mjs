@@ -17,6 +17,7 @@ function run(args) {
 run(['run', 'typecheck']);
 run(['run', 'test']);
 run(['run', 'build']);
+run(['run', 'offline:check']);
 
 const output = resolve(import.meta.dirname, '..', 'frontend', 'dist', 'index.html');
 if (!existsSync(output) || statSync(output).size < 1_000) {

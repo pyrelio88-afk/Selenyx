@@ -6,7 +6,8 @@ export type LLMProvider = 'openai' | 'openrouter' | 'anthropic' | 'google' | 'ol
 
 export interface LLMConfig {
   provider: LLMProvider;
-  apiKey: string;
+  /** Browser-development compatibility only; never persist this field. */
+  apiKey?: string;
   baseUrl: string;
   model: string;
   temperature: number;

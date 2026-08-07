@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.01] - 2026-08-07
+
+### Changed
+- Publish using SemVer `0.0.1` for npm, Tauri, Cargo, and FastAPI; the app displays the user-facing version as 0.01.
+- Add explicit, read-only desktop import from Zotero Local API; it never reads Zotero's SQLite database or writes back to Zotero.
+
 Selenyx 按「自迭代轮次（R<N>）」推进，本文件记录每轮主要变化。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 精神，以轮次代替语义化版本号。
 
 ## [R110] - 2026-08-07

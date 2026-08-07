@@ -1,47 +1,66 @@
 # 贡献指南（Contributing to Selenyx）
 
-感谢你愿意为 Selenyx 做贡献。Selenyx 是一个本地优先、BYOK（Bring Your Own Key）的科研工作台，目标是让任何人接入自己的 LLM API 就能完成从选题到写作的八段科研流水线。
+Selenyx 是本地优先的科研工作台。当前开发与验收以**原生桌面应用**为中心；浏览器页面只用于前端调试，Android 仅有设备本地/离线核心范围，不是桌面伴侣。
 
 ## 开发环境
 
-| 层 | 技术栈 | 入口 |
+| 层 | 技术栈 | 目录 |
 |---|---|---|
-| 前端 | React 19 + TypeScript + Vite 6 + Zustand 5 | `frontend/` |
-| 后端 | FastAPI + SQLModel + async SQLite + Alembic | `backend/` |
-| 桌面 | Tauri v2 | `desktop/` |
+| 前端 | React + TypeScript + Vite + Zustand | `frontend/` |
+| 本地服务 | FastAPI + SQLModel + SQLite | `backend/` |
+| 桌面壳 | Tauri v2 + Rust | `desktop/` |
 
-```bash
-# 前端
-cd frontend
+首次准备和桌面开发：
+
+```powershell
 npm install
-npm run dev          # 本地开发
-npm run typecheck    # tsc --noEmit（提交前必过）
-npm run test         # Vitest 单测（提交前必过）
-npm run build        # 构建单文件产物
+npm run desktop:doctor
+
+# 可选：只在需要自己的 LLM 服务时创建；不得提交真实密钥
+Copy-Item backend/.env.example backend/.env.local
+
+npm run desktop:dev
 ```
 
-## 提交前检查（硬性门槛）
+不要把 `npm run dev` 当作完整应用验收：它仅启动前端。需要浏览器方式排查 API 时，再显式运行 `npm run backend:dev`。
 
-1. **`npm run typecheck` 零错误** — 仓库开启 `strict` + `noUnusedLocals` + `noUnusedParameters`，不允许新增 `any` 于领域模型层（外部 API 边界如 LLM 响应解析除外，且应优先用 `unknown` + 收窄）。
-2. **`npm run test` 全绿** — 统计计算（`src/lib/stats.ts`）的测试以 scipy 参考值为准；改动统计函数必须同步更新参考值（用 Python scipy 实算，禁止手算）。
-3. **提交前运行 `npm run verify:local`** — 类型检查 → 测试 → 本地构建。不要绕过验证直接提交。
-4. **本地优先原则** — 新功能默认离线可用；任何网络请求必须是用户显式触发（BYOK 对话、元数据抓取等），禁止隐式上报/遥测。
+## 提交前检查
 
-## 代码约定
+在仓库根目录运行：
 
-- **共享状态一律走 Zustand store**（`stores/appStore.ts`，persist key `selenyx-v2`），视图组件零 props，禁止 prop drilling。
-- **localStorage 读写必须经过 `src/lib/storage.ts`** 的版本化迁移层（schema versioning），新增/变更持久化字段时要登记迁移函数。
-- 统计/数学函数集中放 `src/lib/stats.ts`，视图层不内联重复实现。
-- 单文件构建（vite-plugin-singlefile）是当前部署形态；新增大型依赖前先评估包体（迁移触发线：gzip > 1.5MB 或功能模块 > 120）。
+```powershell
+npm run typecheck
+npm run test
+npm run verify:local
+npm run backend:test
+npm run desktop:doctor
+```
 
-## 提交信息
+改动桌面壳、打包脚本或 sidecar 时，还应运行：
 
-格式：`R<轮次>: <主题>`（如 `R103: StatToolsView重构 + anova eta2`）。每轮自迭代打标签 `r<N>-<theme>`。
+```powershell
+npm run desktop:build
+```
 
-## 数据准确性红线
+若系统策略阻止本机安装包构建，请记录原始报错和系统环境；不要通过关闭安全策略来绕过验证。
 
-学科术语、统计公式、参考文献元数据属于**事实层**：不得凭记忆编造，必须有来源（source 字段）或可复算的验证路径。R90–R100 的数据质量战役（术语去重、同义反复清零、source 覆盖 100%）是基线，新增条目不得低于此标准。
+## 代码与数据约定
 
-## 提问与讨论
+- 共享前端状态统一通过 Zustand store 管理；持久化读取应通过 `frontend/src/lib/storage.ts` 的版本迁移层。
+- 统计和数学函数集中在 `frontend/src/lib/stats.ts`，以可复算的参考值测试，不在视图层复制实现。
+- 新功能默认离线可用；联网必须由用户显式触发，禁止隐式遥测或后台上传。
+- 所有学科术语、公式、标准和文献元数据都应提供可核查来源，不能凭记忆编造。
+- `backend/.env.local`、任何 `.env.local`、数据库和用户附件都不能提交。
+- 修改 Rust/Tauri 依赖时，`desktop/Cargo.lock` 必须随同提交，保证桌面构建可复现。
 
-开 Issue 时请附：使用的 LLM provider、浏览器版本、复现步骤、控制台报错截图。Selenyx 仍处于密集自迭代阶段，接口与数据结构可能随轮次演进，CHANGELOG.md 记录了每轮变化。
+## 平台边界
+
+- 桌面端可以使用本地 FastAPI sidecar，且只能监听本机回环地址。
+- Android 不运行桌面 sidecar，也没有已交付的局域网配对、同步或远程访问协议；不要将电脑地址写入移动端环境变量来作为正式功能。
+- iOS 当前没有交付承诺；不要在 issue、文档或界面中把它表述为已支持的平台。
+
+## 提交信息与讨论
+
+使用清晰、可检索的提交主题，例如 `feat(desktop): improve local startup diagnostics` 或 `fix(references): preserve exported citations`。
+
+提交 issue 时请附上复现步骤、平台、应用版本、相关日志以及已脱敏的错误信息。涉及 API 时不要粘贴真实密钥。

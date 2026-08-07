@@ -512,7 +512,7 @@ function OnboardingChecklist() {
   const steps: { label: string; done: boolean; view: ViewKey; tip: string }[] = [
     { label: '创建项目', done: projects.length > 0, view: 'projects', tip: '选择适合你研究类型的设计框架（如 PICO 适合临床试验、PRISMA 适合系统综述），系统会自动生成对应项目字段' },
     { label: '导入文献', done: references.length > 0, view: 'references', tip: '输入论文 DOI 自动抓取标题、作者、期刊等元数据，也可上传 PDF' },
-    { label: '配置 AI', done: !!(llmConfig?.apiKey), view: 'settings', tip: '接入你自己的大模型 API（支持 DeepSeek / 智谱 / OpenAI 等），让 AI 帮你精读文献、起草报告' },
+    { label: '配置 AI', done: !!llmConfig, view: 'settings', tip: '在本机配置大模型服务，让 AI 帮你精读文献、起草报告' },
     { label: '进入流水线', done: visitedPipeline, view: 'pipeline', tip: '八段流水线（问题→文献→全文→筛选→精读→证据→综合→写作）帮你管理从选题到成稿的全流程' },
   ];
   const completed = steps.filter((s) => s.done).length;

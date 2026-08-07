@@ -1,31 +1,47 @@
 """Configuration for the local Selenyx service.
 
-Only this module reads environment variables.  It deliberately keeps API keys
+Only this module reads environment variables. It deliberately keeps API keys
 on the device running the backend and never returns them from an API route.
+
+Settings are instantiated per request instead of being cached. This lets an
+already-running desktop sidecar pick up an edited ``~/.selenyx/.env.local``
+file without copying its secrets into the process environment or requiring a
+restart. Process environment variables still take precedence over both files.
 """
 
-from functools import lru_cache
 from pathlib import Path
 
-from dotenv import load_dotenv
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# A packaged desktop sidecar starts outside the repository. Load its private
-# configuration from the same local application directory as the SQLite data;
-# process environment still takes precedence over this file.
-load_dotenv(Path.home() / ".selenyx" / ".env.local", override=False)
+def development_env_file() -> Path:
+    """Return the private config file used while running from this repository."""
+
+    return Path(__file__).resolve().parents[1] / ".env.local"
+
+
+def local_env_file() -> Path:
+    """Return the private config file used by the packaged local application."""
+
+    return Path.home() / ".selenyx" / ".env.local"
+
+
+def default_data_dir() -> Path:
+    return Path.home() / ".selenyx"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SELENYX_",
-        env_file=".env.local",
+        # ``get_settings`` supplies absolute files so a packaged sidecar does
+        # not accidentally read a file from its transient working directory.
+        env_file=None,
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    data_dir: Path = Path.home() / ".selenyx"
+    data_dir: Path = Field(default_factory=default_data_dir)
     cors_origins: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"
         "http://tauri.localhost,https://tauri.localhost,tauri://localhost"
@@ -43,6 +59,12 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
-@lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    """Read the current local configuration without caching secrets.
+
+    The application directory file is listed last, so it can override the
+    repository development fallback. Pydantic still gives actual process
+    environment variables the highest priority.
+    """
+
+    return Settings(_env_file=(development_env_file(), local_env_file()))

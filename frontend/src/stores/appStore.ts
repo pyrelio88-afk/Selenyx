@@ -11,6 +11,7 @@ import type {
   Note,
 } from '@apptypes/index';
 import { createEmptyNote } from '@apptypes/index';
+import { migratePersistedAppState } from './migrations';
 
 export type ViewKey =
   | 'dashboard' | 'projects' | 'references' | 'pipeline'
@@ -51,6 +52,8 @@ interface AppState {
   addReferences: (refs: Reference[]) => void;
   updateReference: (id: string, patch: Partial<Reference>) => void;
   deleteReference: (id: string) => void;
+  /** Removes a reference and every local project/note relationship in one state commit. */
+  deleteReferenceAndRelations: (id: string) => void;
 
   // === 项目 ===
   projects: ResearchProject[];
@@ -132,6 +135,28 @@ export const useAppStore = create<AppState>()(
       deleteReference: (id) => set((s) => ({
         references: s.references.filter((r) => r.id !== id),
       })),
+      deleteReferenceAndRelations: (id) => set((s) => {
+        const updatedAt = new Date().toISOString();
+        return {
+          references: s.references.filter((reference) => reference.id !== id),
+          projects: s.projects.map((project) => {
+            if (!Array.isArray(project.referenceIds) || !project.referenceIds.includes(id)) return project;
+            return {
+              ...project,
+              referenceIds: project.referenceIds.filter((referenceId) => referenceId !== id),
+              updatedAt,
+            };
+          }),
+          notes: s.notes.map((note) => {
+            if (!Array.isArray(note.linkedReferenceIds) || !note.linkedReferenceIds.includes(id)) return note;
+            return {
+              ...note,
+              linkedReferenceIds: note.linkedReferenceIds.filter((referenceId) => referenceId !== id),
+              updatedAt,
+            };
+          }),
+        };
+      }),
 
       projects: [],
       currentProjectId: null,
@@ -216,19 +241,23 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'selenyx-v2',
-      version: 4,
+      version: 5,
       // D6：版本化迁移链（R102）。migrate 只做"补默认值 + 结构调整"，绝不整个 reset
       // ——reset 留给下方 storage.getItem 的 JSON 预校验兜底（数据真损坏读不出时才回退）。
       // 新增持久化字段时在此补默认（state.xxx ??= defaultValue），保持链路完整可追踪。
       migrate: (persistedState: unknown, _version: number) => {
-        const state = (persistedState as Record<string, unknown>) ?? {};
+        const state = migratePersistedAppState(persistedState);
         // v<2 → v2：R91.1 时代字段补默认（历史布局/配置缺字段类崩溃的正式迁移占位）
         // v2 → v3：本轮起占位，后续新增持久化字段在此补默认
         // v3 → v4（R109）：笔记区持久化字段补默认
-        if (!Array.isArray(state.notes)) state.notes = [];
-        if (state.pendingNoteId !== null && typeof state.pendingNoteId !== 'string') state.pendingNoteId = null;
         return state;
       },
+      // Secrets are accepted only transiently for browser development. The
+      // installed desktop app writes them through a native command instead.
+      partialize: (state) => ({
+        ...state,
+        llmConfig: state.llmConfig ? { ...state.llmConfig, apiKey: undefined } : null,
+      }),
       // C1 修复：自定义 storage 预校验 JSON，脏数据降级为初始状态而非白屏崩溃
       storage: createJSONStorage(() => ({
         getItem: (name) => {

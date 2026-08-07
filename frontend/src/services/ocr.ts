@@ -4,10 +4,10 @@
  * 选型结论（R85 深度对比 12+ 开源 OCR 方案）：
  * Selenyx 是纯静态单文件 HTML、无推理后端，VLM 类 OCR（PaddleOCR-VL/OlmOCR/DeepSeek-OCR
  * 等 0.3B–9B）均需 GPU 服务端，不可用。Tesseract.js 是唯一成熟、浏览器原生、轻量且中英文
- * 兼备的方案：核心 WASM ~3.8MB、语言数据按需从 CDN 加载（中文 best 档 ~3MB）、Apache 2.0、
+ * 兼备的方案：核心 WASM 与中英文轻量模型随应用携带、Apache 2.0、
  * v7 较 v6 提速 15–35%。与 pdfjs 文本层互补——文本层为空（扫描版 PDF / 图片）时由 OCR 补位。
  *
- * 资源均从 jsDelivr CDN 运行时加载，不打包进单文件 HTML，构建体积零增长。
+ * OCR 资源位于 public/ocr，构建时作为本地应用资源复制；运行时不请求 CDN。
  * 中文护理文献默认 chi_sim+eng 双语识别。
  */
 
@@ -25,10 +25,21 @@ declare global {
   interface Window { Tesseract?: TesseractGlobal }
 }
 
-const TESS_VERSION = '6';
-const CDN_BASE = `https://cdn.jsdelivr.net/npm`;
-const CORE_CDN = `${CDN_BASE}/tesseract.js-core@5.1.1`;
-const LANG_CDN = `${CDN_BASE}/@tesseract.js-data`;
+/** Pinned files shipped in `public/ocr`; no runtime CDN dependency. */
+export const OCR_ASSET_MANIFEST = Object.freeze({
+  runtime: 'tesseract.js@6.0.1',
+  core: 'tesseract.js-core@5.1.1',
+  languages: 'chi_sim+eng (4.0.0_best_int)',
+  root: 'ocr/',
+  worker: 'ocr/worker.min.js',
+  coreDirectory: 'ocr/core/',
+  languageDirectory: 'ocr/lang/',
+});
+
+function localOcrAsset(path: string): string {
+  return new URL(`${OCR_ASSET_MANIFEST.root}${path}`, document.baseURI).toString();
+}
+
 const OCR_LANGS = 'chi_sim+eng';
 
 let tessPromise: Promise<TesseractGlobal> | null = null;
@@ -40,11 +51,11 @@ function loadTesseract(): Promise<TesseractGlobal> {
   tessPromise = new Promise<TesseractGlobal>((resolve, reject) => {
     if (window.Tesseract) return resolve(window.Tesseract);
     const script = document.createElement('script');
-    script.src = `${CDN_BASE}/tesseract.js@${TESS_VERSION}/dist/tesseract.min.js`;
+    script.src = localOcrAsset('tesseract.min.js');
     script.async = true;
     script.onerror = () => {
       tessPromise = null;
-      reject(new Error('OCR 引擎加载失败（CDN 不可达）。请检查网络后重试。'));
+      reject(new Error('OCR 本地运行资源不可用。请重新安装完整的 Selenyx 应用后重试。'));
     };
     script.onload = () => {
       if (window.Tesseract) resolve(window.Tesseract);
@@ -60,11 +71,11 @@ async function getWorker(): Promise<TesseractWorker> {
   if (workerPromise) return workerPromise;
   const Tesseract = await loadTesseract();
   workerPromise = Tesseract.createWorker(OCR_LANGS, 1, {
-    // 核心 WASM 与语言数据均指向 CDN，避免走默认路径找不到资源
-    workerPath: `${CDN_BASE}/tesseract.js@${TESS_VERSION}/dist/worker.min.js`,
-    corePath: CORE_CDN,
-    langPath: LANG_CDN,
-    // 第一次会下载核心+语言数据并缓存到 IndexedDB，后续调用直接命中
+    // 运行时、WASM 核心和中英模型都随应用携带，不依赖联网下载。
+    workerPath: localOcrAsset('worker.min.js'),
+    corePath: localOcrAsset('core/'),
+    langPath: localOcrAsset('lang/'),
+    // IndexedDB 仅作本地缓存，不包含任何远程回退路径。
     logger: () => { /* 进度由 recognize 的 status 回调承接，这里静默 */ },
   });
   return workerPromise;

@@ -5,7 +5,20 @@ import type { LLMProvider } from '@apptypes/index';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { DensityToggle } from '@components/ui/StatusChip';
 import { testConnection, PROVIDER_DEFAULTS, type TestResult } from '@services/llm';
-import { localApi } from '@services/api';
+import { aiApi, hasConfiguredCompanionBackend, localApi } from '@services/api';
+import {
+  exportNativeState,
+  deleteNativeStateBackup,
+  importNativeState,
+  isDesktopTauri,
+  isMobileTauri,
+  saveLocalLLMConfig,
+} from '@services/nativeRuntime';
+import {
+  clearSelenyxBrowserStorage,
+  createWorkspaceBackupJson,
+  restoreWorkspaceBackup,
+} from '@services/workspaceBackup';
 
 type SettingsTab = 'appearance' | 'llm' | 'data' | 'shortcuts' | 'about';
 
@@ -78,7 +91,13 @@ const OLLAMA_MODELS: {
 
 export function SettingsView() {
   const [tab, setTab] = useState<SettingsTab>('appearance');
-  const { theme, setTheme, mode, setMode, density, setDensity, llmConfig, setLLMConfig, projects, references, tables } = useAppStore();
+  const appState = useAppStore();
+  const {
+    theme, setTheme, mode, setMode, density, setDensity, llmConfig, setLLMConfig,
+    projects, references, tables,
+  } = appState;
+  const desktopRuntime = isDesktopTauri();
+  const mobileRuntime = isMobileTauri();
   const [provider, setProvider] = useState<LLMProvider>(llmConfig?.provider ?? 'openai');
   const [apiKey, setApiKey] = useState(llmConfig?.apiKey ?? '');
   const [baseUrl, setBaseUrl] = useState(llmConfig?.baseUrl ?? PROVIDER_DEFAULTS[llmConfig?.provider ?? 'openai'].baseUrl);
@@ -88,20 +107,42 @@ export function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [backendStorage, setBackendStorage] = useState('');
+  const [backendLLMConfigured, setBackendLLMConfigured] = useState(false);
 
   useEffect(() => {
+    if (mobileRuntime && !hasConfiguredCompanionBackend) {
+      setBackendStatus('offline');
+      return undefined;
+    }
     let active = true;
     void localApi.health()
       .then((health) => {
         if (!active) return;
         setBackendStatus('online');
         setBackendStorage(health.storage);
+        setBackendLLMConfigured(health.llmConfigured);
+        if (desktopRuntime && health.llmConfigured && !llmConfig) {
+          void aiApi.config().then((config) => {
+            if (!active || !config.configured) return;
+            setBaseUrl(config.baseUrl);
+            setModel(config.model);
+            setLLMConfig({
+              provider: config.baseUrl.includes('127.0.0.1:11434') ? 'ollama' : 'custom',
+              baseUrl: config.baseUrl,
+              model: config.model,
+              temperature: 0.3,
+              maxTokens: 4096,
+              tokenBudget: 1000000,
+              tokensUsed: 0,
+            });
+          }).catch(() => undefined);
+        }
       })
       .catch(() => {
         if (active) setBackendStatus('offline');
       });
     return () => { active = false; };
-  }, []);
+  }, [desktopRuntime, llmConfig, mobileRuntime, setLLMConfig]);
 
   function onProviderChange(p: LLMProvider) {
     setProvider(p);
@@ -134,35 +175,125 @@ export function SettingsView() {
     };
   }
 
-  function saveLLM() {
-    setLLMConfig(buildConfig());
+  function localGatewaySupportsProvider() {
+    return provider === 'openai' || provider === 'openrouter' || provider === 'ollama' || provider === 'custom';
+  }
+
+  async function saveLLM(): Promise<boolean> {
+    if (mobileRuntime && !hasConfiguredCompanionBackend) {
+      setTestResult({
+        ok: false,
+        model,
+        latencyMs: 0,
+        error: 'This mobile build keeps research data on-device. Secure desktop pairing is not available yet, so it will not accept or store a cloud API key.',
+      });
+      return false;
+    }
+    const config = buildConfig();
+    if (desktopRuntime) {
+      if (!localGatewaySupportsProvider()) {
+        setTestResult({
+          ok: false,
+          model,
+          latencyMs: 0,
+          error: 'The local desktop gateway currently supports OpenAI-compatible endpoints and local Ollama. Choose Custom for another compatible provider.',
+        });
+        return false;
+      }
+      if (provider !== 'ollama' && !apiKey && !backendLLMConfigured) {
+        setTestResult({
+          ok: false,
+          model,
+          latencyMs: 0,
+          error: 'Enter an API key, or choose Ollama for a local model without a key.',
+        });
+        return false;
+      }
+      try {
+        await saveLocalLLMConfig({
+          apiKey: provider === 'ollama' ? '' : (apiKey || undefined),
+          baseUrl,
+          model,
+        });
+        setLLMConfig({ ...config, apiKey: undefined });
+        setApiKey('');
+        setBackendLLMConfigured(Boolean(apiKey) || provider === 'ollama' || backendLLMConfigured);
+      } catch (error) {
+        setTestResult({
+          ok: false,
+          model,
+          latencyMs: 0,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    } else {
+      // Browser mode is development-only. The persist middleware strips this
+      // transient field before state is written to localStorage.
+      setLLMConfig(config);
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    return true;
   }
 
   async function saveAndTest() {
-    const cfg = buildConfig();
-    setLLMConfig(cfg);
+    const configBeforeSave = buildConfig();
+    const savedConfig = await saveLLM();
+    if (!savedConfig) return;
     setTesting(true);
     setTestResult(null);
-    const r = await testConnection(cfg);
-    setTestResult(r);
+    const start = Date.now();
+    if (desktopRuntime) {
+      try {
+        const result = await aiApi.testConnection();
+        setTestResult({ ok: result.ok, model: result.model, latencyMs: Date.now() - start });
+      } catch (error) {
+        setTestResult({
+          ok: false,
+          model,
+          latencyMs: Date.now() - start,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else {
+      setTestResult(await testConnection(configBeforeSave));
+    }
     setTesting(false);
   }
 
-  function exportData() {
-    const data = {
-      projects, references, tables,
-      exportedAt: new Date().toISOString(),
-      version: 'R81',
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  async function exportData() {
+    const json = createWorkspaceBackupJson();
+    if (desktopRuntime) {
+      try {
+        await exportNativeState(json);
+      } catch {
+        // Keep the browser-file download available even if the native backup
+        // location cannot be written.
+      }
+    }
+    const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `selenyx-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function restoreNativeData() {
+    if (!desktopRuntime) return;
+    try {
+      const savedBackup = await importNativeState();
+      if (!savedBackup) {
+        alert('此设备尚未找到本机恢复点。');
+        return;
+      }
+      restoreWorkspaceBackup(savedBackup);
+      alert('已恢复此设备的最新本机快照。');
+    } catch (error) {
+      alert(`恢复失败：${error instanceof Error ? error.message : '本机快照无效'}`);
+    }
   }
 
   function importData() {
@@ -174,27 +305,26 @@ export function SettingsView() {
       if (!file) return;
       try {
         const text = await file.text();
-        const data = JSON.parse(text);
-        if (data.projects) useAppStore.setState({ projects: data.projects });
-        if (data.references) useAppStore.setState({ references: data.references });
-        if (data.tables) useAppStore.setState({ tables: data.tables });
+        restoreWorkspaceBackup(text);
         alert('数据导入成功');
-      } catch {
-        alert('导入失败：文件格式不正确');
+      } catch (error) {
+        alert(`导入失败：${error instanceof Error ? error.message : '文件格式不正确'}`);
       }
     };
     input.click();
   }
 
-  function clearData() {
+  async function clearData() {
     if (window.confirm('确定要清除所有本地数据吗？此操作不可恢复。')) {
-      // D6：清所有 selenyx-* 前缀 key（主 store + 番茄钟/学科自定义/onboarding 等）
-      const keys: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith('selenyx-')) keys.push(k);
+      if (desktopRuntime && window.confirm('是否同时删除此设备的本机恢复快照？选择“取消”会保留快照，之后仍可显式恢复。')) {
+        try {
+          await deleteNativeStateBackup();
+        } catch (error) {
+          alert(`无法删除本机快照：${error instanceof Error ? error.message : '未知错误'}`);
+          return;
+        }
       }
-      keys.forEach((k) => localStorage.removeItem(k));
+      clearSelenyxBrowserStorage();
       window.location.reload();
     }
   }
@@ -265,6 +395,11 @@ export function SettingsView() {
           <div className="card">
             <h3 style={{ marginBottom: 16, fontSize: 16 }}>AI 配置 (BYOK)</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {mobileRuntime && !hasConfiguredCompanionBackend && (
+                <div style={{ padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--bg-canvas)', border: '1px solid var(--border)', fontSize: 12, lineHeight: 1.6 }}>
+                  此 Android 构建仅提供设备本地资料功能。安全配对的桌面伴侣服务尚未实现，因此不会在手机中保存或直连云端 API Key。
+                </div>
+              )}
               <div>
                 <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>LLM 提供商</label>
                 <select className="input" value={provider} onChange={(e) => onProviderChange(e.target.value as LLMProvider)}>
@@ -338,8 +473,8 @@ export function SettingsView() {
               </div>
 
               <div>
-                <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>API Key</label>
-                <input className="input" type="password" placeholder="sk-..." value={apiKey} onChange={(e) => { setApiKey(e.target.value); setTestResult(null); }} />
+                <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>API Key{desktopRuntime ? '（仅写入本机私有配置）' : ''}</label>
+                <input className="input" type="password" placeholder="sk-..." value={apiKey} disabled={mobileRuntime && !hasConfiguredCompanionBackend} onChange={(e) => { setApiKey(e.target.value); setTestResult(null); }} />
               </div>
               <div>
                 <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Base URL</label>
@@ -350,8 +485,8 @@ export function SettingsView() {
                 <input className="input" value={model} onChange={(e) => { setModel(e.target.value); setTestResult(null); }} />
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="btn btn-primary" onClick={saveLLM}>保存配置</button>
-                <button className="btn" onClick={saveAndTest} disabled={testing || !apiKey}>
+                <button className="btn btn-primary" onClick={() => { void saveLLM(); }} disabled={mobileRuntime && !hasConfiguredCompanionBackend}>保存配置</button>
+                <button className="btn" onClick={() => { void saveAndTest(); }} disabled={testing || (mobileRuntime && !hasConfiguredCompanionBackend) || (provider !== 'ollama' && !apiKey && !backendLLMConfigured)}>
                   {testing ? '测试中…' : '保存并测试连接'}
                 </button>
                 {saved && !testResult && <span style={{ fontSize: 13, color: 'var(--success)' }}><Icon name="check" size={14} /> 已保存</span>}
@@ -375,10 +510,10 @@ export function SettingsView() {
               fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)',
             }}>
               <span style={{ fontWeight: 600, color: 'var(--accent)' }}>⚠ API Key 安全须知</span>
+              <p style={{ margin: '6px 0 0 0' }}>桌面应用的密钥只写入本机私有配置并由本地 sidecar 使用；它不会写入 WebView localStorage，也不会返回给前端。浏览器仅用于开发调试，刷新后需重新输入。</p>
               <ul style={{ margin: '6px 0 0 0', paddingLeft: 18 }}>
-                <li>密钥以明文存储在本地浏览器 localStorage，请求由浏览器直连 LLM 提供商，不经过任何中转服务器。</li>
-                <li>请勿在公共/共享电脑上配置；清除浏览器数据会同时删除密钥。</li>
-                <li>建议使用各平台提供的用量可观测、可吊销的受限 Key，并定期轮换。</li>
+                <li>移动端目前不会保存云端 API Key；待完成安全配对后才会开放桌面伴侣模式。</li>
+                <li>建议使用可观测、可撤销的受限 Key，并定期轮换。</li>
               </ul>
             </div>
           </div>
@@ -407,23 +542,28 @@ export function SettingsView() {
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ marginBottom: 12, fontSize: 16 }}>备份与恢复</h3>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                所有数据存储在浏览器 localStorage 中。建议定期导出备份，防止浏览器清除数据导致丢失。
+                工作区资料默认保存在此设备。桌面版会额外保存本机快照；JSON 与快照均不包含 API Key，也不包含本地 SQLite 服务中的独立数据。
               </p>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-primary" onClick={exportData}>
                   <Icon name="download" size={14} /> 导出数据
                 </button>
                 <button className="btn" onClick={importData}>
-                  <Icon name="import" size={14} /> 导入数据
+                  <Icon name="import" size={14} /> 选择 JSON 恢复
                 </button>
+                {desktopRuntime && (
+                  <button className="btn" onClick={() => { void restoreNativeData(); }}>
+                    <Icon name="retry" size={14} /> 恢复此设备快照
+                  </button>
+                )}
               </div>
             </div>
             <div className="card">
               <h3 style={{ marginBottom: 12, fontSize: 16, color: 'var(--danger)' }}>危险区域</h3>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                清除所有本地数据（项目、文献、表格、设置）。此操作不可恢复。
+                清除 WebView 中的本地工作区缓存（项目、文献、表格、设置）。桌面本机快照只有在二次确认后才会删除；SQLite 服务中的独立数据不在此操作范围内。
               </p>
-              <button className="btn btn-danger-ghost" onClick={clearData}>清除所有数据</button>
+              <button className="btn btn-danger-ghost" onClick={() => { void clearData(); }}>清除所有数据</button>
             </div>
           </div>
         )}

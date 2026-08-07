@@ -1,17 +1,17 @@
 /**
- * Selenyx BYOK LLM 服务 — 浏览器直连（R79）
+ * Selenyx BYOK LLM 服务。
  *
- * 关键架构决策：本地应用无需依赖远程中转服务。
- * 因此 BYOK 采用「客户端直连 LLM 提供商」——用户的 API Key
- * 只存在本机 localStorage（zustand persist），请求从浏览器直接发往
- * OpenAI / OpenRouter / Anthropic / Google / Ollama，不经任何中转服务器。
- * 这既符合 BYOK「key 不出用户设备」的本意，也让静态部署真正可用。
+ * 已安装的桌面应用把 API Key 写入本机私有配置，并经仅监听回环地址
+ * 的 sidecar 请求提供商；WebView 不读取、持久化或发送该密钥。浏览器
+ * 开发调试仍允许一次性的内存配置直连，但不能作为桌面发布路径。
  *
  * 支持：OpenAI 兼容（openai/openrouter/ollama/custom → /chat/completions）、
  * Anthropic（/v1/messages）、Google Gemini（:generateContent / :streamGenerateContent）。
  */
 
 import type { LLMConfig } from '@apptypes/index';
+import { streamLocalAI } from './api';
+import { isDesktopTauri } from './nativeRuntime';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -69,7 +69,7 @@ function mapNetworkError(e: unknown, baseUrl: string): LLMError {
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
     return new LLMError(
       `连不上 ${baseUrl}。可能原因：① 网络不通 ② 该服务不允许浏览器跨域直连（CORS）③ Base URL 填错。` +
-      `本地 Ollama 需先设 OLLAMA_ORIGINS 允许跨域。`,
+      `已安装桌面端会经本机网关调用 Ollama；只有浏览器开发模式才可能需要设置 OLLAMA_ORIGINS。`,
       'cors',
     );
   }
@@ -177,6 +177,14 @@ function prepare(config: LLMConfig, messages: LLMMessage[], stream: boolean): Pr
 // ============================================================
 
 export async function chat(config: LLMConfig, messages: LLMMessage[]): Promise<LLMResult> {
+  if (isDesktopTauri()) {
+    const content = await streamLocalAI(messages, () => undefined);
+    return {
+      content,
+      tokensUsed: estimateTokens(messages.map((message) => message.content).join('') + content),
+      estimated: true,
+    };
+  }
   const req = prepare(config, messages, false);
   let res: Response;
   try {
@@ -205,6 +213,14 @@ export async function streamChat(
   onDelta: (accumulated: string) => void,
   signal?: AbortSignal,
 ): Promise<LLMResult> {
+  if (isDesktopTauri()) {
+    const content = await streamLocalAI(messages, onDelta, signal);
+    return {
+      content,
+      tokensUsed: estimateTokens(messages.map((message) => message.content).join('') + content),
+      estimated: true,
+    };
+  }
   const req = prepare(config, messages, true);
   let res: Response;
   try {
@@ -308,6 +324,6 @@ export const PROVIDER_DEFAULTS: Record<LLMConfig['provider'], { baseUrl: string;
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', hint: '一个 Key 调多家模型，支持浏览器直连' },
   anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5', hint: '已自动加浏览器直连头' },
   google: { baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-2.0-flash', hint: '免费额度友好' },
-  ollama: { baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b', hint: '本地跑，需设 OLLAMA_ORIGINS=* 允许跨域' },
+  ollama: { baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b', hint: '本地运行；桌面版通过本机网关连接' },
   custom: { baseUrl: '', model: '', hint: '任何 OpenAI 兼容端点（/chat/completions）' },
 };

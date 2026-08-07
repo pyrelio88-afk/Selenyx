@@ -3,13 +3,11 @@ import pytest
 
 from selenyx_backend.database import get_engine, init_db
 from selenyx_backend.main import app
-from selenyx_backend.settings import get_settings
 
 
 def reset_backend(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("SELENYX_DATA_DIR", str(tmp_path))
     get_engine.cache_clear()
-    get_settings.cache_clear()
     init_db()
 
 

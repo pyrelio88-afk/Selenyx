@@ -22,6 +22,9 @@ import { streamChat, LLMError, PROVIDER_DEFAULTS, type LLMMessage } from '@servi
 import { Icon } from '@components/ui/Icon';
 import { MarkdownView } from '@components/chat/MarkdownView';
 import { RESEARCH_SKILLS, getRecommendedSkills } from '@data/skills';
+import { isDesktopTauri } from '@services/nativeRuntime';
+import { queueNativeWorkspaceSnapshot } from '@services/workspaceBackup';
+import { persistChatSessions } from '@services/chatSessionStorage';
 
 /* ============ 类型 ============ */
 
@@ -123,12 +126,21 @@ function loadSessions(scope: string): { sessions: Session[]; activeId: string | 
 /* ============ 主组件 ============ */
 
 export function AIChatView() {
-  const { llmConfig, setLLMConfig, projects, currentProjectId } = useAppStore();
+  const {
+    llmConfig, setLLMConfig, projects, currentProjectId,
+    setCurrentProject, setView,
+  } = useAppStore();
   const isMobile = useIsMobile();
-  const scope = currentProjectId || 'global';
+  const desktopRuntime = isDesktopTauri();
   const project = projects.find((p) => p.id === currentProjectId);
+  // A stale project id must not create an orphaned chat-storage scope.
+  const activeProjectId = project?.id ?? null;
+  const scope = activeProjectId || 'global';
 
   const [{ sessions, activeId }, setSessionState] = useState(() => loadSessions(scope));
+  // Keep the scope that produced the in-memory sessions. A new project first
+  // renders with old React state, which must never be persisted under its key.
+  const [sessionScope, setSessionScope] = useState(scope);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth <= 430 ? true : window.innerWidth > 760);
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -143,30 +155,41 @@ export function AIChatView() {
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const modelTriggerRef = useRef<HTMLButtonElement>(null);
+  const scopeRef = useRef(scope);
   const stickBottomRef = useRef(true);
   const rafRef = useRef<number | null>(null);
   const pendingAccRef = useRef<string>('');
 
+  // Keep asynchronous stream callbacks attached to the project that started
+  // them. A project change must never append a late completion to another
+  // project's active session.
+  scopeRef.current = scope;
+
   // 当前会话
+  const scopedSessions = sessionScope === scope ? sessions : [];
   const activeSession = useMemo(
-    () => sessions.find((s) => s.id === activeId) ?? sessions[0] ?? null,
-    [sessions, activeId],
+    () => scopedSessions.find((s) => s.id === activeId) ?? scopedSessions[0] ?? null,
+    [scopedSessions, activeId],
   );
   const messages = activeSession?.messages ?? [];
 
   /* ---- 持久化副作用 ---- */
   useEffect(() => {
     try {
-      localStorage.setItem(`selenyx_chat_sessions_${scope}`, JSON.stringify(sessions));
-      if (activeId) localStorage.setItem(`selenyx_chat_active_${scope}`, activeId);
+      if (persistChatSessions(localStorage, sessionScope, scope, sessions, activeId)) {
+        queueNativeWorkspaceSnapshot();
+      }
     } catch { /* quota */ }
-  }, [sessions, activeId, scope]);
+  }, [sessions, activeId, scope, sessionScope]);
 
   /* ---- scope 切换（换项目）时重载 ---- */
   useEffect(() => {
+    if (sessionScope === scope) return;
     setSessionState(loadSessions(scope));
+    setSessionScope(scope);
     setEditingIdx(null);
-  }, [scope]);
+  }, [scope, sessionScope]);
 
   /* ---- 技能投递修复：读取 SkillsView 写入的提示词 ---- */
   useEffect(() => {
@@ -222,6 +245,15 @@ export function AIChatView() {
     if (window.innerWidth <= 760) setSidebarOpen(false);
   }
 
+  function switchProject(projectId: string | null) {
+    if (busy || projectId === currentProjectId) return;
+    setCurrentProject(projectId);
+    setSearch('');
+    setInput('');
+    setShowSlash(false);
+    setEditingIdx(null);
+  }
+
   function deleteSession(id: string) {
     setSessionState((prev) => {
       const remain = prev.sessions.filter((s) => s.id !== id);
@@ -245,8 +277,9 @@ export function AIChatView() {
     }));
   }
 
-  function patchActive(updater: (s: Session) => Session) {
+  function patchActive(updater: (s: Session) => Session, expectedScope = scope) {
     setSessionState((prev) => {
+      if (scopeRef.current !== expectedScope) return prev;
       if (!prev.activeId) return prev;
       return {
         ...prev,
@@ -491,8 +524,8 @@ export function AIChatView() {
   /* ---- 侧栏搜索过滤 + 分组 ---- */
   const filteredSessions = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = sessions;
-    if (q) list = sessions.filter((s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q)));
+    let list = scopedSessions;
+    if (q) list = scopedSessions.filter((s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q)));
     const pinned = list.filter((s) => s.pinned);
     const rest = list.filter((s) => !s.pinned);
     const group = (arr: Session[]) => {
@@ -501,10 +534,24 @@ export function AIChatView() {
       return g;
     };
     return { pinned, groups: group(rest) };
-  }, [sessions, search]);
+  }, [scopedSessions, search]);
 
   const configured = !!llmConfig;
   const tokensUsed = llmConfig?.tokensUsed ?? 0;
+
+  const closeModelMenu = useCallback(() => {
+    setShowModelMenu(false);
+    requestAnimationFrame(() => modelTriggerRef.current?.focus());
+  }, []);
+
+  function toggleModelMenu() {
+    if (desktopRuntime) {
+      setView('settings');
+      return;
+    }
+    if (showModelMenu) closeModelMenu();
+    else setShowModelMenu(true);
+  }
 
   /* ============ 渲染 ============ */
 
@@ -513,16 +560,28 @@ export function AIChatView() {
       {/* 会话侧栏 */}
       <aside className={`aichat-sidebar ${sidebarOpen ? 'open' : ''} ${isMobile ? 'mobile-full' : ''}`}>
         <div className="aichat-sidebar-head">
-          <button className="aichat-new-btn" onClick={createSession}>
+          <button type="button" className="aichat-new-btn" onClick={createSession} aria-label="新建对话">
             <Icon name="plus" size={16} strokeWidth={1.8} /> 新对话
           </button>
-          <button className="aichat-icon-btn" title={sidebarOpen ? '收起' : '展开'} onClick={() => setSidebarOpen((v) => !v)}>
+          <button
+            type="button"
+            className="aichat-icon-btn"
+            title={sidebarOpen ? '收起' : '展开'}
+            aria-label={sidebarOpen ? '收起会话列表' : '展开会话列表'}
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen((v) => !v)}
+          >
             <Icon name="chevronLeft" size={16} />
           </button>
         </div>
         <div className="aichat-search">
           <Icon name="search" size={14} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索会话…" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索会话…"
+            aria-label="搜索当前项目的会话"
+          />
         </div>
         <div className="aichat-session-list">
           {filteredSessions.pinned.length > 0 && (
@@ -539,7 +598,7 @@ export function AIChatView() {
               </div>
             ) : null,
           )}
-          {sessions.length === 0 && (
+          {scopedSessions.length === 0 && (
             <div className="aichat-session-empty">还没有对话<br />点击「新对话」开始</div>
           )}
         </div>
@@ -548,7 +607,14 @@ export function AIChatView() {
       {/* 主对话区 */}
       <section className="aichat-main">
         <header className="aichat-header">
-          <button className="aichat-icon-btn aichat-toggle" title="会话列表" onClick={() => setSidebarOpen((v) => !v)}>
+          <button
+            type="button"
+            className="aichat-icon-btn aichat-toggle"
+            title="会话列表"
+            aria-label={sidebarOpen ? '收起会话列表' : '打开会话列表'}
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen((v) => !v)}
+          >
             <Icon name="list" size={17} />
           </button>
           <div className="aichat-header-title">
@@ -558,16 +624,27 @@ export function AIChatView() {
           <div className="aichat-header-right">
             {/* 模型切换器 */}
             <div className="aichat-model-wrap">
-              <button className={`aichat-model-chip ${configured ? 'ok' : 'warn'}`} onClick={() => setShowModelMenu((v) => !v)}>
+              <button
+                ref={modelTriggerRef}
+                type="button"
+                className={`aichat-model-chip ${configured ? 'ok' : 'warn'}`}
+                onClick={toggleModelMenu}
+                aria-label={desktopRuntime
+                  ? '在设置中管理 AI 模型和本机密钥'
+                  : configured ? `切换模型，当前为 ${llmConfig!.provider} ${llmConfig!.model}` : '配置 AI 模型'}
+                aria-haspopup={desktopRuntime ? undefined : 'dialog'}
+                aria-expanded={desktopRuntime ? undefined : showModelMenu}
+                aria-controls={desktopRuntime ? undefined : 'aichat-model-dialog'}
+              >
                 <span className="pdf-tool-dot" style={{ background: 'currentColor' }} />
                 {configured ? `${llmConfig!.provider} / ${llmConfig!.model}` : '未配置'}
                 <Icon name="chevronDown" size={13} />
               </button>
-              {showModelMenu && (
+              {showModelMenu && !desktopRuntime && (
                 <ModelMenu
                   config={llmConfig}
-                  onPick={(model) => { if (llmConfig) setLLMConfig({ ...llmConfig, model }); setShowModelMenu(false); }}
-                  onClose={() => setShowModelMenu(false)}
+                  onPick={(model) => { if (llmConfig) setLLMConfig({ ...llmConfig, model }); closeModelMenu(); }}
+                  onClose={closeModelMenu}
                 />
               )}
             </div>
@@ -577,20 +654,36 @@ export function AIChatView() {
               </span>
             )}
             {activeSession && messages.length > 0 && (
-              <button className="aichat-icon-btn" title="导出为 Markdown" onClick={exportSession}>
+              <button type="button" className="aichat-icon-btn" title="导出为 Markdown" aria-label="将当前会话导出为 Markdown" onClick={exportSession}>
                 <Icon name="download" size={15} />
               </button>
             )}
           </div>
         </header>
 
-        {project && (
-          <div className="aichat-ctx">
-            <Icon name="projects" size={13} />
-            <span>当前项目：<b>{project.name}</b> · 阶段：{project.currentStage}</span>
-            {project.referenceIds.length > 0 && <span className="aichat-ctx-sub">· 文献 {project.referenceIds.length} 篇</span>}
-          </div>
-        )}
+        <div className="aichat-ctx" aria-label="AI 会话项目上下文">
+          <Icon name="projects" size={13} />
+          <label className="aichat-ctx-label" htmlFor="aichat-project-scope">会话项目</label>
+          <select
+            id="aichat-project-scope"
+            className="aichat-project-select"
+            value={activeProjectId ?? ''}
+            onChange={(event) => switchProject(event.target.value || null)}
+            disabled={busy}
+            aria-describedby="aichat-project-scope-hint"
+          >
+            <option value="">不关联项目（全局会话）</option>
+            {projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <span id="aichat-project-scope-hint" className="aichat-ctx-detail">
+            {project ? <>阶段：<b>{project.currentStage}</b></> : '全局会话，不会关联到某个项目'}
+          </span>
+          {project && project.referenceIds.length > 0 && <span className="aichat-ctx-sub">· 文献 {project.referenceIds.length} 篇</span>}
+          {busy && <span className="aichat-ctx-sub">· 生成完成后可切换项目</span>}
+          <button type="button" className="aichat-project-manage" onClick={() => setView('projects')}>
+            管理项目
+          </button>
+        </div>
 
         {/* 消息列表 */}
         <div className="aichat-messages" ref={listRef} onScroll={onListScroll}>
@@ -624,7 +717,7 @@ export function AIChatView() {
 
         {/* 滚动到底按钮 */}
         {messages.length > 0 && !stickBottomRef.current && (
-          <button className="aichat-scroll-btn visible" onClick={() => scrollToBottom(true)} title="滚动到底部">
+          <button type="button" className="aichat-scroll-btn visible" onClick={() => scrollToBottom(true)} title="滚动到底部" aria-label="滚动到最新消息">
             <Icon name="chevronDown" size={18} />
           </button>
         )}
@@ -674,22 +767,22 @@ export function AIChatView() {
                 rows={1}
               />
               {editingIdx !== null ? (
-                <button className="aichat-send" onClick={commitEdit} title="更新并重发">
+                <button type="button" className="aichat-send" onClick={commitEdit} title="更新并重发" aria-label="更新并重新发送消息">
                   <Icon name="editIn" size={17} />
                 </button>
               ) : busy ? (
-                <button className="aichat-send stop" onClick={stop} title="停止生成">
+                <button type="button" className="aichat-send stop" onClick={stop} title="停止生成" aria-label="停止生成">
                   <Icon name="stop" size={16} />
                 </button>
               ) : (
-                <button className="aichat-send" onClick={send} disabled={!input.trim()} title="发送">
+                <button type="button" className="aichat-send" onClick={send} disabled={!input.trim()} title="发送" aria-label="发送消息">
                   <Icon name="send" size={17} />
                 </button>
               )}
             </div>
           </div>
           <div className="aichat-composer-foot">
-            <span>BYOK · 浏览器直连，Key 不出本机</span>
+            <span>BYOK · 桌面端经本机服务连接，Key 不离开设备</span>
             {editingIdx !== null ? (
               <span className="aichat-editing-tag">编辑模式 · Esc 取消</span>
             ) : (
@@ -710,26 +803,38 @@ export function AIChatView() {
     const isActive = s.id === (activeSession?.id ?? activeId);
     return (
       <div key={s.id} className={`aichat-session ${isActive ? 'active' : ''}`}>
-        <div className="aichat-session-main" onClick={() => selectSession(s.id)}>
-          {s.pinned && <Icon name="pin" size={11} className="aichat-pin-mark" />}
-          {renamingId === s.id ? (
+        {renamingId === s.id ? (
+          <div className="aichat-session-main aichat-session-main-renaming">
+            {s.pinned && <Icon name="pin" size={11} className="aichat-pin-mark" />}
             <input
               className="aichat-rename"
               autoFocus
               defaultValue={s.title}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => { if (e.key === 'Enter') renameSession(s.id, (e.target as HTMLInputElement).value); if (e.key === 'Escape') setRenamingId(null); }}
+              aria-label="会话名称"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') renameSession(s.id, (e.target as HTMLInputElement).value);
+                if (e.key === 'Escape') setRenamingId(null);
+              }}
               onBlur={(e) => renameSession(s.id, e.target.value)}
             />
-          ) : (
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="aichat-session-main"
+            onClick={() => selectSession(s.id)}
+            aria-label={`打开会话「${s.title}」，${s.messages.length} 条消息${s.pinned ? '，已置顶' : ''}`}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            {s.pinned && <Icon name="pin" size={11} className="aichat-pin-mark" />}
             <span className="aichat-session-title">{s.title}</span>
-          )}
-          <span className="aichat-session-meta">{s.messages.length} 条 · {nowHHMM(s.updatedAt)}</span>
-        </div>
+            <span className="aichat-session-meta">{s.messages.length} 条 · {nowHHMM(s.updatedAt)}</span>
+          </button>
+        )}
         <div className="aichat-session-acts">
-          <button title={s.pinned ? '取消置顶' : '置顶'} onClick={() => togglePin(s.id)}><Icon name="pin" size={13} /></button>
-          <button title="重命名" onClick={() => setRenamingId(s.id)}><Icon name="pencil" size={13} /></button>
-          <button title="删除" onClick={() => deleteSession(s.id)}><Icon name="trash" size={13} /></button>
+          <button type="button" title={s.pinned ? '取消置顶' : '置顶'} aria-label={`${s.pinned ? '取消置顶' : '置顶'}会话「${s.title}」`} onClick={() => togglePin(s.id)}><Icon name="pin" size={13} /></button>
+          <button type="button" title="重命名" aria-label={`重命名会话「${s.title}」`} onClick={() => setRenamingId(s.id)}><Icon name="pencil" size={13} /></button>
+          <button type="button" title="删除" aria-label={`删除会话「${s.title}」`} onClick={() => deleteSession(s.id)}><Icon name="trash" size={13} /></button>
         </div>
       </div>
     );
@@ -740,32 +845,69 @@ export function AIChatView() {
 
 function ModelMenu({ config, onPick, onClose }: { config: ReturnType<typeof useAppStore.getState>['llmConfig']; onPick: (model: string) => void; onClose: () => void }) {
   const [val, setVal] = useState(config?.model ?? '');
+  const panelRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const provider = config?.provider ?? 'openai';
   const preset = PROVIDER_DEFAULTS[provider];
   const presets = [preset.model, 'gpt-4o', 'gpt-4.1-mini', 'claude-sonnet-4-5', 'claude-opus-4-1', 'gemini-2.0-flash', 'gemini-2.5-pro', 'deepseek-chat', 'qwen2.5:7b']
     .filter((v, i, a) => v && a.indexOf(v) === i);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    inputRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="aichat-model-menu" onClick={onClose}>
-      <div className="aichat-model-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="aichat-model-provider">
-          <span className="pdf-tool-dot" style={{ background: 'var(--success)' }} />
-          {provider}
-          <span className="aichat-model-hint">{preset.hint}</span>
+    <div className="aichat-model-menu" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div ref={panelRef} id="aichat-model-dialog" className="aichat-model-panel" role="dialog" aria-modal="true" aria-labelledby="aichat-model-dialog-title" aria-describedby="aichat-model-dialog-hint">
+        <div className="aichat-model-heading">
+          <div className="aichat-model-provider">
+            <span className="pdf-tool-dot" style={{ background: 'var(--success)' }} />
+            <span id="aichat-model-dialog-title">当前服务：{provider}</span>
+            <span id="aichat-model-dialog-hint" className="aichat-model-hint">{preset.hint}</span>
+          </div>
+          <button type="button" className="aichat-model-close" onClick={onClose} aria-label="关闭模型选择器" title="关闭">
+            <Icon name="close" size={15} />
+          </button>
         </div>
         <input
+          ref={inputRef}
           className="aichat-model-input"
           value={val}
           onChange={(e) => setVal(e.target.value)}
           placeholder="模型名，如 gpt-4o-mini"
-          autoFocus
-          onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) onPick(val.trim()); if (e.key === 'Escape') onClose(); }}
+          aria-label="输入模型名称"
+          onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) onPick(val.trim()); }}
         />
         <div className="aichat-model-presets">
           {presets.map((m) => (
-            <button key={m} className="aichat-model-preset" onClick={() => onPick(m)}>{m}</button>
+            <button type="button" key={m} className="aichat-model-preset" onClick={() => onPick(m)}>{m}</button>
           ))}
         </div>
-        <button className="btn btn-primary aichat-model-apply" disabled={!val.trim()} onClick={() => onPick(val.trim())}>应用</button>
+        <button type="button" className="btn btn-primary aichat-model-apply" disabled={!val.trim()} onClick={() => onPick(val.trim())}>应用</button>
       </div>
     </div>
   );
@@ -778,7 +920,7 @@ function EmptyState({ configured, onPick }: { configured: boolean; onPick: (p: s
     <div className="aichat-empty">
       <div className="aichat-empty-icon"><Icon name="sparkles" size={40} strokeWidth={1.2} /></div>
       <h2>AI 研究助手</h2>
-      <p>{configured ? '已接入你的 API（BYOK）· 浏览器直连 LLM，Key 不出本机' : '请先在「设置」中配置 LLM API Key（BYOK）'}</p>
+      <p>{configured ? '已接入你的 API（BYOK）· 桌面端经本机服务连接，Key 不离开设备' : '请先在「设置」中配置 LLM API Key（BYOK）'}</p>
       <p className="aichat-empty-sub">文献综述 / 论文批评 / 想法生成 / 数据提取 / SBAR 交接 · 输入 / 召唤更多指令</p>
       <div className="aichat-quick">
         {CATEGORIES.map((cat) => {

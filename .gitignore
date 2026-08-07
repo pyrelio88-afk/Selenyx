@@ -29,7 +29,9 @@ Thumbs.db
 
 # Tauri
 desktop/gen/
-desktop/Cargo.lock
 desktop/binaries/
+desktop/.cache/
+desktop/release/
+desktop/resources/ollama/OllamaSetup.exe
 *.tsbuildinfo
 *.bak

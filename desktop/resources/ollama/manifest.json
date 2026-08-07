@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "component": "ollama-windows-installer",
+  "fileName": "OllamaSetup.exe",
+  "version": "0.32.6",
+  "sourceUrl": "https://github.com/ollama/ollama/releases/download/v0.32.6/OllamaSetup.exe",
+  "expectedSizeBytes": 1563278432,
+  "sha256": "526e47db7c295d017e9514df5bb20c6f32b3d1170f2c8bb9c59b53185f5bd6ff",
+  "downloadedBy": "scripts/prepare-ollama-installer.mjs",
+  "licenseNotice": "This metadata does not grant rights to the upstream installer. Review Ollama's applicable upstream license and distribution terms before redistribution."
+}

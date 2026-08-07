@@ -1,6 +1,6 @@
 {
   "name": "selenyx",
-  "version": "2.0.0-alpha",
+  "version": "0.0.1",
   "private": true,
   "description": "Selenyx 科研工作台 — 本地优先、BYOK、八段科研流水线（TypeScript + Python + Tauri 多语言架构）",
   "license": "MIT",
@@ -13,6 +13,8 @@
     "build": "npm --workspace @selenyx/frontend run build",
     "typecheck": "npm --workspace @selenyx/frontend run typecheck",
     "test": "npm --workspace @selenyx/frontend run test",
+    "offline:check": "node scripts/check-offline-assets.mjs --dist",
+    "offline:smoke": "node scripts/smoke-offline-ocr.mjs",
     "verify:local": "node scripts/verify-local.mjs",
     "backend:dev": "cd backend && uv run uvicorn selenyx_backend.main:app --reload --port 8770",
     "backend:test": "cd backend && uv run --extra dev pytest -q",
@@ -21,6 +23,9 @@
     "desktop:dev": "node scripts/dev-desktop.mjs",
     "desktop:doctor": "node scripts/check-desktop-prereqs.mjs",
     "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:prepare-ollama": "node scripts/prepare-ollama-installer.mjs --with-ollama",
+    "desktop:verify-ollama": "node scripts/prepare-ollama-installer.mjs --verify",
+    "desktop:build:with-ollama": "node scripts/build-desktop.mjs --with-ollama",
     "lint": "npm --workspace @selenyx/frontend run lint"
   },
   "engines": {

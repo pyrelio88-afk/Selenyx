@@ -4,13 +4,20 @@
  */
 
 import type { Reference, ResearchProject, RetrievalResult, ChatMessage } from '@apptypes/index';
+import { isDesktopTauri, isMobileTauri } from './nativeRuntime';
 
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
-const isMobileRuntime = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-const isDesktopTauri = !isMobileRuntime && '__TAURI_INTERNALS__' in window;
-const API_BASE = (configuredApiBase || (isDesktopTauri ? 'http://127.0.0.1:8770/api' : '/api')).replace(/\/$/, '');
+// Mobile pairing is intentionally not shipped yet. Never allow a compile-time
+// address to turn an APK into an unauthenticated LAN client.
+export const hasConfiguredCompanionBackend = !isMobileTauri() && Boolean(configuredApiBase);
+const API_BASE = (isMobileTauri()
+  ? ''
+  : configuredApiBase || (isDesktopTauri() ? 'http://127.0.0.1:8770/api' : '/api')).replace(/\/$/, '');
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  if (!API_BASE) {
+    throw new Error('The mobile app is offline-first. A paired companion service is not available in this build.');
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
@@ -36,6 +43,38 @@ export const refApi = {
   searchByPMID: (pmid: string) => request<Reference>(`/references/lookup/pmid/${pmid}`),
 };
 
+/** A normalized, read-only item exposed by the user's local Zotero desktop API. */
+export interface ZoteroReferenceCandidate {
+  key: string;
+  type: string;
+  title: string;
+  creators: { firstName: string; lastName: string; type: string }[];
+  publication: string;
+  year: string;
+  date: string;
+  doi: string;
+  url: string;
+  volume: string;
+  issue: string;
+  pages: string;
+  abstract: string;
+  publisher: string;
+  place: string;
+  isbn: string;
+  issn: string;
+  language: string;
+  rights: string;
+  collections: string[];
+  tags: string[];
+}
+
+export const zoteroApi = {
+  status: () => request<{ available: true; apiVersion: string }>('/zotero/status'),
+  items: (limit = 250) => request<{ apiVersion: string; items: ZoteroReferenceCandidate[]; skipped: number }>(
+    `/zotero/items?limit=${Math.min(Math.max(Math.floor(limit), 1), 500)}`,
+  ),
+};
+
 // === 项目 API ===
 export const projectApi = {
   list: () => request<ResearchProject[]>('/projects'),
@@ -53,12 +92,65 @@ export const searchApi = {
 
 // === AI / LLM API ===
 export const aiApi = {
+  config: () => request<{ configured: boolean; baseUrl: string; model: string }>('/ai/config'),
   chat: (messages: Omit<ChatMessage, 'id' | 'timestamp'>[], projectId?: string) =>
     request<ChatMessage>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, projectId }) }),
   runRecipe: (recipeId: string, input: string, projectId: string) =>
     request<{ runId: string; status: string }>('/ai/recipes/run', { method: 'POST', body: JSON.stringify({ recipeId, input, projectId }) }),
   testConnection: () => request<{ ok: boolean; model: string }>('/ai/test'),
 };
+
+/** Proxy a desktop-sidecar SSE stream without ever exposing the API key to JS. */
+export async function streamLocalAI(
+  messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
+  onDelta: (accumulated: string) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (!API_BASE) {
+    throw new Error('The local AI service is unavailable on this mobile build.');
+  }
+  const response = await fetch(`${API_BASE}/ai/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages }),
+    signal,
+  });
+  if (!response.ok) throw new Error(`Local AI ${response.status}: ${await response.text()}`);
+  if (!response.body) throw new Error('The local AI service returned no response stream.');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let content = '';
+  let done = false;
+
+  while (!done) {
+    const { value, done: readerDone } = await reader.read();
+    if (readerDone) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') {
+        done = true;
+        break;
+      }
+      try {
+        const event = JSON.parse(payload) as { delta?: unknown };
+        if (typeof event.delta === 'string' && event.delta) {
+          content += event.delta;
+          onDelta(content);
+        }
+      } catch {
+        // Ignore SSE keep-alives and malformed partial events.
+      }
+    }
+  }
+
+  return content;
+}
 
 // === 临床数据 API ===
 export const clinicalApi = {
@@ -75,5 +167,24 @@ export const citationApi = {
 };
 
 export const localApi = {
-  health: () => request<{ status: string; version: string; storage: 'local-sqlite'; llmConfigured: boolean }>('/health'),
+  health: async (): Promise<{ status: 'ok'; version: string; storage: 'local-sqlite'; llmConfigured: boolean }> => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 3_000);
+    try {
+      const response = await request<unknown>('/health', { signal: controller.signal });
+      if (!response || typeof response !== 'object') throw new Error('Local backend health response is invalid.');
+      const health = response as Record<string, unknown>;
+      if (health.status !== 'ok' || health.storage !== 'local-sqlite'
+        || typeof health.version !== 'string' || !health.version.trim()
+        || typeof health.llmConfigured !== 'boolean') {
+        throw new Error('The process on the local backend port is not a healthy Selenyx service.');
+      }
+      return health as { status: 'ok'; version: string; storage: 'local-sqlite'; llmConfigured: boolean };
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error('The local backend health check timed out.');
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  },
 };

@@ -1,10 +1,16 @@
 /**
- * Pexels API 服务 — 搜索真实照片用于 UI 设计
- * API 文档: https://www.pexels.com/api/documentation/
+ * Remote editorial photography is intentionally disabled in the client.
+ * VITE_* values are compiled into the application bundle, so a Pexels key
+ * cannot be treated as private configuration here. The UI already tolerates
+ * null/empty image results and can use local assets instead.
  */
 
-const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY || '';
-const PEXELS_BASE = 'https://api.pexels.com/v1';
+const EMPTY_RESULT: PexelsResult = {
+  photos: [],
+  total_results: 0,
+  page: 1,
+  per_page: 0,
+};
 
 export interface PexelsPhoto {
   id: number;
@@ -35,22 +41,13 @@ export interface PexelsResult {
 
 /** 搜索照片 */
 export async function searchPhotos(query: string, perPage = 15, page = 1): Promise<PexelsResult> {
-  const url = `${PEXELS_BASE}/search?query=${encodeURIComponent(query)}&per_page=${perPage}&page=${page}`;
-  const resp = await fetch(url, {
-    headers: { Authorization: PEXELS_API_KEY },
-  });
-  if (!resp.ok) throw new Error(`Pexels API error: ${resp.status}`);
-  return resp.json();
+  void query;
+  return { ...EMPTY_RESULT, per_page: perPage, page };
 }
 
 /** 获取精选照片 */
 export async function getCuratedPhotos(perPage = 15, page = 1): Promise<PexelsResult> {
-  const url = `${PEXELS_BASE}/curated?per_page=${perPage}&page=${page}`;
-  const resp = await fetch(url, {
-    headers: { Authorization: PEXELS_API_KEY },
-  });
-  if (!resp.ok) throw new Error(`Pexels API error: ${resp.status}`);
-  return resp.json();
+  return { ...EMPTY_RESULT, per_page: perPage, page };
 }
 
 /** 按学科关键词搜索配图 */

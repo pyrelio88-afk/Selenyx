@@ -1,10 +1,16 @@
-import { useState, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { FIELD_LABELS } from '@apptypes/index';
 import type { Reference } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
 import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
+import {
+  dedupeIncomingReferences,
+  normalizeDoi,
+  referenceOnlineUrl,
+  safeExternalUrl,
+} from '@utils/referenceIntegrity';
 import { fetchByDOI, searchCrossref, type FetchedReference } from '@services/metadataFetch';
 import { ViewSwitcher, type ViewMode } from '@components/datagrid/ViewSwitcher';
 import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
@@ -13,6 +19,9 @@ import { CalendarView } from '@components/datagrid/CalendarView';
 import type { Annotation } from '@apptypes/reference';
 import { useIsMobile } from '@lib/useIsMobile';
 import { BottomSheet } from '@components/layout/BottomSheet';
+import { zoteroApi } from '@services/api';
+import { isDesktopTauri } from '@services/nativeRuntime';
+import { referenceFromZotero } from '@utils/zoteroReference';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
@@ -21,13 +30,14 @@ import { AnydocConvertModal } from '@components/anydoc/AnydocConvertModal';
 
 function createReferenceFromFetched(ref: FetchedReference): Reference {
   const timestamp = new Date().toISOString();
-  const identifier = ref.doi || ref.title;
+  const doi = normalizeDoi(ref.doi);
+  const identifier = doi || ref.title;
   return {
     id: `ref_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     title: ref.title,
     creators: ref.creators.map((creator, index) => ({ id: `c_${index}`, firstName: creator.firstName, lastName: creator.lastName, type: 'author' as const, order: index })),
     type: ref.type as Reference['type'],
-    doi: ref.doi,
+    doi,
     publication: ref.publication,
     year: String(ref.year),
     volume: ref.volume,
@@ -50,7 +60,7 @@ function createReferenceFromFetched(ref: FetchedReference): Reference {
     pmid: '',
     pmcid: '',
     arxivId: '',
-    url: ref.doi ? `https://doi.org/${encodeURIComponent(ref.doi)}` : '',
+    url: doi ? `https://doi.org/${encodeURIComponent(doi)}` : '',
     uri: '',
     collections: [],
     language: '',
@@ -68,8 +78,96 @@ function createReferenceFromFetched(ref: FetchedReference): Reference {
   };
 }
 
+interface ManualReferenceForm {
+  title: string;
+  authors: string;
+  year: string;
+  publication: string;
+  doi: string;
+  url: string;
+  abstract: string;
+}
+
+function emptyManualReferenceForm(): ManualReferenceForm {
+  return { title: '', authors: '', year: String(new Date().getFullYear()), publication: '', doi: '', url: '', abstract: '' };
+}
+
+function parseManualCreators(input: string): Reference['creators'] {
+  return input.split(/[;；\n]+/).map((raw) => raw.trim()).filter(Boolean).map((name, index) => {
+    const comma = name.indexOf(',');
+    if (comma >= 0) {
+      return { id: `c_${index}`, firstName: name.slice(comma + 1).trim(), lastName: name.slice(0, comma).trim(), type: 'author' as const, order: index };
+    }
+    const tokens = name.split(/\s+/);
+    const lastName = tokens.length > 1 ? tokens.at(-1) ?? '' : name;
+    return { id: `c_${index}`, firstName: tokens.length > 1 ? tokens.slice(0, -1).join(' ') : '', lastName, type: 'author' as const, order: index };
+  });
+}
+
+function createManualReference(form: ManualReferenceForm): Reference {
+  const timestamp = new Date().toISOString();
+  const doi = normalizeDoi(form.doi);
+  const creators = parseManualCreators(form.authors);
+  const identifier = doi || `${creators[0]?.lastName ?? 'reference'}${form.year}` || form.title;
+  return {
+    id: `ref_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    title: form.title.trim(),
+    creators,
+    type: 'journalArticle',
+    doi,
+    publication: form.publication.trim(),
+    year: form.year.trim(),
+    volume: '', issue: '', pages: '', abstract: form.abstract.trim(), tags: [], readStatus: 'unread', importance: 3,
+    citeKey: identifier.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20) || 'reference',
+    openAccess: false, annotations: [], shortTitle: '', publisher: '', place: '', date: '', accessionDate: '', isbn: '', issn: '', pmid: '', pmcid: '', arxivId: '',
+    url: form.url.trim() || (doi ? `https://doi.org/${encodeURIComponent(doi)}` : ''), uri: '', collections: [], language: '', rights: '', attachments: [], notes: '',
+    impactFactor: null, jcrQuartile: null, pageCharge: null, reviewWeeks: null, pipelineStage: null,
+    source: 'manual', createdAt: timestamp, updatedAt: timestamp,
+  };
+}
+
+function ManualReferenceFields({ form, onChange }: { form: ManualReferenceForm; onChange: (patch: Partial<ManualReferenceForm>) => void }) {
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div>
+        <label className="form-label" htmlFor="manual-reference-title">文献标题 *</label>
+        <input id="manual-reference-title" className="input" autoFocus value={form.title} onChange={(event) => onChange({ title: event.target.value })} placeholder="输入论文、书籍或报告标题" />
+      </div>
+      <div>
+        <label className="form-label" htmlFor="manual-reference-authors">作者</label>
+        <input id="manual-reference-authors" className="input" value={form.authors} onChange={(event) => onChange({ authors: event.target.value })} placeholder="如：Wang, Wei; Zhang, Li（多位作者用分号分隔）" />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: 10 }}>
+        <div>
+          <label className="form-label" htmlFor="manual-reference-year">年份</label>
+          <input id="manual-reference-year" className="input" inputMode="numeric" value={form.year} onChange={(event) => onChange({ year: event.target.value })} placeholder="2026" />
+        </div>
+        <div>
+          <label className="form-label" htmlFor="manual-reference-publication">期刊 / 出版物</label>
+          <input id="manual-reference-publication" className="input" value={form.publication} onChange={(event) => onChange({ publication: event.target.value })} placeholder="如：Nature / 中华护理杂志" />
+        </div>
+      </div>
+      <div>
+        <label className="form-label" htmlFor="manual-reference-doi">DOI</label>
+        <input id="manual-reference-doi" className="input" value={form.doi} onChange={(event) => onChange({ doi: event.target.value })} placeholder="10.xxxx/xxxx（可粘贴 doi.org 链接）" />
+      </div>
+      <div>
+        <label className="form-label" htmlFor="manual-reference-url">原文链接</label>
+        <input id="manual-reference-url" className="input" type="url" value={form.url} onChange={(event) => onChange({ url: event.target.value })} placeholder="https://…（可选）" />
+      </div>
+      <div>
+        <label className="form-label" htmlFor="manual-reference-abstract">摘要 / 备注</label>
+        <textarea id="manual-reference-abstract" className="input" rows={4} value={form.abstract} onChange={(event) => onChange({ abstract: event.target.value })} placeholder="粘贴摘要或记录要点（可选）" style={{ resize: 'vertical' }} />
+      </div>
+    </div>
+  );
+}
+
 export function ReferencesView() {
-  const { references, searchQuery, setSearchQuery, addReferences, updateReference, deleteReference } = useAppStore();
+  const {
+    references, searchQuery, setSearchQuery,
+    addReferences, updateReference, deleteReferenceAndRelations,
+  } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -93,8 +191,16 @@ export function ReferencesView() {
   const [exportPreview, setExportPreview] = useState<{ format: string; content: string; referenceCount: number } | null>(null);
   // A2 删除二次确认（使用应用内确认弹窗）
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showManualCreate, setShowManualCreate] = useState(false);
+  const [manualForm, setManualForm] = useState<ManualReferenceForm>(emptyManualReferenceForm);
+  const [zoteroImporting, setZoteroImporting] = useState(false);
+  const [zoteroPreview, setZoteroPreview] = useState<{
+    references: Reference[];
+    duplicateCount: number;
+    sourceSkipped: number;
+  } | null>(null);
   // A3 开放获取 PDF 链接（Unpaywall 查询结果）
-  const [oaPdfUrl, setOaPdfUrl] = useState<string | null>(null);
+  const [oaPdfLink, setOaPdfLink] = useState<{ referenceId: string; url: string } | null>(null);
   const [oaLoading, setOaLoading] = useState(false);
   // 移动端: 更多操作菜单 / 筛选面板
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -102,6 +208,38 @@ export function ReferencesView() {
   const isMobile = useIsMobile();
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+  const deleteTriggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!confirmDeleteId || isMobile) return;
+    const focusFrame = window.requestAnimationFrame(() => deleteCancelRef.current?.focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setConfirmDeleteId(null);
+      if (event.key !== 'Tab' || !deleteDialogRef.current) return;
+      const focusable = Array.from(deleteDialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', onKeyDown);
+      deleteTriggerRef.current?.focus();
+      deleteTriggerRef.current = null;
+    };
+  }, [confirmDeleteId, isMobile]);
 
   const filtered = useMemo(() => {
     let result = references;
@@ -132,7 +270,7 @@ export function ReferencesView() {
   }, [references, searchQuery, filterType, sortField, sortDir]);
 
   const savedDois = useMemo(
-    () => new Set(references.map((reference) => reference.doi.toLowerCase()).filter(Boolean)),
+    () => new Set(references.map((reference) => normalizeDoi(reference.doi)).filter(Boolean)),
     [references],
   );
 
@@ -143,17 +281,29 @@ export function ReferencesView() {
 
   /** DOI 自动抓取元数据 → 入库 */
   async function handleDoiFetch() {
-    if (!doiInput.trim()) return;
+    const requestedDoi = normalizeDoi(doiInput);
+    if (!requestedDoi) return;
+    if (savedDois.has(requestedDoi)) {
+      setDoiInput('');
+      flashToast('该 DOI 已在本地文献库中');
+      return;
+    }
     setDoiLoading(true);
     try {
-      const ref = await fetchByDOI(doiInput.trim());
+      const ref = await fetchByDOI(requestedDoi);
       if (ref) {
+        const fetchedDoi = normalizeDoi(ref.doi) || requestedDoi;
+        if (fetchedDoi && savedDois.has(fetchedDoi)) {
+          setDoiInput('');
+          flashToast('该 DOI 已在本地文献库中');
+          return;
+        }
         addReferences([{
           id: 'ref_' + Date.now().toString(36),
           title: ref.title,
           creators: ref.creators.map((c, i) => ({ id: "c_" + i, firstName: c.firstName, lastName: c.lastName, type: "author" as const, order: i })),
           type: ref.type as any,
-          doi: ref.doi,
+          doi: fetchedDoi,
           publication: ref.publication,
           year: String(ref.year),
           volume: ref.volume,
@@ -163,7 +313,7 @@ export function ReferencesView() {
           tags: [],
           readStatus: 'unread',
           importance: 3,
-          citeKey: ref.doi.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20),
+          citeKey: fetchedDoi.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20),
           openAccess: ref.openAccess,
           annotations: [],
           shortTitle: '',
@@ -196,7 +346,7 @@ export function ReferencesView() {
         setDoiInput('');
       } else {
         // Crossref 没找到，降级为手动添加
-        const doi = doiInput.trim().replace(/^https?:\/\/doi\.org\//, '');
+        const doi = requestedDoi;
         addReferences([{
           id: 'ref_' + Date.now().toString(36),
           title: `[待补充] DOI: ${doi}`,
@@ -269,13 +419,48 @@ export function ReferencesView() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  /** Keep project associations and transient readers consistent with deletion. */
+  const deleteReferenceWithCleanup = useCallback((referenceId: string) => {
+    deleteReferenceAndRelations(referenceId);
+    if (pdfRefId === referenceId) {
+      setPdfSource(null);
+      setPdfRefId(null);
+    }
+    if (anydocRefId === referenceId) {
+      setAnydocOpen(false);
+      setAnydocRefId(null);
+    }
+    if (oaPdfLink?.referenceId === referenceId) setOaPdfLink(null);
+    setConfirmDeleteId(null);
+    closePanel();
+    flashToast('已删除文献，并移除关联项目中的引用');
+  }, [anydocRefId, closePanel, deleteReferenceAndRelations, flashToast, oaPdfLink, pdfRefId]);
+
+  const openManualCreate = useCallback(() => {
+    setManualForm(emptyManualReferenceForm());
+    setShowManualCreate(true);
+  }, []);
+
+  const saveManualReference = useCallback(() => {
+    if (!manualForm.title.trim()) {
+      flashToast('请先填写文献标题');
+      return;
+    }
+    const reference = createManualReference(manualForm);
+    addReferences([reference]);
+    setSelectedId(reference.id);
+    setShowManualCreate(false);
+    flashToast('已创建本地文献条目');
+  }, [addReferences, flashToast, manualForm]);
+
   const handleAddSearchResult = useCallback((result: FetchedReference) => {
-    const duplicate = result.doi && references.some((reference) => reference.doi.toLowerCase() === result.doi.toLowerCase());
-    if (duplicate) {
+    const candidate = createReferenceFromFetched(result);
+    const { accepted } = dedupeIncomingReferences(references, [candidate]);
+    if (accepted.length === 0) {
       flashToast('该 DOI 已在本地文献库中');
       return;
     }
-    addReferences([createReferenceFromFetched(result)]);
+    addReferences(accepted);
     flashToast(`已加入本地文献库：${result.title.slice(0, 40)}`);
   }, [addReferences, flashToast, references]);
 
@@ -285,12 +470,67 @@ export function ReferencesView() {
       const text = await file.text();
       const { format, refs } = importReferences(text);
       if (refs.length === 0) { flashToast('未解析到有效文献，请检查文件格式'); return; }
-      addReferences(refs);
-      flashToast(`成功导入 ${refs.length} 条文献（${format.toUpperCase()} 格式）`);
+      const { accepted, skipped } = dedupeIncomingReferences(references, refs);
+      if (accepted.length === 0) {
+        flashToast(`未导入新文献：${skipped} 条与本地记录重复`);
+        return;
+      }
+      addReferences(accepted);
+      flashToast(`成功导入 ${accepted.length} 条文献（${format.toUpperCase()} 格式）${skipped ? `，已跳过 ${skipped} 条重复记录` : ''}`);
     } catch (err) {
       flashToast(`导入失败：${err instanceof Error ? err.message : '未知错误'}`);
     }
-  }, [addReferences, flashToast]);
+  }, [addReferences, flashToast, references]);
+
+  /** Explicit one-way import through the desktop sidecar; Selenyx never writes to Zotero. */
+  const handleZoteroImport = useCallback(async () => {
+    if (!isDesktopTauri()) {
+      flashToast('Zotero 本机导入仅在 Selenyx 桌面应用中可用');
+      return;
+    }
+    setZoteroImporting(true);
+    try {
+      await zoteroApi.status();
+      const result = await zoteroApi.items();
+      const { accepted, skipped } = dedupeIncomingReferences(
+        references,
+        result.items.map(referenceFromZotero),
+      );
+      if (accepted.length === 0) {
+        flashToast(`Zotero 中没有可导入的新文献（已跳过 ${skipped} 条重复记录）`);
+        return;
+      }
+      setZoteroPreview({ references: accepted, duplicateCount: skipped, sourceSkipped: result.skipped });
+      flashToast(`已读取 ${accepted.length} 条 Zotero 文献；请预览后确认导入`);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : '';
+      if (detail.includes('403')) {
+        flashToast('Zotero 本机 API 未启用：请在 Zotero 设置 → 高级中允许本机应用通信');
+      } else if (detail.includes('503')) {
+        flashToast('未检测到正在运行的 Zotero；请启动 Zotero 后重试');
+      } else {
+        flashToast('读取本机 Zotero 文献失败；请确认 Zotero 已启动且本机 API 可用');
+      }
+    } finally {
+      setZoteroImporting(false);
+    }
+  }, [flashToast, references]);
+
+  const confirmZoteroImport = useCallback(() => {
+    if (!zoteroPreview) return;
+    // Re-run de-duplication at commit time in case local data changed while
+    // the user was reviewing the preview.
+    const { accepted, skipped } = dedupeIncomingReferences(references, zoteroPreview.references);
+    setZoteroPreview(null);
+    if (accepted.length === 0) {
+      flashToast('预览中的文献已全部存在于本地库，未写入新条目');
+      return;
+    }
+    addReferences(accepted);
+    const ignored = zoteroPreview.sourceSkipped ? `，${zoteroPreview.sourceSkipped} 个附件/笔记已跳过` : '';
+    const newlySkipped = skipped - zoteroPreview.duplicateCount;
+    flashToast(`已复制 ${accepted.length} 条 Zotero 文献到 Selenyx${newlySkipped > 0 ? `，另有 ${newlySkipped} 条在确认前重复` : ''}${ignored}`);
+  }, [addReferences, flashToast, references, zoteroPreview]);
 
   /** A1 导出修复：生成 BibTeX/RIS 文本 → 应用内弹窗展示 + 复制按钮。 */
   const handleExport = useCallback((format: 'bibtex' | 'ris') => {
@@ -305,7 +545,8 @@ export function ReferencesView() {
     if (!exportPreview) return;
     const text = exportPreview.content;
     try {
-      await navigator.clipboard?.writeText(text);
+      if (typeof navigator.clipboard?.writeText !== 'function') throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(text);
       flashToast(`已复制 ${text.length} 字符到剪贴板`);
     } catch {
       // 降级：选中文本框内容让用户手动 Ctrl+C
@@ -324,17 +565,28 @@ export function ReferencesView() {
     const extension = exportPreview.format.toLowerCase() === 'ris' ? 'ris' : 'bib';
     const mime = extension === 'ris' ? 'application/x-research-info-systems' : 'application/x-bibtex';
     const stamp = new Date().toISOString().slice(0, 10);
-    const blob = new Blob([exportPreview.content], { type: `${mime};charset=utf-8` });
-    const href = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = href;
-    link.download = `selenyx-references-${stamp}.${extension}`;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(href), 0);
-    flashToast(`已下载 ${link.download}`);
+    const filename = `selenyx-references-${stamp}.${extension}`;
+    let href: string | null = null;
+    let link: HTMLAnchorElement | null = null;
+    try {
+      if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+        throw new Error('当前运行环境不支持 Blob 下载');
+      }
+      href = URL.createObjectURL(new Blob([exportPreview.content], { type: `${mime};charset=utf-8` }));
+      link = document.createElement('a');
+      link.href = href;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      flashToast(`已请求下载 ${filename}`);
+    } catch {
+      // Keep the preview open: users can always copy the verified export text.
+      flashToast(`无法自动下载 ${filename}；导出文本仍保留，可复制或手动保存`);
+    } finally {
+      link?.remove();
+      if (href) window.setTimeout(() => URL.revokeObjectURL(href!), 60_000);
+    }
   }, [exportPreview, flashToast]);
 
   /** 打开 PDF 阅读器：读取文件 → ArrayBuffer → 渲染 */
@@ -345,6 +597,41 @@ export function ReferencesView() {
       flashToast(`已加载 ${file.name}`);
     } catch {
       flashToast('PDF 读取失败');
+    }
+  }, [flashToast]);
+
+  const handleLookupOa = useCallback(async (referenceId: string, doi: string) => {
+    const normalizedDoi = normalizeDoi(doi);
+    if (!normalizedDoi) {
+      flashToast('当前文献没有可查询的 DOI');
+      return;
+    }
+    setOaLoading(true);
+    setOaPdfLink(null);
+    try {
+      const response = await fetch(`https://api.unpaywall.org/v2/${encodeURIComponent(normalizedDoi)}?email=selenyx@research.local`);
+      if (!response.ok) {
+        flashToast('Unpaywall 查询失败');
+        return;
+      }
+      const payload = await response.json() as {
+        best_oa_location?: { url_for_pdf?: unknown; url?: unknown } | null;
+      };
+      const location = payload.best_oa_location;
+      const candidate = typeof location?.url_for_pdf === 'string'
+        ? location.url_for_pdf
+        : typeof location?.url === 'string' ? location.url : null;
+      const safeUrl = safeExternalUrl(candidate);
+      if (safeUrl) {
+        setOaPdfLink({ referenceId, url: safeUrl });
+        flashToast('找到开放获取 PDF 链接');
+      } else {
+        flashToast('未找到可安全打开的开放获取版本');
+      }
+    } catch {
+      flashToast('网络请求失败（可能被 CORS 限制）');
+    } finally {
+      setOaLoading(false);
     }
   }, [flashToast]);
 
@@ -379,6 +666,9 @@ export function ReferencesView() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
           />
           <button className="btn ref-desktop-only" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
+          <button className="btn ref-desktop-only" aria-label="从本机 Zotero 导入文献" disabled={zoteroImporting || Boolean(zoteroPreview)} onClick={handleZoteroImport} title="仅读取本机 Zotero；预览确认后才复制到 Selenyx，不会写回或修改 Zotero 数据">
+            <Icon name="references" size={16} /> {zoteroImporting ? '读取 Zotero…' : '导入 Zotero'}
+          </button>
           <button className="btn ref-desktop-only" aria-label="文档转 Markdown" onClick={() => { setAnydocRefId(selectedId); setAnydocOpen(true); }} title="上传 PDF/Word/Excel 等文档，本地转为 Markdown 进入精读"><Icon name="download" size={16} /> 文档转MD</button>
           <button className="btn ref-desktop-only" onClick={() => {
             import('@data/seedReferences').then(({ getSeedReferences }) => {
@@ -395,9 +685,32 @@ export function ReferencesView() {
           <button className="btn ref-desktop-only" aria-label="在线检索" onClick={() => setSearchOpen(true)}><Icon name="search" size={16} /> 检索</button>
           {/* 移动端: 更多操作(桌面隐藏) */}
           <button className="btn ref-more-btn" aria-label="更多操作" onClick={() => setShowMoreMenu(true)}><Icon name="more" size={16} /> 更多</button>
-          <button className="btn btn-primary" aria-label="新建文献"><Icon name="plus" size={16} /> 新建</button>
+          <button className="btn btn-primary" aria-label="新建文献" onClick={openManualCreate}><Icon name="plus" size={16} /> 新建</button>
         </div>
       </div>
+
+      {zoteroPreview && (
+        <section className="card" role="region" aria-label="Zotero 导入预览" style={{ marginBottom: 16, padding: 16, border: '1px solid var(--accent)', background: 'var(--accent-light)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <strong>已从本机 Zotero 读取 {zoteroPreview.references.length} 条候选文献，尚未写入 Selenyx</strong>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>只读复制，不会写回 Zotero</span>
+          </div>
+          <ol style={{ margin: '10px 0', paddingLeft: 20, color: 'var(--text-secondary)', fontSize: 13 }}>
+            {zoteroPreview.references.slice(0, 5).map((reference) => <li key={reference.id}>{reference.title}</li>)}
+          </ol>
+          {zoteroPreview.references.length > 5 && <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>另有 {zoteroPreview.references.length - 5} 条候选文献。</p>}
+          {(zoteroPreview.duplicateCount > 0 || zoteroPreview.sourceSkipped > 0) && (
+            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>
+              {zoteroPreview.duplicateCount > 0 ? `已过滤 ${zoteroPreview.duplicateCount} 条重复记录。` : ''}
+              {zoteroPreview.sourceSkipped > 0 ? `已跳过 ${zoteroPreview.sourceSkipped} 个附件或笔记。` : ''}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button className="btn" onClick={() => setZoteroPreview(null)}>取消</button>
+            <button className="btn btn-primary" onClick={confirmZoteroImport}>确认复制 {zoteroPreview.references.length} 条到 Selenyx</button>
+          </div>
+        </section>
+      )}
 
       <div className="ref-search-row" style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
@@ -569,7 +882,23 @@ export function ReferencesView() {
 
       {/* 详情面板: 桌面侧滑 / 移动端 BottomSheet */}
       {!isMobile && <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />}
-      {selected && <RefDetailPanel ref={selected} onClose={closePanel} onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }} onConvertMd={(id) => { setAnydocRefId(id); setAnydocOpen(true); }} onOpenWeb={(url) => setWebViewerUrl(url)} onDelete={(id) => setConfirmDeleteId(id)} oaPdfUrl={oaPdfUrl} oaLoading={oaLoading} onLookupOa={async (doi) => { if (!doi) return; setOaLoading(true); setOaPdfUrl(null); try { const res = await fetch(`https://api.unpaywall.org/v2/${doi}?email=selenyx@research.local`); if (res.ok) { const d = await res.json(); const loc = d.best_oa_location; if (loc?.url_for_pdf || loc?.url) { setOaPdfUrl(loc.url_for_pdf || loc.url); flashToast('找到开放获取 PDF 链接'); } else { flashToast('未找到开放获取版本'); } } else { flashToast('Unpaywall 查询失败'); } } catch { flashToast('网络请求失败（可能被 CORS 限制）'); } finally { setOaLoading(false); } }} asSheet={isMobile} />}
+      {selected && (
+        <RefDetailPanel
+          ref={selected}
+          onClose={closePanel}
+          onOpenPdf={(id) => { setPdfRefId(id); pdfInputRef.current?.click(); }}
+          onConvertMd={(id) => { setAnydocRefId(id); setAnydocOpen(true); }}
+          onOpenWeb={setWebViewerUrl}
+          onDelete={(referenceId) => {
+            deleteTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            setConfirmDeleteId(referenceId);
+          }}
+          oaPdfUrl={oaPdfLink?.referenceId === selected.id ? oaPdfLink.url : null}
+          oaLoading={oaLoading}
+          onLookupOa={handleLookupOa}
+          asSheet={isMobile}
+        />
+      )}
 
       {/* 隐藏 PDF 文件输入 */}
       <input
@@ -592,6 +921,34 @@ export function ReferencesView() {
           />
         </Suspense>
       )}
+
+      {/* 手动新建：此前标题栏按钮无行为；现在直接创建完整本地条目。 */}
+      {showManualCreate && (isMobile ? (
+        <BottomSheet open onClose={() => setShowManualCreate(false)} title="新建本地文献">
+          <ManualReferenceFields form={manualForm} onChange={(patch) => setManualForm((current) => ({ ...current, ...patch }))} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button className="btn" style={{ flex: 1, height: 48 }} onClick={() => setShowManualCreate(false)}>取消</button>
+            <button className="btn btn-primary" style={{ flex: 1, height: 48 }} onClick={saveManualReference}>保存文献</button>
+          </div>
+        </BottomSheet>
+      ) : (
+        <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setShowManualCreate(false)}>
+          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, width: 'min(640px, 100%)', maxHeight: '85vh', overflow: 'auto', padding: 20, boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(event) => event.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600 }}>新建本地文献</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>先保存到本机；稍后仍可补充全文、批注和标签。</p>
+              </div>
+              <button className="icon-btn" onClick={() => setShowManualCreate(false)} aria-label="关闭"><Icon name="close" size={18} /></button>
+            </div>
+            <ManualReferenceFields form={manualForm} onChange={(patch) => setManualForm((current) => ({ ...current, ...patch }))} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+              <button className="btn" onClick={() => setShowManualCreate(false)}>取消</button>
+              <button className="btn btn-primary" onClick={saveManualReference}>保存文献</button>
+            </div>
+          </div>
+        </div>
+      ))}
 
       {/* 内置网页浏览器 — 在线阅读文献 */}
       {webViewerUrl && (
@@ -729,7 +1086,7 @@ export function ReferencesView() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn" style={{ flex: 1, height: 48 }} onClick={() => setConfirmDeleteId(null)}>取消</button>
-            <button className="btn" style={{ flex: 1, height: 48, background: 'var(--danger, #c3272b)', color: '#fff', borderColor: 'var(--danger, #c3272b)' }} onClick={() => { deleteReference(confirmDeleteId); setConfirmDeleteId(null); closePanel(); flashToast('已删除文献'); }}>确认删除</button>
+            <button className="btn" style={{ flex: 1, height: 48, background: 'var(--danger, #c3272b)', color: '#fff', borderColor: 'var(--danger, #c3272b)' }} onClick={() => deleteReferenceWithCleanup(confirmDeleteId)}>确认删除</button>
           </div>
         </BottomSheet>
       )}
@@ -760,13 +1117,13 @@ export function ReferencesView() {
       {/* A2 删除二次确认弹窗 */}
       {!isMobile && confirmDeleteId && (
         <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setConfirmDeleteId(null)}>
-          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 360, width: '100%', padding: 24, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
+          <div ref={deleteDialogRef} role="dialog" aria-modal="true" aria-labelledby="reference-delete-title" aria-describedby="reference-delete-description" style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 360, width: '100%', padding: 24, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>确认删除此文献？</h3>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>此操作不可撤销，文献及其笔记/批注将永久删除。</p>
+            <h3 id="reference-delete-title" style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>确认删除此文献？</h3>
+            <p id="reference-delete-description" style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>此操作不可撤销，文献及其笔记/批注将永久删除。</p>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn" style={{ flex: 1 }} onClick={() => setConfirmDeleteId(null)}>取消</button>
-              <button className="btn" style={{ flex: 1, background: 'var(--danger, #c3272b)', color: '#fff', borderColor: 'var(--danger, #c3272b)' }} onClick={() => { deleteReference(confirmDeleteId); setConfirmDeleteId(null); closePanel(); flashToast('已删除文献'); }}>确认删除</button>
+              <button ref={deleteCancelRef} className="btn" style={{ flex: 1 }} onClick={() => setConfirmDeleteId(null)}>取消</button>
+              <button className="btn" style={{ flex: 1, background: 'var(--danger, #c3272b)', color: '#fff', borderColor: 'var(--danger, #c3272b)' }} onClick={() => deleteReferenceWithCleanup(confirmDeleteId)}>确认删除</button>
             </div>
           </div>
         </div>
@@ -843,9 +1200,10 @@ function LiteratureSearchContent({
 }
 
 /** 文献详情侧滑面板 */
-function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, onDelete, oaPdfUrl, oaLoading, onLookupOa, asSheet }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void; oaPdfUrl: string | null; oaLoading: boolean; onLookupOa: (doi: string) => void; asSheet?: boolean }) {
+function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, onDelete, oaPdfUrl, oaLoading, onLookupOa, asSheet }: { ref: Reference; onClose: () => void; onOpenPdf: (id: string) => void; onConvertMd: (id: string) => void; onOpenWeb: (url: string) => void; onDelete: (id: string) => void; oaPdfUrl: string | null; oaLoading: boolean; onLookupOa: (referenceId: string, doi: string) => void; asSheet?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const onlineUrl = r.url || r.uri || (r.doi ? `https://doi.org/${encodeURIComponent(r.doi)}` : '');
+  const onlineUrl = referenceOnlineUrl(r);
+  const doiUrl = r.doi ? referenceOnlineUrl({ url: '', uri: '', doi: r.doi }) : null;
 
   function generateGBT7714(): string {
     const authors = r.creators.map((c) => `${c.lastName}${c.firstName}`).join(', ');
@@ -938,10 +1296,10 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, on
             </span>
           </div>
         )}
-        {r.doi && (
+        {doiUrl && (
           <div className="ref-detail-field">
             <span className="field-label">链接</span>
-            <a className="field-value" href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <a className="field-value" href={doiUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Icon name="link" size={14} /> doi.org/{r.doi}
             </a>
           </div>
@@ -961,7 +1319,7 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, on
           <button className="btn btn-primary" onClick={() => onOpenPdf(r.id)}><Icon name="download" size={18} /> 上传PDF阅读</button>
           <button className="btn" onClick={() => onConvertMd(r.id)}><Icon name="import" size={18} /> 转Markdown</button>
           {r.doi && (
-            <button className="btn" onClick={() => onLookupOa(r.doi)} disabled={oaLoading}><Icon name="link" size={18} /> {oaLoading ? '查询中…' : '查找OA全文'}</button>
+            <button className="btn" onClick={() => onLookupOa(r.id, r.doi)} disabled={oaLoading}><Icon name="link" size={18} /> {oaLoading ? '查询中…' : '查找OA全文'}</button>
           )}
           {onlineUrl && (
             <button className="btn" onClick={() => onOpenWeb(onlineUrl)}><Icon name="globe" size={18} /> 应用内预览</button>
@@ -1060,10 +1418,10 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, on
           </div>
         )}
 
-        {r.doi && (
+        {doiUrl && (
           <div className="ref-detail-field">
             <span className="field-label">链接</span>
-            <a className="field-value" href={`https://doi.org/${r.doi}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <a className="field-value" href={doiUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Icon name="link" size={14} /> doi.org/{r.doi}
             </a>
           </div>
@@ -1103,7 +1461,7 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, on
           <button className="btn" style={{ flex: '1 1 120px' }} onClick={() => onConvertMd(r.id)} title="上传该文献的 PDF/Word 等文件，本地转 Markdown"><Icon name="import" size={15} /> 转Markdown</button>
           {r.doi && (
             <>
-              <button className="btn" style={{ flex: '1 1 120px' }} onClick={() => onLookupOa(r.doi)} disabled={oaLoading} title="通过 Unpaywall 查询开放获取版本">
+              <button className="btn" style={{ flex: '1 1 120px' }} onClick={() => onLookupOa(r.id, r.doi)} disabled={oaLoading} title="通过 Unpaywall 查询开放获取版本">
                 <Icon name="link" size={15} /> {oaLoading ? '查询中…' : '查找OA全文'}
               </button>
               {oaPdfUrl && (
@@ -1111,6 +1469,10 @@ function RefDetailPanel({ ref: r, onClose, onOpenPdf, onConvertMd, onOpenWeb, on
                   <Icon name="download" size={15} /> 打开OA PDF
                 </a>
               )}
+            </>
+          )}
+          {onlineUrl && (
+            <>
               <button className="btn" style={{ flex: '1 1 120px' }} onClick={() => onOpenWeb(onlineUrl)} title="在应用内预览网页；如期刊拒绝嵌入，可用旁边的新窗口打开">
                 <Icon name="globe" size={15} /> 应用内预览
               </button>

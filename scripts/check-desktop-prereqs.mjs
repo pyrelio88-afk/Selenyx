@@ -25,6 +25,7 @@ function hasCommand(command, args = []) {
 
 const missing = [];
 if (!hasCommand('rustc', ['-vV'])) missing.push('Rust stable toolchain（rustc / cargo）');
+if (!hasCommand('uv', ['--version'])) missing.push('uv（用于构建本机 Python sidecar）');
 
 const msvcLinkerAvailable = process.platform !== 'win32' || (() => {
   const probe = spawnSync('where', ['link.exe'], { encoding: 'utf8', shell: false, env: environment });
