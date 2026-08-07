@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "pnpm --filter @selenyx/frontend dev",
-    "beforeBuildCommand": "pnpm --filter @selenyx/frontend build"
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend run build"
   },
   "app": {
     "withGlobalTauri": true,

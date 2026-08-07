@@ -24,7 +24,7 @@ npm run build        # 构建单文件产物
 
 1. **`npm run typecheck` 零错误** — 仓库开启 `strict` + `noUnusedLocals` + `noUnusedParameters`，不允许新增 `any` 于领域模型层（外部 API 边界如 LLM 响应解析除外，且应优先用 `unknown` + 收窄）。
 2. **`npm run test` 全绿** — 统计计算（`src/lib/stats.ts`）的测试以 scipy 参考值为准；改动统计函数必须同步更新参考值（用 Python scipy 实算，禁止手算）。
-3. **部署走 `deploy_safe.sh`** — 五段式：tsc 门 → 构建 → 备份 → 冒烟（vite preview + 无头 console 检查）→ 推送。不要绕过冒烟直接推。
+3. **提交前运行 `npm run verify:local`** — 类型检查 → 测试 → 本地构建。不要绕过验证直接提交。
 4. **本地优先原则** — 新功能默认离线可用；任何网络请求必须是用户显式触发（BYOK 对话、元数据抓取等），禁止隐式上报/遥测。
 
 ## 代码约定

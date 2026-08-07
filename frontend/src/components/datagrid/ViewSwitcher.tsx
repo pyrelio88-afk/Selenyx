@@ -1,6 +1,6 @@
 /**
  * 视图切换器 — 表格 / 看板 / 画廊 / 日历（多维表格核心交互）
- * 借鉴 Notion / 飞书多维表格的视图标签页。
+ * 提供表格、看板、画廊和日历之间的数据视图标签页。
  */
 
 export type ViewMode = 'table' | 'kanban' | 'gallery' | 'calendar';

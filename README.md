@@ -111,19 +111,19 @@
 ## 快速开始
 
 ### 前提条件
-- Node.js ≥ 20 + pnpm ≥ 9
+- Node.js ≥ 20（内置 npm）
 
 ### 开发模式
 
 ```bash
-pnpm install
-pnpm dev          # http://127.0.0.1:5173
+npm install
+npm run dev       # http://127.0.0.1:5173
 ```
 
 ### 构建
 
 ```bash
-pnpm build        # 单文件 HTML 产物
+npm run build     # 可由任意静态服务器打开的单文件 HTML 产物
 ```
 
 ## 隐私

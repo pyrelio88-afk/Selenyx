@@ -42,7 +42,7 @@ export const RESEARCH_SKILLS: ResearchSkill[] = [
     nameEn: 'nature-literature-pipeline',
     category: 'research',
     categoryLabel: '研究',
-    description: '全自动文献发现流水线：多源检索 → 六维评分 → 精读 → 格式化投递 → 归档。可配置引擎 + 每日定时应用层，支持飞书/Telegram 等消息平台推送。作者：十五 (JL Lab)。',
+    description: '全自动文献发现流水线：多源检索 → 六维评分 → 精读 → 格式化投递 → 归档。可配置检索引擎与本地提醒。作者：十五 (JL Lab)。',
     source: '本地已安装 skills/nature-literature-pipeline',
     sourceUrl: 'https://github.com/Yuan1z0825/nature-skills',
     stars: '32k+',

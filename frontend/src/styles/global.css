@@ -820,7 +820,7 @@ kbd {
  * R74 多维表格视图系统（看板 / 画廊 / 日历 / 视图切换器）
  * ============================================================ */
 
-/* ===== 视图切换器（Notion/飞书多维表格标签页模式） ===== */
+/* ===== 视图切换器（多维表格标签页模式） ===== */
 .view-switcher {
   display: inline-flex;
   gap: 2px;
@@ -2864,10 +2864,7 @@ tr:hover .row-delete-btn { opacity: 0.6; }
 
 
 
- * R108-r13: 移动端适配批一 (Selenyx Mobile Spec v1)
- * TopBar + Drawer + BottomSheet 组件样式 + V1总览 + V9番茄钟 + 全局触控
- * 桌面 >768px: MobileShell 组件渲染但 .mobile-topbar display:none
- * ============================================================ */
+/* Mobile layout: top bar, drawer, bottom sheet, overview, and focus timer. */
 
 /* --- MobileShell: TopBar (桌面隐藏, ≤768px 显示) --- */
 .mobile-topbar {

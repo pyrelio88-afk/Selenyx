@@ -18,19 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.14.0
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
 
       - name: Install frontend deps
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -57,14 +52,14 @@ jobs:
           workspaces: desktop -> target
 
       - name: Install Tauri CLI
-        run: pnpm add -Dw @tauri-apps/cli@2
+        run: cargo install tauri-cli --version "^2"
 
       - name: Init Android project
-        run: pnpm exec tauri android init
+        run: cargo tauri android init
         working-directory: desktop
 
       - name: Build APK
-        run: pnpm exec tauri android build --apk --split-per-abi
+        run: cargo tauri android build --apk --split-per-abi
         working-directory: desktop
         env:
           NDK_HOME: ${{ env.ANDROID_NDK_HOME }}

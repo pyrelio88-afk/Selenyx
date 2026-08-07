@@ -10,8 +10,8 @@
  * WASM 加载策略：wasm 二进制放 public/ 目录（不参与 singlefile 内联），
  * 运行时 fetch 按需加载——首次使用「文档转MD」时才下载 6.2MB wasm，
  * 避免首屏 bundle 膨胀（gzip 6.27MB → 2.55MB）。
- * 加载源按序回退：相对路径 anydoc.wasm（本地/Tauri/APK/妙搭若服务仓库文件）
- * → jsDelivr CDN（妙搭线上兜底）；魔数校验防 HTML 兜底页误判。
+ * 加载源按序回退：相对路径 anydoc.wasm（本地、Tauri 与 APK 内置资源）
+ * → jsDelivr CDN（通用网络容错）；魔数校验防 HTML 兜底页误判。
  *
  * 转换是同步阻塞调用（wasm 单线程），大文件会短暂卡 UI，故在调用前让出主线程一帧
  * 以确保 loading 状态渲染出来。
@@ -63,8 +63,8 @@ function isWasmBytes(buf: ArrayBuffer): boolean {
 
 /**
  * 候选加载源，按序尝试：
- * 1. 相对路径 anydoc.wasm——file:// 本地包 / Tauri / APK 内置资源，及妙搭若服务仓库文件
- * 2. jsDelivr CDN——妙搭线上兜底（已验证 200 + application/wasm）
+ * 1. 相对路径 anydoc.wasm——file:// 本地包、Tauri 与 APK 内置资源
+ * 2. jsDelivr CDN——本地资源不可用时的通用容错（已验证 200 + application/wasm）
  */
 const WASM_SOURCES = [
   'anydoc.wasm',

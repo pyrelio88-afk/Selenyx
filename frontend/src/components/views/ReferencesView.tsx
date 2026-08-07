@@ -35,9 +35,9 @@ export function ReferencesView() {
   const [pdfRefId, setPdfRefId] = useState<string | null>(null);
   const [anydocOpen, setAnydocOpen] = useState(false);
   const [anydocRefId, setAnydocRefId] = useState<string | null>(null);
-  // A1 导出预览弹窗（飞书 webview 拦截 a.click 下载 → 改为应用内展示+复制）
+  // A1 导出预览弹窗（先在应用内展示，支持复制或另存）
   const [exportPreview, setExportPreview] = useState<{ format: string; content: string } | null>(null);
-  // A2 删除二次确认（飞书 webview 拦截 window.confirm → 改为应用内确认弹窗）
+  // A2 删除二次确认（使用应用内确认弹窗）
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // A3 开放获取 PDF 链接（Unpaywall 查询结果）
   const [oaPdfUrl, setOaPdfUrl] = useState<string | null>(null);
@@ -211,7 +211,7 @@ export function ReferencesView() {
     }
   }, [addReferences, flashToast]);
 
-  /** A1 导出修复：生成 BibTeX/RIS 文本 → 应用内弹窗展示 + 复制按钮（飞书 webview 拦截 a.click 下载） */
+  /** A1 导出修复：生成 BibTeX/RIS 文本 → 应用内弹窗展示 + 复制按钮。 */
   const handleExport = useCallback((format: 'bibtex' | 'ris') => {
     const target = searchQuery ? filtered : references;
     if (target.length === 0) { flashToast('没有可导出的文献'); return; }
@@ -613,7 +613,7 @@ export function ReferencesView() {
         <div className="toast" role="status" aria-live="polite">{toast}</div>
       )}
 
-      {/* A1 导出预览弹窗（飞书 webview 拦截下载 → 应用内展示+复制） */}
+      {/* A1 导出预览弹窗（应用内展示与复制） */}
       {exportPreview && (
         <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setExportPreview(null)}>
           <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 640, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
@@ -630,7 +630,7 @@ export function ReferencesView() {
         </div>
       )}
 
-      {/* A2 删除二次确认弹窗（飞书 webview 拦截 window.confirm → 应用内确认） */}
+      {/* A2 删除二次确认弹窗 */}
       {confirmDeleteId && (
         <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setConfirmDeleteId(null)}>
           <div style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 360, width: '100%', padding: 24, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>

@@ -75,7 +75,7 @@ Selenyx 按「自迭代轮次（R<N>）」推进，本文件记录每轮主要�
 
 ### 新增（A9 开源工程件）
 - `LICENSE`：MIT 许可证全文（README 与 package.json 此前已声明 MIT，本轮补齐实体文件）。
-- `CONTRIBUTING.md`：开发环境、提交前三道门槛（typecheck/test/deploy_safe.sh）、代码约定（store 集中、storage 迁移层、stats 集中）、数据准确性红线。
+- `CONTRIBUTING.md`：开发环境、提交前三道门槛（typecheck/test/local verification）、代码约定（store 集中、storage 迁移层、stats 集中）、数据准确性红线。
 - `CHANGELOG.md`：本文件，按轮次回溯播种 R71–R104。
 
 ## [R103] - 2026-08
@@ -105,7 +105,7 @@ Selenyx 按「自迭代轮次（R<N>）」推进，本文件记录每轮主要�
 ## [R100] - 2026-08（里程碑）
 
 ### 新增
-- 可配置倒计时；`deploy_safe.sh` 五段部署安全脚本（tsc 门→构建→备份→冒烟→推送）。
+- 可配置倒计时；本地验证流程（类型检查→构建→冒烟）。
 - L2 数据质量战役收官：13/13 学科同义反复清零，术语 2921→2892（去重）。
 
 ## [R97–R99] - 2026-08

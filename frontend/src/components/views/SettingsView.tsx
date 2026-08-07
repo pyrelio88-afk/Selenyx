@@ -442,7 +442,7 @@ export function SettingsView() {
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 <p>版本：R80 (multi-dim tables + clinical data + stat tools)</p>
                 <p>技术栈：React 19 + Vite + TypeScript + Zustand</p>
-                <p>部署：妙搭单文件 HTML（2.7MB, gzip 855KB）</p>
+                <p>运行：本地单文件 HTML、Tauri 桌面端与 Android 应用</p>
                 <p>许可：开源（GitHub push 待用户授权）</p>
               </div>
             </div>

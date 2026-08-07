@@ -1,8 +1,8 @@
 /**
  * Selenyx BYOK LLM 服务 — 浏览器直连（R79）
  *
- * 关键架构决策：妙搭部署的是纯静态站点，跑不了 Python 后端。
- * 因此 BYOK 的正确实现是「浏览器直连 LLM 提供商」——用户的 API Key
+ * 关键架构决策：本地应用无需依赖远程中转服务。
+ * 因此 BYOK 采用「客户端直连 LLM 提供商」——用户的 API Key
  * 只存在本机 localStorage（zustand persist），请求从浏览器直接发往
  * OpenAI / OpenRouter / Anthropic / Google / Ollama，不经任何中转服务器。
  * 这既符合 BYOK「key 不出用户设备」的本意，也让静态部署真正可用。

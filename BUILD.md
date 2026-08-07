@@ -1,6 +1,6 @@
 # Selenyx 桌面端 & Android 构建/安装指南
 
-Selenyx 桌面端基于 **Tauri v2**：一套 Rust 壳 + 同一份 React/Vite 前端，编译出 **Windows / macOS / Linux 桌面原生安装包** 和 **Android APK**。飞书妙搭上的网页只是预览壳，这里是真正的本地原生应用。
+Selenyx 桌面端基于 **Tauri v2**：一套 Rust 壳 + 同一份 React/Vite 前端，编译出 **Windows / macOS / Linux 桌面原生安装包** 和 **Android APK**。应用完全在本地运行，不依赖任何协作平台基础设施。
 
 > 目录约定：`desktop/` = Tauri 工程根（`tauri.conf.json` / `Cargo.toml` / `src/`），`frontend/` = React19+Vite 前端，`frontend/dist/` = 构建产物（Tauri 的 `frontendDist`）。
 
@@ -10,13 +10,13 @@ Selenyx 桌面端基于 **Tauri v2**：一套 Rust 壳 + 同一份 React/Vite �
 
 ```bash
 # 仓库根目录
-pnpm install              # 装前端依赖
-pnpm dev                  # 等价 cd frontend && vite（仅前端，浏览器 5173）
+npm install               # 安装前端依赖
+npm run dev               # 等价 cd frontend && vite（仅前端，浏览器 5173）
 # 桌面端热重载（前端 + Rust 壳一起跑）：
 cd desktop && cargo tauri dev
 ```
 
-`cargo tauri dev` 会自动跑 `beforeDevCommand`（`pnpm --filter @selenyx/frontend dev`）拉起 Vite，再用系统 webview 打开桌面窗口，Rust 改动自动重编译。
+`cargo tauri dev` 会自动跑 `beforeDevCommand`（`npm --prefix ../frontend run dev`）拉起 Vite，再用系统 webview 打开桌面窗口，Rust 改动自动重编译。
 
 ---
 
@@ -30,13 +30,13 @@ cd desktop && cargo tauri dev
 | **macOS** | Xcode Command Line Tools：`xcode-select --install` |
 | **Windows** | Microsoft Edge WebView2（Win11 已自带；Win10 装 [Evergreen Bootstrapper](https://developer.microsoft.com/microsoft-edge/webview2/)）；MSVC 工具链（VS Build Tools） |
 
-Rust 工具链：`curl https://sh.rustup.rs -sSf | sh`（stable）。Tauri CLI：`cargo install tauri-cli --version "^2"` 或 `pnpm add -Dw @tauri-apps/cli@2`。
+Rust 工具链：`curl https://sh.rustup.rs -sSf | sh`（stable）。Tauri CLI：`cargo install tauri-cli --version "^2"`。
 
 ### 构建
 
 ```bash
 # 仓库根目录
-pnpm install
+npm install
 cd desktop
 cargo tauri build          # 产出当前平台全部包
 # 指定包类型：
@@ -94,8 +94,8 @@ git push origin v2.0.0-alpha
 rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 
 cd desktop
-pnpm exec tauri android init          # 首次：生成 gen/android 工程骨架
-pnpm exec tauri android build --apk --split-per-abi   # 产出 APK
+cargo tauri android init          # 首次：生成 gen/android 工程骨架
+cargo tauri android build --apk --split-per-abi   # 产出 APK
 ```
 
 产物：`desktop/gen/android/app/build/outputs/apk/<abi>/release/app-<abi>-release-unsigned.apk`
