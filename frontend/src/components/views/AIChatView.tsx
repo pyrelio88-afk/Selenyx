@@ -15,7 +15,7 @@
  * 持久化：localStorage，按项目 scope 隔离；自动迁移旧版单会话历史。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { useIsMobile } from '@lib/useIsMobile';
 import { streamChat, LLMError, PROVIDER_DEFAULTS, type LLMMessage } from '@services/llm';
@@ -138,6 +138,7 @@ export function AIChatView() {
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSlash, setShowSlash] = useState(false);
+  const [slashIdx, setSlashIdx] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -459,11 +460,14 @@ export function AIChatView() {
     const v = e.target.value;
     setInput(v);
     setShowSlash(v.startsWith('/'));
+    setSlashIdx(0);
   }
 
   function onInputKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (showSlash && slashItems.length) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); slashItems[0].run(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx((i) => (i + 1) % slashItems.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIdx((i) => (i - 1 + slashItems.length) % slashItems.length); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); slashItems[slashIdx]?.run(); return; }
       if (e.key === 'Escape') { setShowSlash(false); return; }
     }
     if (editingIdx !== null) {
@@ -594,29 +598,44 @@ export function AIChatView() {
             <EmptyState configured={configured} onPick={(p) => { setInput(p); setTimeout(() => inputRef.current?.focus(), 20); }} />
           ) : (
             <div className="aichat-thread">
-              {messages.map((msg, i) => (
-                <MessageBubble
-                  key={i}
-                  msg={msg}
-                  isLast={i === messages.length - 1}
-                  busy={busy}
-                  onCopy={() => copyMessage(msg.content)}
-                  onEdit={() => startEdit(i)}
-                  onRetry={regenerate}
-                  onBranch={() => branchFrom(i)}
-                />
-              ))}
+              {messages.map((msg, i) => {
+                const showDateSep = i === 0 || dayLabel(messages[i - 1].ts) !== dayLabel(msg.ts);
+                return (
+                  <Fragment key={i}>
+                    {showDateSep && <div className="aichat-date-sep">{dayLabel(msg.ts)}</div>}
+                    <MessageBubble
+                      msg={msg}
+                      isLast={i === messages.length - 1}
+                      busy={busy}
+                      onCopy={() => copyMessage(msg.content)}
+                      onEdit={() => startEdit(i)}
+                      onRetry={regenerate}
+                      onBranch={() => branchFrom(i)}
+                    />
+                  </Fragment>
+                );
+              })}
+              {busy && messages.length > 0 && messages[messages.length - 1]?.role === 'assistant' && messages[messages.length - 1]?.content && (
+                <div className="aichat-streaming-bar">生成中…</div>
+              )}
             </div>
           )}
         </div>
+
+        {/* 滚动到底按钮 */}
+        {messages.length > 0 && !stickBottomRef.current && (
+          <button className="aichat-scroll-btn visible" onClick={() => scrollToBottom(true)} title="滚动到底部">
+            <Icon name="chevronDown" size={18} />
+          </button>
+        )}
 
         {/* 输入区 */}
         <div className="aichat-composer">
           {showSlash && slashItems.length > 0 && (
             <div className="aichat-slash">
-              <div className="aichat-slash-hint">斜杠指令 · 回车选第一条 · Esc 取消</div>
+              <div className="aichat-slash-hint"><span>斜杠指令</span><span>↑↓ 选择 · 回车确认 · Esc 取消</span></div>
               {slashItems.map((it, idx) => (
-                <button key={idx} className={`aichat-slash-item ${it.kind}`} onClick={it.run}>
+                <button key={idx} className={`aichat-slash-item ${it.kind} ${idx === slashIdx ? 'active' : ''}`} onClick={it.run}>
                   <Icon name={it.icon} size={15} strokeWidth={1.6} />
                   <span className="aichat-slash-label">{it.label}</span>
                   <span className="aichat-slash-desc">{it.desc}</span>
@@ -643,33 +662,43 @@ export function AIChatView() {
               </div>
             </div>
           )}
-          <div className="aichat-input-row">
-            <textarea
-              ref={inputRef}
-              className="aichat-input"
-              placeholder={editingIdx !== null ? '编辑这条消息后回车重发…（Esc 取消）' : configured ? '输入问题…  / 召唤指令 · Enter 发送 · Shift+Enter 换行' : '先在「设置」配置 LLM API Key…'}
-              value={input}
-              onChange={onInputChange}
-              onKeyDown={onInputKeyDown}
-              rows={1}
-            />
-            {editingIdx !== null ? (
-              <button className="aichat-send" onClick={commitEdit} title="更新并重发">
-                <Icon name="editIn" size={17} />
-              </button>
-            ) : busy ? (
-              <button className="aichat-send stop" onClick={stop} title="停止生成">
-                <Icon name="stop" size={16} />
-              </button>
-            ) : (
-              <button className="aichat-send" onClick={send} disabled={!input.trim()} title="发送">
-                <Icon name="send" size={17} />
-              </button>
-            )}
+          <div className="aichat-input-wrap">
+            <div className="aichat-input-row">
+              <textarea
+                ref={inputRef}
+                className="aichat-input"
+                placeholder={editingIdx !== null ? '编辑这条消息后回车重发…（Esc 取消）' : configured ? '输入问题…  / 召唤指令 · Enter 发送 · Shift+Enter 换行' : '先在「设置」配置 LLM API Key…'}
+                value={input}
+                onChange={onInputChange}
+                onKeyDown={onInputKeyDown}
+                rows={1}
+              />
+              {editingIdx !== null ? (
+                <button className="aichat-send" onClick={commitEdit} title="更新并重发">
+                  <Icon name="editIn" size={17} />
+                </button>
+              ) : busy ? (
+                <button className="aichat-send stop" onClick={stop} title="停止生成">
+                  <Icon name="stop" size={16} />
+                </button>
+              ) : (
+                <button className="aichat-send" onClick={send} disabled={!input.trim()} title="发送">
+                  <Icon name="send" size={17} />
+                </button>
+              )}
+            </div>
           </div>
           <div className="aichat-composer-foot">
             <span>BYOK · 浏览器直连，Key 不出本机</span>
-            {editingIdx !== null && <span className="aichat-editing-tag">编辑模式</span>}
+            {editingIdx !== null ? (
+              <span className="aichat-editing-tag">编辑模式 · Esc 取消</span>
+            ) : (
+              <span className="aichat-foot-hint">
+                <span><kbd>Enter</kbd> 发送</span>
+                <span><kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</span>
+                <span><kbd>/</kbd> 指令</span>
+              </span>
+            )}
           </div>
         </div>
       </section>
@@ -783,6 +812,14 @@ function MessageBubble({ msg, isLast, busy, onCopy, onEdit, onRetry, onBranch }:
   const isUser = msg.role === 'user';
   const streaming = !isUser && busy && isLast;
   const thinking = streaming && !msg.content;
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    onCopy();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
   return (
     <div className={`aichat-msg ${isUser ? 'user' : 'assistant'} ${msg.error ? 'error' : ''}`}>
       <div className="aichat-msg-avatar">
@@ -808,9 +845,13 @@ function MessageBubble({ msg, isLast, busy, onCopy, onEdit, onRetry, onBranch }:
         </div>
         {!thinking && (
           <div className="aichat-msg-acts">
-            <button onClick={onCopy} title="复制"><Icon name="copy" size={13} /></button>
+            <button onClick={handleCopy} title="复制" className={copied ? 'copied' : ''}>
+              <Icon name={copied ? 'check' : 'copy'} size={13} />
+              {copied && <span>已复制</span>}
+            </button>
             {isUser && <button onClick={onEdit} title="编辑并重发"><Icon name="pencil" size={13} /></button>}
             {!isUser && isLast && !busy && <button onClick={onRetry} title="重新生成"><Icon name="retry" size={13} /></button>}
+            {!isUser && msg.error && !streaming && <button onClick={onRetry} title="重试" className="aichat-retry-btn"><Icon name="retry" size={13} /> 重试</button>}
             <button onClick={onBranch} title="从此处分支新会话"><Icon name="branch" size={13} /></button>
           </div>
         )}
