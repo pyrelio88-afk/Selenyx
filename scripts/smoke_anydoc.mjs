@@ -28,8 +28,10 @@ const ctx = await browser.newContext();
 const page = await ctx.newPage();
 
 const errors = [];
-page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-page.on('pageerror', (e) => errors.push(String(e)));
+// file:// 下 fetch wasm 必然失败（浏览器限制），回退链自动走 CDN——这类 console error 属预期噪音，不记
+const isExpectedNoise = (text) => /Failed to fetch.*\.wasm|net::ERR.*\.wasm|ERR_FILE_NOT_FOUND|fetch.*anydoc\.wasm/i.test(text);
+page.on('console', (m) => m.type() === 'error' && !isExpectedNoise(m.text()) && errors.push(m.text()));
+page.on('pageerror', (e) => !isExpectedNoise(String(e)) && errors.push(String(e)));
 
 let fail = '';
 

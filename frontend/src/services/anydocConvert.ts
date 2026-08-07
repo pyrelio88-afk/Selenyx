@@ -113,6 +113,11 @@ export function ensureAnydocReady(): Promise<void> {
   return initPromise;
 }
 
+/** wasm 是否已初始化（用于 UI 区分首次加载提示） */
+export function isAnydocReady(): boolean {
+  return wasmReady;
+}
+
 /** 从文件名取扩展名（小写、去点） */
 function extOf(name: string): string {
   const i = name.lastIndexOf('.');

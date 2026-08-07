@@ -122,6 +122,10 @@ interface IconProps {
 
 export function Icon({ name, size = 18, className, strokeWidth, style, 'aria-label': ariaLabel }: IconProps) {
   const sw = strokeWidth ?? 1.6;
+  const path = PATHS[name];
+  if (!path && import.meta.env.DEV) {
+    console.warn(`[Icon] unknown icon name: "${name}" — renders empty`);
+  }
   return (
     <svg
       width={size}
@@ -138,7 +142,7 @@ export function Icon({ name, size = 18, className, strokeWidth, style, 'aria-lab
       aria-hidden={ariaLabel ? undefined : true}
       style={{ flexShrink: 0, ...style }}
     >
-      {PATHS[name]}
+      {path}
     </svg>
   );
 }

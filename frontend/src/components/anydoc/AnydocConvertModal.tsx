@@ -15,6 +15,7 @@ import {
   convertToMarkdown,
   describeAnydocError,
   isAnydocSupported,
+  isAnydocReady,
   ANYDOC_ACCEPT,
   type AnydocResult,
 } from '@services/anydocConvert';
@@ -33,6 +34,7 @@ interface Props {
 export function AnydocConvertModal({ open, onClose, initialFile, onSaveToNotes }: Props) {
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<AnydocResult | null>(null);
+  const [firstLoad, setFirstLoad] = useState(false);
   const [fileName, setFileName] = useState<string>('');
   const [dragOver, setDragOver] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -54,6 +56,7 @@ export function AnydocConvertModal({ open, onClose, initialFile, onSaveToNotes }
   }, [open, initialFile]);
 
   const runConvert = useCallback(async (file: File) => {
+    setFirstLoad(!isAnydocReady());
     setStatus('converting');
     setResult(null);
     const res = await convertToMarkdown(file);
@@ -182,7 +185,7 @@ export function AnydocConvertModal({ open, onClose, initialFile, onSaveToNotes }
               <div className="skeleton" style={{ width: 48, height: 48, borderRadius: '50%' }} />
               <div style={{ fontSize: 14, fontWeight: 600 }}>正在本地转换…</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fileName}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>首次使用需初始化转换引擎（约 6MB），稍后即快</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{firstLoad ? '首次使用需初始化转换引擎（约 6MB），稍后即快' : '正在转换…'}</div>
             </div>
           )}
 
