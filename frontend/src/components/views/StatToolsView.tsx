@@ -1,18 +1,23 @@
 /**
  * Selenyx 统计工具 —— p值计算 / t检验 / 卡方检验 / 样本量 / 置信区间
  * R80: 从空壳替换为全套可用计算器
+ * R110: 统计-图表深度融合（ROC/KM/森林图/热力图可视化）+ 公式库 + 文字对齐修复
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { BottomSheet } from '@components/layout/BottomSheet';
-import { useIsMobile } from '@lib/useIsMobile';
+import { useState, useRef, useEffect } from 'react';
+import * as echarts from 'echarts/core';
+import { LineChart, ScatterChart, HeatmapChart, CustomChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, TitleComponent, MarkLineComponent } from 'echarts/components';
+import { SVGRenderer } from 'echarts/renderers';
 import {
   normalCDF, chi2SF,
   independentTTest, pairedTFromSummary, oneSampleTFromSummary,
   anova, orRr, diagTest, correlationTest, effectSize,
 } from '@lib/stats';
 
-type Tab = 'calculator' | 'tables' | 'methods';
+echarts.use([LineChart, ScatterChart, HeatmapChart, CustomChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, TitleComponent, MarkLineComponent, SVGRenderer]);
+
+type Tab = 'calculator' | 'tables' | 'formula' | 'methods';
 
 const Z_TABLE_ENTRIES = [
   { z: 1.645, label: 'α=0.10 (双侧)', p: 0.10 },
@@ -23,6 +28,12 @@ const Z_TABLE_ENTRIES = [
 
 export function StatToolsView() {
   const [tab, setTab] = useState<Tab>('calculator');
+  const [calcKey, setCalcKey] = useState<CalcKey>('pvalue');
+
+  function navigateToCalc(k: CalcKey) {
+    setCalcKey(k);
+    setTab('calculator');
+  }
 
   return (
     <div>
@@ -30,16 +41,17 @@ export function StatToolsView() {
         <h1 className="view-title">统计工具</h1>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
-        {(['calculator', 'tables', 'methods'] as const).map((t) => (
-          <button key={t} className={`btn ${tab === t ? 'btn-primary' : ''}`} onClick={() => setTab(t)}>
-            {t === 'calculator' ? '统计计算器' : t === 'tables' ? '临界值表' : '方法速查'}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+        {(['calculator', 'tables', 'formula', 'methods'] as const).map((t) => (
+          <button key={t} className={`btn btn-sm ${tab === t ? 'btn-primary' : ''}`} onClick={() => setTab(t)}>
+            {t === 'calculator' ? '统计计算器' : t === 'tables' ? '临界值表' : t === 'formula' ? '公式库' : '方法速查'}
           </button>
         ))}
       </div>
 
-      {tab === 'calculator' && <Calculators />}
+      {tab === 'calculator' && <Calculators calc={calcKey} setCalc={setCalcKey} onGoFormula={() => setTab('formula')} />}
       {tab === 'tables' && <CriticalTables />}
+      {tab === 'formula' && <FormulaLibrary onNavigate={navigateToCalc} />}
       {tab === 'methods' && <MethodsGuide />}
     </div>
   );
@@ -68,45 +80,17 @@ const CALC_LIST: { key: CalcKey; label: string }[] = [
   { key: 'survival', label: '生存分析' },
 ];
 
-const CALC_DESC: Record<CalcKey, string> = {
-  pvalue: 'Z 值转双尾 p 值',
-  ttest: '两组独立均值比较',
-  pairedt: '前后配对资料比较',
-  onesamplet: '样本与总体均值比较',
-  anova: '三组及以上均值比较',
-  chi: '四格表关联性检验',
-  orrr: '比值比 / 相对危险度',
-  diagtest: '敏感度 / 特异度评估',
-  correlation: 'Pearson 线性相关',
-  effectsize: "Cohen's d 等效应量",
-  samplesize: '研究所需样本量估算',
-  ci: '均值 / 率的置信区间',
-  cronbach: '量表内部一致性信度',
-  regression: '一元线性回归分析',
-  mannwhitney: '非参数秩和检验',
-  logistic: '二分类结局建模',
-  roc: '诊断界值与曲线下面积',
-  survival: 'KM / Cox 生存分析',
-};
-
-function Calculators() {
-  const [calc, setCalc] = useState<CalcKey>('pvalue');
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const isMobile = useIsMobile();
-  const calcRef = useRef<HTMLDivElement>(null);
-  const activeCalc = CALC_LIST.find((c) => c.key === calc)!;
-
-  useEffect(() => {
-    if (!isMobile) return;
-    const node = calcRef.current;
-    if (!node) return;
-    node.querySelectorAll('input.input').forEach((el) => {
-      (el as HTMLInputElement).setAttribute('inputmode', 'decimal');
-    });
-  }, [isMobile, calc, sheetOpen]);
-
-  const calcBody = (
-    <div className="stattools-calc" ref={calcRef}>
+function Calculators({ calc, setCalc, onGoFormula }: { calc: CalcKey; setCalc: (k: CalcKey) => void; onGoFormula: () => void }) {
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {CALC_LIST.map((c) => (
+          <button key={c.key} className={`btn btn-sm ${calc === c.key ? 'btn-primary' : ''}`} onClick={() => setCalc(c.key)}>
+            {c.label}
+          </button>
+        ))}
+        <button className="btn btn-sm" onClick={onGoFormula} style={{ marginLeft: 'auto' }}>公式库 →</button>
+      </div>
       {calc === 'pvalue' && <PValueCalc />}
       {calc === 'ttest' && <TTestCalc />}
       {calc === 'pairedt' && <PairedTTestCalc />}
@@ -125,46 +109,6 @@ function Calculators() {
       {calc === 'logistic' && <LogisticRegCalc />}
       {calc === 'roc' && <ROCCalc />}
       {calc === 'survival' && <SurvivalCalc />}
-    </div>
-  );
-
-  if (isMobile) {
-    return (
-      <>
-        <div className="stat-calc-list">
-          {CALC_LIST.map((c) => (
-            <button
-              key={c.key}
-              className={`stat-calc-item ${calc === c.key ? 'active' : ''}`}
-              onClick={() => {
-                setCalc(c.key);
-                setSheetOpen(true);
-              }}
-            >
-              <span className="stat-calc-name">{c.label}</span>
-              <span className="stat-calc-desc">{CALC_DESC[c.key]}</span>
-            </button>
-          ))}
-        </div>
-        {sheetOpen && (
-          <BottomSheet open onClose={() => setSheetOpen(false)} title={activeCalc.label}>
-            {calcBody}
-          </BottomSheet>
-        )}
-      </>
-    );
-  }
-
-  return (
-    <>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
-        {CALC_LIST.map((c) => (
-          <button key={c.key} className={`btn btn-sm ${calc === c.key ? 'btn-primary' : ''}`} onClick={() => setCalc(c.key)}>
-            {c.label}
-          </button>
-        ))}
-      </div>
-      {calcBody}
     </>
   );
 }
@@ -172,11 +116,45 @@ function Calculators() {
 function ResultBox({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div style={{ padding: 16, background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', marginTop: 12 }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{label} = </span>
-      <strong style={{ fontSize: 20, color: 'var(--accent)' }}>{value}</strong>
-      {note && <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>{note}</div>}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <span style={{ fontSize: 14, color: 'var(--text-muted)', flexShrink: 0 }}>{label} =</span>
+        <strong style={{ fontSize: 18, lineHeight: 1.4 }}>{value}</strong>
+      </div>
+      {note && <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{note}</div>}
     </div>
   );
+}
+
+/** 内联图表组件 — 统计结果一键可视化 */
+function InlineChart({ option, height = 260 }: { option: Record<string, unknown>; height?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const instRef = useRef<echarts.EChartsType | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (!instRef.current) {
+      instRef.current = echarts.init(ref.current, undefined, { renderer: 'svg' });
+    }
+    instRef.current.setOption(option, true);
+    const onResize = () => instRef.current?.resize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [option]);
+
+  useEffect(() => () => { instRef.current?.dispose(); }, []);
+
+  return <div ref={ref} style={{ width: '100%', height, marginTop: 12 }} />;
+}
+
+/** 从 CSS 变量获取图表配色 */
+function getStatColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const accent = cs.getPropertyValue('--accent').trim() || '#7a9b6a';
+  const danger = cs.getPropertyValue('--danger').trim() || '#c0432b';
+  const textPri = cs.getPropertyValue('--text-primary').trim() || '#2c2a26';
+  const textSec = cs.getPropertyValue('--text-secondary').trim() || '#6b6760';
+  const border = cs.getPropertyValue('--border').trim() || '#d8d4ca';
+  return { accent, danger, textPri, textSec, border };
 }
 
 function PValueCalc() {
@@ -241,7 +219,7 @@ function TTestCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>独立样本 t 检验</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>合并方差 t 检验（适用于方差齐性成立时）</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>合并方差 t 检验（适用于方差齐性成立时）</p>
       <div className="grid grid-2" style={{ gap: 8, marginBottom: 12 }}>
         {inputs.map((inp) => (
           <div key={inp.label}>
@@ -266,6 +244,7 @@ function ChiSquareCalc() {
   const [a, setA] = useState(''); const [b, setB] = useState('');
   const [c, setC] = useState(''); const [d, setD] = useState('');
   const [result, setResult] = useState<{ chi: string; df: string; p: string } | null>(null);
+  const [chartOption, setChartOption] = useState<Record<string, unknown> | null>(null);
 
   function calc() {
     const A = parseFloat(a), B = parseFloat(b), C = parseFloat(c), D = parseFloat(d);
@@ -279,11 +258,80 @@ function ChiSquareCalc() {
       df: '1',
       p: pVal < 0.0001 ? pVal.toExponential(4) : pVal.toFixed(4),
     });
+    // 列联表热力图：标准化残差着色
+    const colors = getStatColors();
+    // 期望频数 E = 行合计 × 列合计 / 总计
+    const eA = (A + B) * (A + C) / n, eB = (A + B) * (B + D) / n;
+    const eC = (C + D) * (A + C) / n, eD = (C + D) * (B + D) / n;
+    // 标准化残差 = (O - E) / √E
+    const rA = eA > 0 ? (A - eA) / Math.sqrt(eA) : 0;
+    const rB = eB > 0 ? (B - eB) / Math.sqrt(eB) : 0;
+    const rC = eC > 0 ? (C - eC) / Math.sqrt(eC) : 0;
+    const rD = eD > 0 ? (D - eD) / Math.sqrt(eD) : 0;
+    const maxAbs = Math.max(Math.abs(rA), Math.abs(rB), Math.abs(rC), Math.abs(rD), 0.01);
+    const heatData = [
+      [0, 0, A, rA], [1, 0, B, rB],
+      [0, 1, C, rC], [1, 1, D, rD],
+    ];
+    setChartOption({
+      backgroundColor: 'transparent',
+      grid: { left: 60, right: 80, top: 35, bottom: 45 },
+      xAxis: {
+        type: 'category', data: ['阳性', '阴性'], name: '结局', nameLocation: 'middle', nameGap: 28,
+        axisLine: { lineStyle: { color: colors.border } },
+        axisLabel: { color: colors.textSec, fontSize: 12 },
+        splitArea: { show: true, areaStyle: { color: ['transparent', 'rgba(0,0,0,0.02)'] } },
+      },
+      yAxis: {
+        type: 'category', data: ['组 1', '组 2'], name: '分组', nameLocation: 'middle', nameGap: 40,
+        axisLine: { lineStyle: { color: colors.border } },
+        axisLabel: { color: colors.textSec, fontSize: 12 },
+        splitArea: { show: true, areaStyle: { color: ['transparent', 'rgba(0,0,0,0.02)'] } },
+      },
+      visualMap: {
+        min: -maxAbs, max: maxAbs,
+        calculable: true, orient: 'vertical', right: 10, top: 'center',
+        textStyle: { color: colors.textSec, fontSize: 10 },
+        inRange: { color: [colors.accent, '#f5f3ed', colors.danger] },
+        text: ['高估', '低估'],
+        textGap: 8,
+      },
+      series: [{
+        type: 'heatmap', name: '列联表',
+        data: heatData.map(([x, y, freq, resid]) => ({ value: [x, y, freq], itemStyle: { color: resid > 0 ? colors.danger : resid < 0 ? colors.accent : '#f5f3ed', opacity: 0.15 + 0.85 * Math.abs(resid) / maxAbs } })),
+        label: {
+          show: true,
+          formatter: (p: { value: number[] }) => {
+            const idx = p.value[0] + p.value[1] * 2;
+            const freq = [A, B, C, D][idx];
+            const resid = [rA, rB, rC, rD][idx];
+            const sign = resid >= 0 ? '+' : '';
+            return `${freq}\n(${sign}${resid.toFixed(2)})`;
+          },
+          color: colors.textPri, fontSize: 14, fontWeight: 600,
+        },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } },
+      }],
+      tooltip: {
+        trigger: 'item',
+        formatter: (p: { value: number[]; name: string }) => {
+          const idx = p.value[0] + p.value[1] * 2;
+          const freq = [A, B, C, D][idx];
+          const exp = [eA, eB, eC, eD][idx];
+          const resid = [rA, rB, rC, rD][idx];
+          const rows = ['组1-阳性', '组1-阴性', '组2-阳性', '组2-阴性'];
+          return `${rows[idx]}<br/>观测: ${freq}  期望: ${exp.toFixed(1)}<br/>标准化残差: ${resid >= 0 ? '+' : ''}${resid.toFixed(3)}<br/>|残差| > 2 提示该格贡献显著`;
+        },
+      },
+    });
   }
 
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>卡方检验（2×2 列联表）</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+        分类变量关联性检验。计算后自动绘制列联表热力图，颜色深度反映标准化残差——越红表示实际高于预期越多，越绿表示低于预期越多。
+      </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <div></div>
         <span style={{ fontSize: 12, textAlign: 'center', color: 'var(--text-muted)' }}>阳性</span>
@@ -295,7 +343,7 @@ function ChiSquareCalc() {
         <input className="input" value={c} onChange={(e) => setC(e.target.value)} placeholder="c" />
         <input className="input" value={d} onChange={(e) => setD(e.target.value)} placeholder="d" />
       </div>
-      <button className="btn btn-primary" onClick={calc}>计算</button>
+      <button className="btn btn-primary" onClick={calc}>计算 + 绘制列联表热力图</button>
       {result && (
         <>
           <ResultBox label="χ² 统计量" value={result.chi} />
@@ -303,6 +351,7 @@ function ChiSquareCalc() {
           <ResultBox label="p 值" value={result.p} note={parseFloat(result.p) < 0.05 ? '关联显著 (p < 0.05)' : '无显著关联 (p ≥ 0.05)'} />
         </>
       )}
+      {chartOption && <InlineChart option={chartOption} height={240} />}
     </div>
   );
 }
@@ -325,7 +374,7 @@ function SampleSizeCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>样本量估算</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>两组比较（基于效应量 Cohen d）</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>两组比较（基于效应量 Cohen d）</p>
       <div style={{ marginBottom: 8 }}>
         <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>效应量 d（小=0.2, 中=0.5, 大=0.8）</label>
         <input className="input" value={effect} onChange={(e) => setEffect(e.target.value)} />
@@ -428,7 +477,7 @@ function PairedTTestCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>配对样本 t 检验</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>适用于同一组对象前后两次测量（如干预前/后）。t = 差值均值 / (差值标准差 / √n)</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>适用于同一组对象前后两次测量（如干预前/后）。t = 差值均值 / (差值标准差 / √n)</p>
       <div className="grid grid-2" style={{ gap: 8, marginBottom: 12 }}>
         <StatInput label="差值均值（后-前）" val={md} set={setMd} />
         <StatInput label="差值标准差" val={sd} set={setSd} />
@@ -459,7 +508,7 @@ function OneSampleTTestCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>单样本 t 检验</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>检验样本均值与已知总体均值（或标准值）是否有差异</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>检验样本均值与已知总体均值（或标准值）是否有差异</p>
       <div className="grid grid-2" style={{ gap: 8, marginBottom: 12 }}>
         <StatInput label="样本均值" val={m} set={setM} />
         <StatInput label="总体均值/标准值" val={mu} set={setMu} />
@@ -501,7 +550,7 @@ function AnovaCalc() {
   return (
     <div className="card" style={{ maxWidth: 560 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>单因素方差分析（One-way ANOVA）</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>比较三组及以上均值。留空的组不参与计算；显著时需做事后检验（如 Bonferroni）定位差异组。</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>比较三组及以上均值。留空的组不参与计算；显著时需做事后检验（如 Bonferroni）定位差异组。</p>
       {groups.map((g, i) => (
         <div key={i} className="grid grid-3" style={{ gap: 8, marginBottom: 8 }}>
           <StatInput label={`组${i + 1} 均值`} val={g.m} set={(v) => setGroup(i, 'm', v)} />
@@ -544,7 +593,7 @@ function OrrrCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>OR / RR 计算（2×2 表）</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>a=暴露且发病 b=暴露未发病 c=未暴露发病 d=未暴露未发病。OR 用于病例对照研究，RR 用于队列/ RCT。</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>a=暴露且发病 b=暴露未发病 c=未暴露发病 d=未暴露未发病。OR 用于病例对照研究，RR 用于队列/ RCT。</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <div></div>
         <span style={{ fontSize: 12, textAlign: 'center', color: 'var(--text-muted)' }}>发病/阳性</span>
@@ -588,7 +637,7 @@ function DiagTestCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>诊断试验评价</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>以金标准为参照：TP=真阳性 FP=假阳性 FN=假阴性 TN=真阴性</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>以金标准为参照：TP=真阳性 FP=假阳性 FN=假阴性 TN=真阴性</p>
       <div className="grid grid-2" style={{ gap: 8, marginBottom: 12 }}>
         <StatInput label="真阳性 TP" val={tp} set={setTp} />
         <StatInput label="假阳性 FP" val={fp} set={setFp} />
@@ -621,7 +670,7 @@ function CorrelationCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>Pearson 相关系数检验</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>检验相关系数 r 是否显著不为 0。|r|: 0.3 弱 / 0.5 中 / 0.7 强</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>检验相关系数 r 是否显著不为 0。|r|: 0.3 弱 / 0.5 中 / 0.7 强</p>
       <div className="grid grid-2" style={{ gap: 8, marginBottom: 12 }}>
         <StatInput label="相关系数 r" val={r} set={setR} />
         <StatInput label="样本量 n" val={n} set={setN} />
@@ -659,7 +708,7 @@ function EffectSizeCalc() {
   return (
     <div className="card" style={{ maxWidth: 480 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>效应量 Cohen&apos;s d</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>p 值只回答「有没有差异」，效应量回答「差异有多大」——论文报告应两者都给</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>p 值只回答「有没有差异」，效应量回答「差异有多大」——论文报告应两者都给</p>
       <div className="grid grid-2" style={{ gap: 8, marginBottom: 12 }}>
         <StatInput label="组1均值" val={m1} set={setM1} />
         <StatInput label="组2均值" val={m2} set={setM2} />
@@ -734,6 +783,258 @@ function CriticalTables() {
             <tr><td>D (极低)</td><td>对效应估计值几乎没有信心</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+/** 公式库 — 统计学常用公式展示（含符号说明、适用条件、示例），与计算器双向跳转 */
+function FormulaLibrary({ onNavigate }: { onNavigate: (k: CalcKey) => void }) {
+  const [cat, setCat] = useState('all');
+
+  const categories = ['all', '均值比较', '方差分析', '分类变量', '相关与回归', '诊断与生存', '信度与非参数'];
+
+  const formulas: {
+    cat: string; name: string; formula: string; sub?: string;
+    symbols: { sym: string; desc: string }[];
+    conditions: string; example: string; calc: CalcKey;
+  }[] = [
+    {
+      cat: '均值比较', name: '独立样本 t 检验',
+      formula: 't = (M₁ − M₂) / √(sₚ² · (1/n₁ + 1/n₂))',
+      sub: 'sₚ² = [(n₁−1)s₁² + (n₂−1)s₂²] / (n₁ + n₂ − 2)',
+      symbols: [
+        { sym: 'M₁, M₂', desc: '两组样本均值' },
+        { sym: 'sₚ²', desc: '合并方差' },
+        { sym: 's₁, s₂', desc: '两组标准差' },
+        { sym: 'n₁, n₂', desc: '两组样本量' },
+      ],
+      conditions: '① 两组独立 ② 连续变量近似正态 ③ 方差齐性（Levene 检验）',
+      example: '干预组 vs 对照组护理技能 OSCE 评分比较',
+      calc: 'ttest',
+    },
+    {
+      cat: '均值比较', name: '配对样本 t 检验',
+      formula: 't = d̄ / (s_d / √n)',
+      symbols: [
+        { sym: 'd̄', desc: '差值均值（后 − 前）' },
+        { sym: 's_d', desc: '差值标准差' },
+        { sym: 'n', desc: '配对数' },
+      ],
+      conditions: '① 同一对象前后两次测量 ② 差值近似正态',
+      example: 'SBAR 培训前后护生交接评分比较',
+      calc: 'pairedt',
+    },
+    {
+      cat: '均值比较', name: '单样本 t 检验',
+      formula: 't = (M − μ₀) / (s / √n)',
+      symbols: [
+        { sym: 'M', desc: '样本均值' },
+        { sym: 'μ₀', desc: '已知总体均值/标准值' },
+        { sym: 's', desc: '样本标准差' },
+        { sym: 'n', desc: '样本量' },
+      ],
+      conditions: '① 样本来自正态总体 ② 与已知标准值比较',
+      example: '本院护士手卫生依从性与国家基线比较',
+      calc: 'onesamplet',
+    },
+    {
+      cat: '均值比较', name: 'Cohen\'s d 效应量',
+      formula: 'd = (M₁ − M₂) / s_pooled',
+      sub: 's_pooled = √[(s₁² + s₂²) / 2]',
+      symbols: [
+        { sym: 'M₁, M₂', desc: '两组均值' },
+        { sym: 's_pooled', desc: '合并标准差' },
+      ],
+      conditions: 'p 值只回答「有没有差异」，d 回答「差异有多大」。0.2 小 / 0.5 中 / 0.8 大',
+      example: '两组样本量不等时用 Hedges\' g 校正',
+      calc: 'effectsize',
+    },
+    {
+      cat: '方差分析', name: '单因素方差分析 (ANOVA)',
+      formula: 'F = MS_between / MS_within',
+      sub: 'MS_between = SS_between / (k−1),  MS_within = SS_within / (N−k)',
+      symbols: [
+        { sym: 'MS_between', desc: '组间均方' },
+        { sym: 'MS_within', desc: '组内均方' },
+        { sym: 'k', desc: '组数' },
+        { sym: 'N', desc: '总样本量' },
+      ],
+      conditions: '① 三组及以上 ② 各组正态 ③ 方差齐性 ④ 显著时需事后检验定位差异组',
+      example: '三种交接班模式对临床推理得分的影响',
+      calc: 'anova',
+    },
+    {
+      cat: '分类变量', name: '卡方检验 (χ²)',
+      formula: 'χ² = N · (ad − bc)² / [(a+b)(c+d)(a+c)(b+d)]',
+      symbols: [
+        { sym: 'a, b, c, d', desc: '2×2 列联表四格频数' },
+        { sym: 'N', desc: '总例数 = a+b+c+d' },
+      ],
+      conditions: '① 分类变量 ② 总例数 ≥ 40 ③ 每格期望频数 ≥ 5（否则用 Fisher 精确检验）',
+      example: '不同教育方式对压疮发生率的影响',
+      calc: 'chi',
+    },
+    {
+      cat: '分类变量', name: 'OR / RR',
+      formula: 'OR = (a/b) / (c/d),  RR = [a/(a+b)] / [c/(c+d)]',
+      symbols: [
+        { sym: 'OR', desc: '比值比（病例对照研究）' },
+        { sym: 'RR', desc: '相对危险度（队列/RCT）' },
+      ],
+      conditions: 'OR 适用于病例对照；RR 适用于队列与 RCT。含 0 值时用 Haldane 校正',
+      example: '跌倒高风险标识与跌倒事件的关联分析',
+      calc: 'orrr',
+    },
+    {
+      cat: '相关与回归', name: 'Pearson 相关系数',
+      formula: 'r = Σ(xᵢ−x̄)(yᵢ−ȳ) / √[Σ(xᵢ−x̄)² · Σ(yᵢ−ȳ)²]',
+      sub: 't = r · √(n−2) / √(1−r²),  r² = 决定系数',
+      symbols: [
+        { sym: 'r', desc: 'Pearson 相关系数（−1 到 1）' },
+        { sym: 'r²', desc: '决定系数（可解释变异比例）' },
+        { sym: 'n', desc: '样本量' },
+      ],
+      conditions: '① 两连续变量 ② 线性关系 ③ 无显著异常值 ④ 正态双变量分布',
+      example: '工作年限与临床推理能力评分的线性关联',
+      calc: 'correlation',
+    },
+    {
+      cat: '相关与回归', name: '简单线性回归',
+      formula: 'ŷ = a + b·x',
+      sub: 'b = Σ(xᵢ−x̄)(yᵢ−ȳ) / Σ(xᵢ−x̄)²,  a = ȳ − b·x̄',
+      symbols: [
+        { sym: 'a', desc: '截距' },
+        { sym: 'b', desc: '斜率（x 每变化 1 单位 y 的变化量）' },
+        { sym: 'r²', desc: '模型拟合优度' },
+      ],
+      conditions: '① 因变量连续 ② 线性关系 ③ 残差独立正态等方差',
+      example: '用培训时长预测 OSCE 评分',
+      calc: 'regression',
+    },
+    {
+      cat: '相关与回归', name: 'Logistic 回归',
+      formula: 'ln(OR) = β₁ = ln(ad/bc)',
+      sub: 'SE(β₁) = √(1/a + 1/b + 1/c + 1/d),  Wald z = β₁ / SE',
+      symbols: [
+        { sym: 'OR', desc: '比值比 = exp(β₁)' },
+        { sym: 'β₁', desc: '回归系数 = ln(OR)' },
+        { sym: 'SE', desc: '标准误' },
+      ],
+      conditions: '① 二分类结局 ② 独立观测 ③ 样本量充足（每变量 ≥ 10 事件）',
+      example: 'AI 辅助训练是否提高 SBAR 交接合格率的 Odds',
+      calc: 'logistic',
+    },
+    {
+      cat: '诊断与生存', name: 'ROC 曲线分析',
+      formula: 'AUC = Φ((a + b) / √2)',
+      sub: 'a = √2 · Φ⁻¹(灵敏度),  b = √2 · Φ⁻¹(特异度)',
+      symbols: [
+        { sym: 'AUC', desc: '曲线下面积（0.5–1.0）' },
+        { sym: 'a, b', desc: '双正态模型参数' },
+        { sym: 'J', desc: "Youden's J = 灵敏度 + 特异度 − 1" },
+      ],
+      conditions: '诊断试验评价金标准。AUC 0.7 可接受 / 0.8 优秀 / 0.9 极好',
+      example: '护理评估工具对跌倒风险的判别能力',
+      calc: 'roc',
+    },
+    {
+      cat: '诊断与生存', name: 'Kaplan-Meier 生存分析',
+      formula: 'Ŝ(t) = ∏_{tᵢ ≤ t} (1 − dᵢ/nᵢ)',
+      sub: 'Log-rank: χ² = (O₁ − E₁)² / V',
+      symbols: [
+        { sym: 'Ŝ(t)', desc: '时刻 t 的累积生存概率' },
+        { sym: 'dᵢ', desc: '时刻 tᵢ 的事件数' },
+        { sym: 'nᵢ', desc: '时刻 tᵢ 的风险人数' },
+      ],
+      conditions: '① 生存时间 ② 删失数据 ③ Log-rank 比较两组生存曲线差异',
+      example: '不同护理方案对术后患者生存时间的影响',
+      calc: 'survival',
+    },
+    {
+      cat: '诊断与生存', name: '诊断试验评价',
+      formula: '灵敏度 = TP/(TP+FN),  特异度 = TN/(TN+FP)',
+      sub: 'PPV = TP/(TP+FP),  NPV = TN/(TN+FN)',
+      symbols: [
+        { sym: 'TP', desc: '真阳性' },
+        { sym: 'FP', desc: '假阳性' },
+        { sym: 'FN', desc: '假阴性' },
+        { sym: 'TN', desc: '真阴性' },
+      ],
+      conditions: '以金标准为参照。LR+ > 10 或 LR− < 0.1 提示诊断价值高',
+      example: '护士疼痛评估量表 vs 医生诊断的一致性',
+      calc: 'diagtest',
+    },
+    {
+      cat: '信度与非参数', name: 'Cronbach α 信度系数',
+      formula: 'α = (k / (k−1)) · (1 − Σσᵢ² / σ_total²)',
+      symbols: [
+        { sym: 'k', desc: '题项数' },
+        { sym: 'σᵢ²', desc: '第 i 题方差' },
+        { sym: 'σ_total²', desc: '总分方差' },
+      ],
+      conditions: '量表内部一致性信度。≥0.9 优秀 / ≥0.8 良好 / ≥0.7 可接受 / <0.6 需修订',
+      example: 'SBAR 交接能力自评量表的内部一致性',
+      calc: 'cronbach',
+    },
+    {
+      cat: '信度与非参数', name: 'Mann-Whitney U 检验',
+      formula: 'U = min(U₁, U₂),  U₁ = R₁ − n₁(n₁+1)/2',
+      sub: 'z = (U − μ_U) / σ_U,  μ_U = n₁n₂/2',
+      symbols: [
+        { sym: 'R₁', desc: '组 1 秩和' },
+        { sym: 'U', desc: '检验统计量' },
+        { sym: 'z', desc: '正态近似统计量' },
+      ],
+      conditions: '非参数检验，不要求正态。适用：等级数据/小样本/偏态分布',
+      example: '两组 Likert 量表满意度评分比较',
+      calc: 'mannwhitney',
+    },
+  ];
+
+  const filtered = cat === 'all' ? formulas : formulas.filter((f) => f.cat === cat);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+        {categories.map((c) => (
+          <button key={c} className={`btn btn-sm ${cat === c ? 'btn-primary' : ''}`} onClick={() => setCat(c)}>
+            {c === 'all' ? '全部公式' : c}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {filtered.map((f) => (
+          <div key={f.name} className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+              <h3 style={{ fontSize: 15 }}>{f.name}</h3>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{f.cat}</span>
+            </div>
+            <div style={{ padding: '8px 12px', background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-mono)', fontSize: 14, lineHeight: 1.6, marginBottom: 6 }}>
+              {f.formula}
+            </div>
+            {f.sub && (
+              <div style={{ padding: '4px 12px', fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.5 }}>
+                {f.sub}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2px 16px', marginBottom: 8 }}>
+              {f.symbols.map((s) => (
+                <div key={s.sym} style={{ fontSize: 12, lineHeight: 1.6, display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <code style={{ color: 'var(--accent)', fontWeight: 600, flexShrink: 0 }}>{s.sym}</code>
+                  <span style={{ color: 'var(--text-muted)' }}>— {s.desc}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4, lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600 }}>适用条件：</span>{f.conditions}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600 }}>示例：</span>{f.example}
+            </div>
+            <button className="btn btn-sm" onClick={() => onNavigate(f.calc)}>→ 打开计算器</button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -821,7 +1122,7 @@ function CronbachCalc() {
   return (
     <div className="card" style={{ maxWidth: 520 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>Cronbach α 信度系数</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>每行一个受试者，列为各题项得分，用空格/逗号分隔。适用：量表内部一致性信度。</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>每行一个受试者，列为各题项得分，用空格/逗号分隔。适用：量表内部一致性信度。</p>
       <textarea className="input" value={data} onChange={(e) => setData(e.target.value)} rows={5} style={{ width: '100%', fontFamily: 'var(--font-mono)', marginBottom: 8 }} />
       <button className="btn btn-primary" onClick={calc}>计算 α</button>
       {result && <ResultBox label="Cronbach α" value={result.split('｜')[0].trim()} note={result.split('｜')[1]?.trim() || ''} />}
@@ -860,7 +1161,7 @@ function RegressionCalc() {
   return (
     <div className="card" style={{ maxWidth: 520 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>简单线性回归</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>每行一组 x,y（逗号或空格分隔）。输出：截距 a、斜率 b、相关 r、决定系数 r²、斜率显著性 t/p。</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>每行一组 x,y（逗号或空格分隔）。输出：截距 a、斜率 b、相关 r、决定系数 r²、斜率显著性 t/p。</p>
       <textarea className="input" value={data} onChange={(e) => setData(e.target.value)} rows={5} style={{ width: '100%', fontFamily: 'var(--font-mono)', marginBottom: 8 }} />
       <button className="btn btn-primary" onClick={calc}>拟合回归</button>
       {result && <ResultBox label="回归方程 ŷ = a + bx" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
@@ -916,7 +1217,7 @@ function MannWhitneyCalc() {
   return (
     <div className="card" style={{ maxWidth: 520 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>Mann-Whitney U 检验</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>两组独立样本，不要求正态分布。输出 U、z（正态近似）、双尾 p。适用：等级数据/小样本/偏态分布。</p>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>两组独立样本，不要求正态分布。输出 U、z（正态近似）、双尾 p。适用：等级数据/小样本/偏态分布。</p>
       <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 1</label>
       <input className="input" value={g1} onChange={(e) => setG1(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
       <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 2</label>
@@ -936,6 +1237,7 @@ function LogisticRegCalc() {
   const [c, setC] = useState('20');
   const [d, setD] = useState('80');
   const [result, setResult] = useState('');
+  const [chartOption, setChartOption] = useState<Record<string, unknown> | null>(null);
 
   function calc() {
     const av = parseFloat(a), bv = parseFloat(b), cv = parseFloat(c), dv = parseFloat(d);
@@ -957,12 +1259,63 @@ function LogisticRegCalc() {
     setResult(
       `OR=${or.toFixed(3)} ｜ β₁=ln(OR)=${logOR.toFixed(3)} ｜ SE=${se.toFixed(3)} ｜ Wald z=${z.toFixed(3)} ｜ p=${twoP < 0.0001 ? twoP.toExponential(2) : twoP.toFixed(4)} ｜ 95%CI [${ciLow.toFixed(3)}, ${ciHigh.toFixed(3)}] ｜ 暴露组风险=${(p1 * 100).toFixed(1)}% vs 对照组=${(p0 * 100).toFixed(1)}%`
     );
+    // 森林图：OR 点估计 + 95%CI 误差棒 + OR=1 参考线
+    const colors = getStatColors();
+    const sig = ciLow > 1 || ciHigh < 1;
+    const ptColor = sig ? colors.danger : colors.accent;
+    const xMin = Math.max(0.05, Math.min(ciLow * 0.7, or * 0.5));
+    const xMax = Math.max(ciHigh * 1.3, or * 1.8, 2);
+    setChartOption({
+      backgroundColor: 'transparent',
+      grid: { left: 80, right: 50, top: 25, bottom: 45 },
+      xAxis: {
+        type: 'value', name: 'OR (95% CI)', nameLocation: 'middle', nameGap: 28,
+        min: xMin, max: xMax,
+        axisLine: { lineStyle: { color: colors.border } },
+        axisLabel: { color: colors.textSec, fontSize: 11 },
+        splitLine: { lineStyle: { color: colors.border, type: 'dashed', opacity: 0.3 } },
+      },
+      yAxis: {
+        type: 'category', data: ['暴露因素'],
+        axisLine: { lineStyle: { color: colors.border } },
+        axisLabel: { color: colors.textSec, fontSize: 12 },
+      },
+      series: [{
+        type: 'custom', name: 'OR',
+        renderItem: (_p: unknown, api: { coord: (d: number[]) => number[]; value: (i: number) => number }) => {
+          const orVal = api.value(0), low = api.value(1), high = api.value(2), yCat = api.value(3);
+          const pt = api.coord([orVal, yCat]);
+          const lp = api.coord([low, yCat]);
+          const hp = api.coord([high, yCat]);
+          return {
+            type: 'group',
+            children: [
+              { type: 'line', shape: { x1: lp[0], y1: pt[1], x2: hp[0], y2: pt[1] }, style: { stroke: ptColor, lineWidth: 2 } },
+              { type: 'line', shape: { x1: lp[0], y1: pt[1] - 6, x2: lp[0], y2: pt[1] + 6 }, style: { stroke: ptColor, lineWidth: 2 } },
+              { type: 'line', shape: { x1: hp[0], y1: pt[1] - 6, x2: hp[0], y2: pt[1] + 6 }, style: { stroke: ptColor, lineWidth: 2 } },
+              { type: 'polygon', shape: { points: [[pt[0], pt[1] - 7], [pt[0] + 7, pt[1]], [pt[0], pt[1] + 7], [pt[0] - 7, pt[1]]] }, style: { fill: ptColor } },
+            ],
+          };
+        },
+        data: [[or, ciLow, ciHigh, 0]],
+        encode: { x: [0, 1, 2], y: 3 },
+        markLine: {
+          silent: true, symbol: 'none',
+          lineStyle: { color: colors.textSec, type: 'dashed', width: 1 },
+          data: [{ xAxis: 1, label: { formatter: 'OR=1', color: colors.textSec, fontSize: 10, position: 'insideEndTop' } }],
+        },
+      }],
+      tooltip: {
+        trigger: 'item',
+        formatter: () => `OR = ${or.toFixed(3)}<br/>95% CI: [${ciLow.toFixed(3)}, ${ciHigh.toFixed(3)}]<br/>${sig ? '✓ 统计显著（CI 不含 1）' : '✗ 不显著（CI 含 1）'}`,
+      },
+    });
   }
 
   return (
     <div className="card" style={{ maxWidth: 560 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>Logistic 回归（2×2 表）</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
         二分类结局的核心方法。输入 2×2 列联表（暴露/非暴露 × 事件/无事件），输出 OR、β₁ 系数、Wald z 检验、p 值与 95% CI。
         适用：流行病学、护理研究、社会科学中的风险因素分析。
       </p>
@@ -977,8 +1330,9 @@ function LogisticRegCalc() {
         <input className="input" value={c} onChange={(e) => setC(e.target.value)} style={{ textAlign: 'center' }} />
         <input className="input" value={d} onChange={(e) => setD(e.target.value)} style={{ textAlign: 'center' }} />
       </div>
-      <button className="btn btn-primary" onClick={calc}>计算 Logistic 回归</button>
+      <button className="btn btn-primary" onClick={calc}>计算 Logistic 回归 + 绘制森林图</button>
       {result && <ResultBox label="Logistic 回归" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
+      {chartOption && <InlineChart option={chartOption} height={200} />}
     </div>
   );
 }
@@ -987,30 +1341,49 @@ function ROCCalc() {
   const [sens, setSens] = useState('0.85');
   const [spec, setSpec] = useState('0.80');
   const [result, setResult] = useState('');
+  const [chartOption, setChartOption] = useState<Record<string, unknown> | null>(null);
 
   function calc() {
     const se = parseFloat(sens), sp = parseFloat(spec);
     if (isNaN(se) || isNaN(sp) || se < 0 || se > 1 || sp < 0 || sp > 1) {
       setResult('灵敏度和特异度须在 0–1 之间'); return;
     }
-    // Binormal AUC approximation
     const a = Math.sqrt(2) * inverseNormalCDF(se);
     const b = Math.sqrt(2) * inverseNormalCDF(sp);
     const auc = normalCDF((a + b) / Math.sqrt(2));
     const youdenJ = se + sp - 1;
-    const ppv = se / (se + (1 - sp)); // assuming prevalence-adjusted would need prevalence input
+    const ppv = se / (se + (1 - sp));
     const npv = sp / (sp + (1 - se));
     const lrPos = se / (1 - sp);
     const lrNeg = (1 - se) / sp;
     setResult(
       `AUC≈${auc.toFixed(3)} ｜ Youden J=${youdenJ.toFixed(3)} ｜ LR+=${lrPos.toFixed(2)} ｜ LR−=${lrNeg.toFixed(2)} ｜ 灵敏度=${(se * 100).toFixed(1)}% ｜ 特异度=${(sp * 100).toFixed(1)}% ｜ PPV≈${(ppv * 100).toFixed(1)}% ｜ NPV≈${(npv * 100).toFixed(1)}%（50%患病率假设）`
     );
+    // 生成 ROC 曲线（binormal 模型）
+    const c = getStatColors();
+    const rocPoints: [number, number][] = [];
+    for (let fpr = 0; fpr <= 1.001; fpr += 0.02) {
+      const tpr = normalCDF(a - b * inverseNormalCDF(1 - fpr));
+      rocPoints.push([fpr, Math.max(0, Math.min(1, tpr))]);
+    }
+    setChartOption({
+      backgroundColor: 'transparent',
+      grid: { left: 50, right: 20, top: 30, bottom: 40 },
+      xAxis: { type: 'value', min: 0, max: 1, name: '1 − 特异度 (FPR)', nameLocation: 'middle', nameGap: 25, axisLine: { lineStyle: { color: c.border } }, axisLabel: { color: c.textSec, fontSize: 11 }, splitLine: { lineStyle: { color: c.border, type: 'dashed', opacity: 0.3 } } },
+      yAxis: { type: 'value', min: 0, max: 1, name: '灵敏度 (TPR)', axisLine: { lineStyle: { color: c.border } }, axisLabel: { color: c.textSec, fontSize: 11 }, splitLine: { lineStyle: { color: c.border, type: 'dashed', opacity: 0.3 } } },
+      series: [
+        { type: 'line', data: [[0, 0], [1, 1]], lineStyle: { color: c.textSec, type: 'dashed', width: 1 }, symbol: 'none', silent: true },
+        { type: 'line', data: rocPoints, lineStyle: { color: c.accent, width: 2.5 }, symbol: 'none', areaStyle: { color: c.accent, opacity: 0.12 }, name: `AUC=${auc.toFixed(3)}` },
+        { type: 'scatter', data: [[1 - sp, se]], symbolSize: 12, itemStyle: { color: c.danger }, name: `工作点 (Se=${(se * 100).toFixed(0)}%, Sp=${(sp * 100).toFixed(0)}%)` },
+      ],
+      tooltip: { trigger: 'item', formatter: (p: { data: number[] }) => `FPR=${p.data[0].toFixed(2)}, TPR=${p.data[1].toFixed(2)}` },
+    });
   }
 
   return (
-    <div className="card" style={{ maxWidth: 520 }}>
+    <div className="card" style={{ maxWidth: 560 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>ROC 曲线分析</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
         输入灵敏度和特异度，估算 AUC（曲线下面积）、Youden's J 指数、似然比。
         AUC 是诊断试验准确性的金标准：0.5=无判别力，0.7–0.8=可接受，0.8–0.9=优秀，&gt;0.9=极好。
         适用：诊断试验评价、预测模型验证、护理评估工具效能分析。
@@ -1019,8 +1392,9 @@ function ROCCalc() {
       <input className="input" value={sens} onChange={(e) => setSens(e.target.value)} style={{ width: '100%', marginBottom: 8 }} placeholder="0.00–1.00" />
       <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>特异度 (Specificity)</label>
       <input className="input" value={spec} onChange={(e) => setSpec(e.target.value)} style={{ width: '100%', marginBottom: 8 }} placeholder="0.00–1.00" />
-      <button className="btn btn-primary" onClick={calc}>计算 ROC 指标</button>
+      <button className="btn btn-primary" onClick={calc}>计算 + 绘制 ROC 曲线</button>
       {result && <ResultBox label="ROC 分析" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
+      {chartOption && <InlineChart option={chartOption} height={280} />}
     </div>
   );
 }
@@ -1031,6 +1405,7 @@ function SurvivalCalc() {
   const [g2times, setG2times] = useState('4 6 8 10 12 14 16 20 24 28');
   const [g2events, setG2events] = useState('1 1 1 1 1 1 0 1 0 1');
   const [result, setResult] = useState('');
+  const [chartOption, setChartOption] = useState<Record<string, unknown> | null>(null);
 
   function calc() {
     const t1 = g1times.trim().split(/[\s,，]+/).map(Number).filter((v) => !isNaN(v));
@@ -1058,17 +1433,25 @@ function SurvivalCalc() {
     if (V <= 0) { setResult('方差为 0，无法计算'); return; }
     const chiSq = ((O1 - E1) ** 2) / V;
     const p = 1 - chiSquareCDF(chiSq, 1);
-    // Median survival (simple interpolation)
-    function medianSurvival(times: number[], events: number[]): string {
-      let cumSurv = 1.0;
+    // K-M 生存曲线计算
+    function kmCurve(times: number[], events: number[]): [number, number][] {
       const sorted = times.map((t, i) => ({ t, e: events[i] })).sort((a, b) => a.t - b.t);
-      const uniqueTimes = [...new Set(sorted.map((x) => x.t))].sort((a, b) => a - b);
+      const uniqueTimes = [...new Set(sorted.filter((x) => x.e === 1).map((x) => x.t))].sort((a, b) => a - b);
+      const points: [number, number][] = [[0, 1.0]];
+      let cumSurv = 1.0;
       for (const t of uniqueTimes) {
         const atRisk = sorted.filter((x) => x.t >= t).length;
-        const events = sorted.filter((x) => x.t === t && x.e === 1).length;
-        if (atRisk > 0) cumSurv *= (1 - events / atRisk);
-        if (cumSurv <= 0.5) return t.toString();
+        const ev = sorted.filter((x) => x.t === t && x.e === 1).length;
+        if (atRisk > 0) cumSurv *= (1 - ev / atRisk);
+        points.push([t, cumSurv]);
       }
+      const lastT = sorted[sorted.length - 1]?.t || 0;
+      points.push([lastT + 1, cumSurv]);
+      return points;
+    }
+    function medianSurvival(times: number[], events: number[]): string {
+      const curve = kmCurve(times, events);
+      for (const [t, s] of curve) { if (s <= 0.5) return t.toString(); }
       return '未达到';
     }
     const med1 = medianSurvival(t1, e1);
@@ -1076,14 +1459,30 @@ function SurvivalCalc() {
     setResult(
       `Log-rank χ²=${chiSq.toFixed(3)} ｜ p=${p < 0.0001 ? p.toExponential(2) : p.toFixed(4)} ｜ 组1中位生存=${med1} ｜ 组2中位生存=${med2} ｜ O₁-E₁=${(O1 - E1).toFixed(2)}`
     );
+    // 生成 K-M 曲线
+    const c = getStatColors();
+    const curve1 = kmCurve(t1, e1);
+    const curve2 = kmCurve(t2, e2);
+    setChartOption({
+      backgroundColor: 'transparent',
+      grid: { left: 50, right: 20, top: 30, bottom: 40 },
+      xAxis: { type: 'value', min: 0, name: '时间', nameLocation: 'middle', nameGap: 25, axisLine: { lineStyle: { color: c.border } }, axisLabel: { color: c.textSec, fontSize: 11 }, splitLine: { lineStyle: { color: c.border, type: 'dashed', opacity: 0.3 } } },
+      yAxis: { type: 'value', min: 0, max: 1, name: '生存概率', axisLine: { lineStyle: { color: c.border } }, axisLabel: { color: c.textSec, fontSize: 11 }, splitLine: { lineStyle: { color: c.border, type: 'dashed', opacity: 0.3 } } },
+      legend: { data: ['组 1', '组 2'], textStyle: { color: c.textSec, fontSize: 11 }, top: 4 },
+      series: [
+        { type: 'line', data: curve1, name: '组 1', step: 'end', lineStyle: { color: c.accent, width: 2.5 }, symbol: 'none' },
+        { type: 'line', data: curve2, name: '组 2', step: 'end', lineStyle: { color: c.danger, width: 2.5 }, symbol: 'none' },
+      ],
+      tooltip: { trigger: 'axis', formatter: (params: Array<{ data: number[]; seriesName: string }>) => params.map((p) => `${p.seriesName}: t=${p.data[0]}, S=${p.data[1].toFixed(3)}`).join('<br/>') },
+    });
   }
 
   return (
-    <div className="card" style={{ maxWidth: 560 }}>
+    <div className="card" style={{ maxWidth: 600 }}>
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>Kaplan-Meier 生存分析</h3>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
         输入两组生存时间和事件指示（1=事件发生，0=删失），执行 Log-rank 检验比较两组生存曲线。
-        输出 χ² 统计量、p 值和各组中位生存时间。
+        输出 χ² 统计量、p 值和各组中位生存时间。计算后自动绘制 K-M 生存曲线。
         适用：肿瘤学、慢性病管理、护理结局随访研究。
       </p>
       <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 1 生存时间（空格/逗号分隔）</label>
@@ -1094,8 +1493,9 @@ function SurvivalCalc() {
       <input className="input" value={g2times} onChange={(e) => setG2times(e.target.value)} style={{ width: '100%', marginBottom: 4 }} />
       <label style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>组 2 事件指示</label>
       <input className="input" value={g2events} onChange={(e) => setG2events(e.target.value)} style={{ width: '100%', marginBottom: 8 }} />
-      <button className="btn btn-primary" onClick={calc}>执行 Log-rank 检验</button>
+      <button className="btn btn-primary" onClick={calc}>执行 Log-rank 检验 + 绘制 K-M 曲线</button>
       {result && <ResultBox label="生存分析" value={result.split('｜')[0].trim()} note={result.split('｜').slice(1).join('｜').trim()} />}
+      {chartOption && <InlineChart option={chartOption} height={280} />}
     </div>
   );
 }
