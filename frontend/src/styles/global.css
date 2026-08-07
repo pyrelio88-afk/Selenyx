@@ -3056,7 +3056,7 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   }
   .aichat-slash-item { min-height: 44px; }
   /* 技能推荐横向滚动卡——移动端增大触控目标 */
-  .aichat-skill-chip { height: 36px; padding: 0 14px; font-size: var(--font-sm); }
+  .aichat-skill-chip { height: 44px; padding: 0 14px; font-size: var(--font-sm); }
 
   /* --- V6 学科数据 --- */
   /* 学科卡网格: 单列 */
