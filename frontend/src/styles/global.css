@@ -3003,6 +3003,42 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   .aichat-quick-cat { width: 100%; }
   .aichat-quick-items { flex-wrap: wrap; }
 
+  /* --- R109 AI助手互斥全屏 (列表 ↔ 对话) --- */
+  .aichat-sidebar.mobile-full {
+    width: 100% !important;
+    max-width: 100% !important;
+    top: 0 !important;
+    z-index: 200 !important;
+  }
+  .aichat-sidebar.mobile-full::before { display: none !important; }
+  /* toggle 按钮在移动端始终显示, 作为返回列表入口 */
+  .aichat-toggle { display: inline-flex !important; }
+  /* 消息气泡: 用户右对齐 78% / AI 左对齐 88% (设计规格) */
+  .aichat-msg.user .aichat-msg-body { max-width: 78%; }
+  .aichat-msg.assistant .aichat-msg-body { max-width: 88%; }
+  /* AI 头像圆形 accent 绿底 (设计规格 28px) */
+  .aichat-msg.assistant .aichat-msg-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .aichat-msg.user .aichat-msg-avatar { display: none; }
+  /* 斜杠命令面板: 浮于输入框上方, 不遮挡 */
+  .aichat-slash {
+    position: fixed;
+    bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+    left: 0; right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 51;
+  }
+  .aichat-slash-item { min-height: 44px; }
+
   /* --- V6 学科数据 --- */
   /* 学科卡网格: 单列 */
   .discipline-grid { grid-template-columns: 1fr !important; gap: 10px; }

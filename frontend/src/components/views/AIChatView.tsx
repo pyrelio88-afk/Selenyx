@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
+import { useIsMobile } from '@lib/useIsMobile';
 import { streamChat, LLMError, PROVIDER_DEFAULTS, type LLMMessage } from '@services/llm';
 import { Icon } from '@components/ui/Icon';
 import { MarkdownView } from '@components/chat/MarkdownView';
@@ -123,11 +124,12 @@ function loadSessions(scope: string): { sessions: Session[]; activeId: string | 
 
 export function AIChatView() {
   const { llmConfig, setLLMConfig, projects, currentProjectId } = useAppStore();
+  const isMobile = useIsMobile();
   const scope = currentProjectId || 'global';
   const project = projects.find((p) => p.id === currentProjectId);
 
   const [{ sessions, activeId }, setSessionState] = useState(() => loadSessions(scope));
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 760);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth <= 430 ? true : window.innerWidth > 760);
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
 
@@ -209,6 +211,7 @@ export function AIChatView() {
     const s = newSession();
     setSessionState((prev) => ({ sessions: [s, ...prev.sessions], activeId: s.id }));
     setEditingIdx(null);
+    if (window.innerWidth <= 760) setSidebarOpen(false);
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
@@ -496,7 +499,7 @@ export function AIChatView() {
   return (
     <div className="aichat-root">
       {/* 会话侧栏 */}
-      <aside className={`aichat-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <aside className={`aichat-sidebar ${sidebarOpen ? 'open' : ''} ${isMobile ? 'mobile-full' : ''}`}>
         <div className="aichat-sidebar-head">
           <button className="aichat-new-btn" onClick={createSession}>
             <Icon name="plus" size={16} strokeWidth={1.8} /> 新对话
