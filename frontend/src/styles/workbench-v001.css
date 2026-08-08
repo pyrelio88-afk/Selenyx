@@ -186,3 +186,65 @@
   .project-role-options { grid-template-columns: 1fr; }
   .view-title { font-size: 22px; }
 }
+
+
+/* —— Projects workbench (reference-aligned cards) —— */
+.projects-workbench .project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated, var(--bg-surface));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.projects-workbench .project-card.is-active {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.projects-workbench .project-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.projects-workbench .project-delete-btn {
+  margin-left: auto;
+  color: var(--danger, #a64734);
+  border-color: color-mix(in srgb, var(--danger, #a64734) 28%, var(--border));
+}
+
+.projects-workbench .project-delete-btn:hover {
+  background: var(--danger-light, #f5e9e4);
+}
+
+.project-active-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-canvas));
+  color: var(--accent);
+  font-weight: 650;
+}
+
+/* Sidebar: quieter brand, no project switcher clutter */
+.workspace-sidebar {
+  padding-top: 16px;
+}
+
+.workspace-brand {
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+}
+
+.workspace-sidebar .nav-group-label {
+  text-transform: none;
+  letter-spacing: .04em;
+  font-weight: 600;
+}

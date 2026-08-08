@@ -428,7 +428,7 @@ function ClockWidget() {
 // D6：onboarding 状态走 storage.ts 统一收口（含旧 selenyx-onboarding-done 兼容）
 
 function OnboardingChecklist() {
-  const { projects, references, llmConfig, setView } = useAppStore();
+  const { projects, references, llmConfig, setView, requestCreateProject } = useAppStore();
   const [dismissed, setDismissed] = useState(() => !!getOnboardingState());
 
   const visitedPipeline = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('visited-pipeline') === 'true';
@@ -466,7 +466,11 @@ function OnboardingChecklist() {
         {steps.map((step, i) => (
           <div
             key={i}
-            onClick={() => { if (!step.done) setView(step.view); }}
+            onClick={() => {
+              if (step.done) return;
+              if (step.label === '创建项目') requestCreateProject();
+              else setView(step.view);
+            }}
             style={{
               flex: '1 1 0', minWidth: 120, cursor: step.done ? 'default' : 'pointer',
               padding: '8px 12px', borderRadius: 8,
@@ -505,7 +509,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 }
 
 export function DashboardView() {
-  const { references, projects, tasks, tables, setView, setCurrentProject, workspaceSyncStatus } = useAppStore();
+  const { references, projects, tasks, tables, setView, setCurrentProject, workspaceSyncStatus, requestCreateProject } = useAppStore();
   const primaryProject = selectPrimaryProject(projects);
   const [evidenceSummary, setEvidenceSummary] = useState<{ total: number; accepted: number; pending: number } | null>(null);
   const [evidenceAvailable, setEvidenceAvailable] = useState(false);
@@ -638,7 +642,7 @@ export function DashboardView() {
           <span className="research-section-kicker">先建立主线</span>
           <h2>从项目名称开始，研究框架完全可选</h2>
           <p>创建项目时标注“我主导”或“我参与”，首页只把主线课题放在第一位。</p>
-          <button className="btn btn-primary" onClick={() => setView('projects')}><Icon name="plus" size={16} /> 新建项目</button>
+          <button className="btn btn-primary" onClick={() => requestCreateProject()}><Icon name="plus" size={16} /> 新建项目</button>
         </section>
       )}
 

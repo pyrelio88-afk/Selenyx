@@ -26,7 +26,6 @@ function focusMainContent() {
 export function MobileShell() {
   const {
     currentView, setView, mode, toggleMode,
-    projects, currentProjectId,
   } = useAppStore();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -34,7 +33,6 @@ export function MobileShell() {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const isDark = mode === 'dark';
   const backend = useLocalBackendStatus();
-  const activeProject = projects.find((project) => project.id === currentProjectId) ?? projects[0] ?? null;
   const title = VIEW_LABELS[currentView] || 'Selenyx';
   const isQuickView = QUICK_NAV.some((item) => item.key === currentView);
 
@@ -105,7 +103,7 @@ export function MobileShell() {
         </button>
         <div className="mobile-topbar-copy">
           <strong>{title}</strong>
-          <span>{activeProject?.name || '未选择项目'}</span>
+          <span>Selenyx</span>
         </div>
         <button
           className="mobile-topbar-btn"
@@ -146,15 +144,6 @@ export function MobileShell() {
                 <Icon name="close" size={20} />
               </button>
             </div>
-
-            <button className="mobile-project-context" onClick={() => navigate('projects')}>
-              <span className="workspace-switcher-avatar" aria-hidden="true">研</span>
-              <span>
-                <strong>{activeProject?.name || '未选择项目'}</strong>
-                <small>{activeProject ? '查看或切换当前项目' : '创建项目后开始科研闭环'}</small>
-              </span>
-              <Icon name="chevronDown" size={16} />
-            </button>
 
             <nav className="mobile-drawer-body" aria-label="全部工作区">
               {NAV_GROUPS.map((group) => (

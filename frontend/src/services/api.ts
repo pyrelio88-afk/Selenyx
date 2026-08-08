@@ -87,6 +87,7 @@ export const projectApi = {
   create: (p: Partial<ResearchProject>) => request<ResearchProject>('/projects', { method: 'POST', body: JSON.stringify(p) }),
   update: (id: string, patch: Partial<ResearchProject>) => request<ResearchProject>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   advanceStage: (id: string) => request<ResearchProject>(`/projects/${id}/advance`, { method: 'POST' }),
+  delete: (id: string) => request<{ deleted: string; deletedTasks: number; deletedEvidence: number }>(`/projects/${id}`, { method: 'DELETE' }),
   workspaceSnapshot: () => request<{
     projects: ResearchProject[];
     tasks: KanbanTask[];

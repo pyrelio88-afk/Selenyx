@@ -106,6 +106,18 @@ export function reconcileWorkspace(
 
 let writeQueue: Promise<void> = Promise.resolve();
 
+export function removeMirroredProject(projectId: string): Promise<void> {
+  writeQueue = writeQueue
+    .then(async () => {
+      await projectApi.delete(projectId);
+    })
+    .catch(() => {
+      // Offline / backend down: local Zustand already dropped the project.
+      // Startup reconcile may reintroduce it until DELETE succeeds later.
+    });
+  return writeQueue;
+}
+
 export function mirrorWorkspace(
   projects: ResearchProject[],
   tasks: KanbanTask[],

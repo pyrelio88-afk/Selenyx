@@ -19,7 +19,7 @@ import {
   removeMirroredReference,
   type ReferenceSyncStatus,
 } from '@services/referenceRepository';
-import { mirrorWorkspace, type WorkspaceSyncStatus } from '@services/workspaceRepository';
+import { mirrorWorkspace, removeMirroredProject, type WorkspaceSyncStatus } from '@services/workspaceRepository';
 
 export type ViewKey =
   | 'dashboard' | 'projects' | 'references' | 'pipeline'
@@ -78,6 +78,11 @@ interface AppState {
   addProject: (p: ResearchProject) => void;
   updateProject: (id: string, patch: Partial<ResearchProject>) => void;
   setPrimaryProject: (id: string) => void;
+  deleteProject: (id: string) => void;
+  /** Open Projects view and immediately show the create dialog. */
+  pendingCreateProject: boolean;
+  requestCreateProject: () => void;
+  clearPendingCreateProject: () => void;
 
   // === 任务看板 ===
   tasks: KanbanTask[];
@@ -237,6 +242,26 @@ export const useAppStore = create<AppState>()(
           workspaceSyncMessage: '正在同步主线课题…',
         };
       }),
+      deleteProject: (id) => set((s) => {
+        const projects = s.projects.filter((project) => project.id !== id);
+        const tasks = s.tasks.filter((task) => task.projectId !== id);
+        const currentProjectId = s.currentProjectId === id
+          ? (selectPrimaryProject(projects)?.id ?? projects[0]?.id ?? null)
+          : s.currentProjectId;
+        void removeMirroredProject(id).then(() => {
+          void mirrorWorkspace(projects, tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
+        });
+        return {
+          projects,
+          tasks,
+          currentProjectId,
+          workspaceSyncStatus: 'syncing',
+          workspaceSyncMessage: '正在删除本机项目…',
+        };
+      }),
+      pendingCreateProject: false,
+      requestCreateProject: () => set({ currentView: 'projects', pendingCreateProject: true }),
+      clearPendingCreateProject: () => set({ pendingCreateProject: false }),
 
       tasks: [],
       addTask: (t) => set((s) => {

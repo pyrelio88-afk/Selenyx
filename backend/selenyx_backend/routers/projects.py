@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from selenyx_backend.database import get_session
-from selenyx_backend.models import KanbanTask, ResearchProject
+from selenyx_backend.models import EvidenceItem, KanbanTask, ResearchProject
 
 router = APIRouter()
 PIPELINE_ORDER = ["problem", "literature", "fulltext", "screening", "reading", "evidence", "synthesis", "writing"]
@@ -246,6 +246,31 @@ def update_project(project_id: str, patch: dict, session: Session = Depends(get_
     session.refresh(project)
     return _project_payload(project)
 
+
+
+
+@router.delete("/{project_id}")
+def delete_project(project_id: str, session: Session = Depends(get_session)):
+    """Hard-delete a project and its local child rows (tasks + evidence)."""
+    project = session.get(ResearchProject, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+
+    tasks = session.exec(select(KanbanTask).where(KanbanTask.project_id == project_id)).all()
+    for task in tasks:
+        session.delete(task)
+
+    evidence_items = session.exec(select(EvidenceItem).where(EvidenceItem.project_id == project_id)).all()
+    for item in evidence_items:
+        session.delete(item)
+
+    session.delete(project)
+    session.commit()
+    return {
+        "deleted": project_id,
+        "deletedTasks": len(tasks),
+        "deletedEvidence": len(evidence_items),
+    }
 
 @router.post("/{project_id}/advance")
 def advance_stage(project_id: str, session: Session = Depends(get_session)):

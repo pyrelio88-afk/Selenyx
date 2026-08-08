@@ -3,9 +3,8 @@ import { Icon, NAV_ICONS } from '@components/ui/Icon';
 import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 
 /**
- * 主导航按「证据门科研流水线」编排（Claude Scholar / nature-skills / Zotero 类工具对齐）：
- * 立题 → 文献 → 阅读/证据 → 分析工具 → 对话与设置
- * 禁止 skill 超市 / 飞书式平行功能墙做主入口。
+ * 主导航按「证据门科研流水线」编排。
+ * 侧栏只做导航 + 后端状态，不展示项目切换（项目在「立题 · 项目」页管理）。
  */
 export interface NavGroup {
   label: string;
@@ -17,7 +16,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: '科研闭环',
     items: [
       { key: 'dashboard', label: '总览', hint: '进度与倒数日' },
-      { key: 'projects', label: '立题 · 项目', hint: '研究问题优先，框架可选' },
+      { key: 'projects', label: '立题 · 项目', hint: '创建、切换与删除项目' },
       { key: 'pipeline', label: '八段流水线', hint: '问题→证据→写作' },
       { key: 'references', label: '文献库', hint: '检索 · 导入 · 全文' },
       { key: 'notes', label: '阅读笔记', hint: '摘录与批注' },
@@ -43,17 +42,9 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 export function Sidebar() {
-  const {
-    currentView, setView, mode, toggleMode,
-    projects, currentProjectId, references,
-  } = useAppStore();
+  const { currentView, setView, mode, toggleMode } = useAppStore();
   const isDark = mode === 'dark';
-  const activeProject = projects.find((project) => project.id === currentProjectId) ?? projects[0] ?? null;
   const backend = useLocalBackendStatus();
-
-  function openProjects() {
-    setView('projects');
-  }
 
   return (
     <aside className="sidebar workspace-sidebar" aria-label="科研工作台侧栏">
@@ -64,31 +55,6 @@ export function Sidebar() {
         <div>
           <div className="workspace-brand-name">Selenyx</div>
         </div>
-      </div>
-
-      <button className="workspace-switcher" onClick={openProjects} aria-label="切换或管理科研项目">
-        <span className="workspace-switcher-avatar">研</span>
-        <span className="workspace-switcher-copy">
-          <strong>{activeProject?.name || '未选择项目'}</strong>
-          <small>{activeProject ? `流水线 · ${activeProject.currentStage || 'problem'}` : '先创建项目名称，框架可选'}</small>
-        </span>
-        <Icon name="chevronDown" size={15} />
-      </button>
-
-      <div className="workspace-actions">
-        <button className="workspace-primary-action" onClick={openProjects}>
-          <Icon name="plus" size={16} />
-          新建项目
-        </button>
-        <button className="workspace-quick-action" onClick={() => setView('references')} title="前往文献库">
-          <Icon name="references" size={16} />
-          <span>文献</span>
-          <b>{references.length}</b>
-        </button>
-        <button className="workspace-quick-action" onClick={() => setView('pipeline')} title="进入八段流水线">
-          <Icon name="pipeline" size={16} />
-          <span>流水线</span>
-        </button>
       </div>
 
       <nav className="sidebar-nav" aria-label="科研工作台导航">
