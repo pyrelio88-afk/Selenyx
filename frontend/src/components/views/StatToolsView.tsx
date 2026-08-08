@@ -4,7 +4,7 @@
  * R110: 统计-图表深度融合（ROC/KM/森林图/热力图可视化）+ 公式库 + 文字对齐修复
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import * as echarts from 'echarts/core';
 import { LineChart, ScatterChart, HeatmapChart, CustomChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, TitleComponent, MarkLineComponent } from 'echarts/components';
@@ -14,6 +14,8 @@ import {
   independentTTest, pairedTFromSummary, oneSampleTFromSummary,
   anova, orRr, diagTest, correlationTest, effectSize,
 } from '@lib/stats';
+import { Icon } from '@components/ui/Icon';
+import '../../styles/stattools-workbench.css';
 
 echarts.use([LineChart, ScatterChart, HeatmapChart, CustomChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent, TitleComponent, MarkLineComponent, SVGRenderer]);
 
@@ -29,68 +31,180 @@ const Z_TABLE_ENTRIES = [
 export function StatToolsView() {
   const [tab, setTab] = useState<Tab>('calculator');
   const [calcKey, setCalcKey] = useState<CalcKey>('pvalue');
+  const [query, setQuery] = useState('');
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const catalogRef = useRef<HTMLElement>(null);
+  const canvasHeadingRef = useRef<HTMLHeadingElement>(null);
+
+  const filteredGroups = useMemo(() => filterStatToolGroups(query), [query]);
+  const activeMeta = tab === 'calculator'
+    ? CALC_LIST.find((item) => item.key === calcKey)!
+    : RESOURCE_LIST.find((item) => item.tab === tab)!;
+  const activeGroupLabel = tab === 'calculator'
+    ? CALC_LIST.find((item) => item.key === calcKey)!.groupLabel
+    : '参考资料';
+
+  function openWorkspace() {
+    setWorkspaceOpen(true);
+    requestAnimationFrame(() => canvasHeadingRef.current?.focus());
+  }
 
   function navigateToCalc(k: CalcKey) {
     setCalcKey(k);
     setTab('calculator');
+    openWorkspace();
+  }
+
+  function navigateToResource(nextTab: Exclude<Tab, 'calculator'>) {
+    setTab(nextTab);
+    openWorkspace();
+  }
+
+  function returnToCatalog() {
+    setWorkspaceOpen(false);
+    requestAnimationFrame(() => catalogRef.current?.focus());
   }
 
   return (
-    <div>
-      <div className="view-header">
-        <h1 className="view-title">统计工具</h1>
-      </div>
+    <div className={`stattools-view ${workspaceOpen ? 'is-workspace-open' : ''}`}>
+      <header className="stattools-view-header">
+        <div>
+          <h1>统计工具</h1>
+          <p>选择一种方法，在独立画布中完成输入、计算与结果判读；所有计算均在本机运行。</p>
+        </div>
+        <button type="button" className="stattools-formula-shortcut" onClick={() => navigateToResource('formula')}>
+          <Icon name="references" size={15} /> 公式与方法依据
+        </button>
+      </header>
 
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
-        {(['calculator', 'tables', 'formula', 'methods'] as const).map((t) => (
-          <button key={t} className={`btn btn-sm ${tab === t ? 'btn-primary' : ''}`} onClick={() => setTab(t)}>
-            {t === 'calculator' ? '统计计算器' : t === 'tables' ? '临界值表' : t === 'formula' ? '公式库' : '方法速查'}
-          </button>
-        ))}
-      </div>
+      <div className="stattools-shell">
+        <aside ref={catalogRef} className="stattools-catalog" aria-label="统计工具目录" tabIndex={-1}>
+          <label className="stattools-search">
+            <span className="sr-only">搜索统计工具</span>
+            <Icon name="search" size={15} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索方法、用途或结果…" />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="清空统计工具搜索"><Icon name="close" size={14} /></button>
+            )}
+          </label>
 
-      {tab === 'calculator' && <Calculators calc={calcKey} setCalc={setCalcKey} onGoFormula={() => setTab('formula')} />}
-      {tab === 'tables' && <CriticalTables />}
-      {tab === 'formula' && <FormulaLibrary onNavigate={navigateToCalc} />}
-      {tab === 'methods' && <MethodsGuide />}
+          <nav className="stattools-nav" aria-label="统计方法分类">
+            {filteredGroups.map((group) => (
+              <section key={group.id} className="stattools-nav-group" aria-labelledby={`stattools-group-${group.id}`}>
+                <h2 id={`stattools-group-${group.id}`}>{group.label}</h2>
+                {group.items.map((item) => (
+                  <button
+                    type="button"
+                    key={item.key}
+                    className={tab === 'calculator' && calcKey === item.key ? 'active' : ''}
+                    onClick={() => navigateToCalc(item.key)}
+                    aria-current={tab === 'calculator' && calcKey === item.key ? 'page' : undefined}
+                  >
+                    <span><strong>{item.label}</strong><small>{item.description}</small></span>
+                    <Icon name="chevronRight" size={14} />
+                  </button>
+                ))}
+              </section>
+            ))}
+
+            {filteredGroups.length === 0 && <div className="stattools-no-results">没有匹配的统计工具。可尝试“诊断”“效应量”或“生存”。</div>}
+
+            {!query && (
+              <section className="stattools-nav-group" aria-labelledby="stattools-group-reference">
+                <h2 id="stattools-group-reference">参考资料</h2>
+                {RESOURCE_LIST.map((item) => (
+                  <button
+                    type="button"
+                    key={item.tab}
+                    className={tab === item.tab ? 'active' : ''}
+                    onClick={() => navigateToResource(item.tab)}
+                    aria-current={tab === item.tab ? 'page' : undefined}
+                  >
+                    <span><strong>{item.label}</strong><small>{item.description}</small></span>
+                    <Icon name="chevronRight" size={14} />
+                  </button>
+                ))}
+              </section>
+            )}
+          </nav>
+        </aside>
+
+        <main className="stattools-canvas" aria-labelledby="stattools-active-title">
+          <header className="stattools-canvas-header">
+            <button type="button" className="stattools-mobile-back" onClick={returnToCatalog}>
+              <Icon name="chevronLeft" size={17} /> 返回工具目录
+            </button>
+            <div>
+              <span>{activeGroupLabel}</span>
+              <h2 id="stattools-active-title" ref={canvasHeadingRef} tabIndex={-1}>{activeMeta.label}</h2>
+              <p>{activeMeta.description}</p>
+            </div>
+          </header>
+          <div className="stattools-canvas-scroll">
+            {tab === 'calculator' && <Calculators calc={calcKey} />}
+            {tab === 'tables' && <CriticalTables />}
+            {tab === 'formula' && <FormulaLibrary onNavigate={navigateToCalc} />}
+            {tab === 'methods' && <MethodsGuide />}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
-type CalcKey = 'pvalue' | 'ttest' | 'pairedt' | 'onesamplet' | 'anova' | 'chi' | 'orrr' | 'diagtest' | 'correlation' | 'effectsize' | 'samplesize' | 'ci' | 'cronbach' | 'regression' | 'mannwhitney' | 'logistic' | 'roc' | 'survival';
+export type CalcKey = 'pvalue' | 'ttest' | 'pairedt' | 'onesamplet' | 'anova' | 'chi' | 'orrr' | 'diagtest' | 'correlation' | 'effectsize' | 'samplesize' | 'ci' | 'cronbach' | 'regression' | 'mannwhitney' | 'logistic' | 'roc' | 'survival';
 
-const CALC_LIST: { key: CalcKey; label: string }[] = [
-  { key: 'pvalue', label: 'Z→p值' },
-  { key: 'ttest', label: '独立t检验' },
-  { key: 'pairedt', label: '配对t检验' },
-  { key: 'onesamplet', label: '单样本t检验' },
-  { key: 'anova', label: '单因素ANOVA' },
-  { key: 'chi', label: '卡方检验' },
-  { key: 'orrr', label: 'OR/RR' },
-  { key: 'diagtest', label: '诊断试验' },
-  { key: 'correlation', label: 'Pearson相关' },
-  { key: 'effectsize', label: '效应量' },
-  { key: 'samplesize', label: '样本量' },
-  { key: 'ci', label: '置信区间' },
-  { key: 'cronbach', label: 'Cronbach α' },
-  { key: 'regression', label: '线性回归' },
-  { key: 'mannwhitney', label: 'Mann-Whitney U' },
-  { key: 'logistic', label: 'Logistic回归' },
-  { key: 'roc', label: 'ROC曲线' },
-  { key: 'survival', label: '生存分析' },
+type CalcGroupId = 'description' | 'inference' | 'association' | 'diagnostic' | 'design';
+interface CalcMeta { key: CalcKey; label: string; description: string; group: CalcGroupId; groupLabel: string }
+
+export const CALC_LIST: CalcMeta[] = [
+  { key: 'pvalue', label: 'Z → p 值', description: '由标准正态统计量计算双尾概率', group: 'inference', groupLabel: '基础推断' },
+  { key: 'ttest', label: '独立样本 t 检验', description: '比较两个独立组的均值', group: 'inference', groupLabel: '基础推断' },
+  { key: 'pairedt', label: '配对 t 检验', description: '比较配对或重复测量均值', group: 'inference', groupLabel: '基础推断' },
+  { key: 'onesamplet', label: '单样本 t 检验', description: '样本均值与已知总体均值比较', group: 'inference', groupLabel: '基础推断' },
+  { key: 'anova', label: '单因素 ANOVA', description: '比较三个及以上独立组均值', group: 'inference', groupLabel: '基础推断' },
+  { key: 'chi', label: '卡方检验', description: '检验分类变量关联并绘制热力图', group: 'inference', groupLabel: '基础推断' },
+  { key: 'mannwhitney', label: 'Mann–Whitney U', description: '两个独立样本的非参数比较', group: 'inference', groupLabel: '基础推断' },
+  { key: 'ci', label: '置信区间', description: '描述估计值的不确定性范围', group: 'description', groupLabel: '描述与估计' },
+  { key: 'orrr', label: 'OR / RR', description: '病例对照与队列研究效应指标', group: 'association', groupLabel: '关联与效应' },
+  { key: 'correlation', label: 'Pearson 相关', description: '连续变量线性相关及显著性', group: 'association', groupLabel: '关联与效应' },
+  { key: 'effectsize', label: '效应量', description: '描述 Cohen d 与组间差异强度', group: 'description', groupLabel: '描述与估计' },
+  { key: 'regression', label: '线性回归', description: '估计连续结局的线性关系', group: 'association', groupLabel: '关联与效应' },
+  { key: 'logistic', label: 'Logistic 回归', description: '二分类结局、OR 与森林图', group: 'association', groupLabel: '关联与效应' },
+  { key: 'diagtest', label: '诊断试验', description: '灵敏度、特异度与预测值', group: 'diagnostic', groupLabel: '诊断与测量' },
+  { key: 'cronbach', label: 'Cronbach α', description: '量表内部一致性信度', group: 'diagnostic', groupLabel: '诊断与测量' },
+  { key: 'roc', label: 'ROC 曲线', description: '判别能力、AUC 与工作点', group: 'diagnostic', groupLabel: '诊断与测量' },
+  { key: 'samplesize', label: '样本量估算', description: '按效应量、α 与效能规划样本', group: 'design', groupLabel: '研究设计与时间结局' },
+  { key: 'survival', label: '生存分析', description: 'Kaplan–Meier 与 Log-rank 检验', group: 'design', groupLabel: '研究设计与时间结局' },
 ];
 
-function Calculators({ calc, setCalc, onGoFormula }: { calc: CalcKey; setCalc: (k: CalcKey) => void; onGoFormula: () => void }) {
+const GROUP_ORDER: Array<{ id: CalcGroupId; label: string }> = [
+  { id: 'description', label: '描述与估计' },
+  { id: 'inference', label: '基础推断' },
+  { id: 'association', label: '关联与效应' },
+  { id: 'diagnostic', label: '诊断与测量' },
+  { id: 'design', label: '研究设计与时间结局' },
+];
+
+const RESOURCE_LIST = [
+  { tab: 'tables' as const, label: '临界值表', description: 't、χ² 等常用临界值' },
+  { tab: 'formula' as const, label: '公式库', description: '公式、变量定义与适用条件' },
+  { tab: 'methods' as const, label: '方法速查', description: '按问题和数据类型选择方法' },
+];
+
+export function filterStatToolGroups(query: string) {
+  const normalized = query.trim().toLocaleLowerCase('zh-CN');
+  return GROUP_ORDER.map((group) => ({
+    ...group,
+    items: CALC_LIST.filter((item) => item.group === group.id && (
+      !normalized || `${item.label} ${item.description} ${item.groupLabel}`.toLocaleLowerCase('zh-CN').includes(normalized)
+    )),
+  })).filter((group) => group.items.length > 0);
+}
+
+function Calculators({ calc }: { calc: CalcKey }) {
   return (
     <>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        {CALC_LIST.map((c) => (
-          <button key={c.key} className={`btn btn-sm ${calc === c.key ? 'btn-primary' : ''}`} onClick={() => setCalc(c.key)}>
-            {c.label}
-          </button>
-        ))}
-        <button className="btn btn-sm" onClick={onGoFormula} style={{ marginLeft: 'auto' }}>公式库 →</button>
-      </div>
       {calc === 'pvalue' && <PValueCalc />}
       {calc === 'ttest' && <TTestCalc />}
       {calc === 'pairedt' && <PairedTTestCalc />}
@@ -115,13 +229,13 @@ function Calculators({ calc, setCalc, onGoFormula }: { calc: CalcKey; setCalc: (
 
 function ResultBox({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div style={{ padding: 16, background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', marginTop: 12 }}>
+    <section className="stattools-result" role="status" aria-live="polite" aria-label={`${label}计算结果`}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
         <span style={{ fontSize: 14, color: 'var(--text-muted)', flexShrink: 0 }}>{label} =</span>
         <strong style={{ fontSize: 18, lineHeight: 1.4 }}>{value}</strong>
       </div>
       {note && <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{note}</div>}
-    </div>
+    </section>
   );
 }
 
@@ -143,7 +257,7 @@ function InlineChart({ option, height = 260 }: { option: Record<string, unknown>
 
   useEffect(() => () => { instRef.current?.dispose(); }, []);
 
-  return <div ref={ref} style={{ width: '100%', height, marginTop: 12 }} />;
+  return <div ref={ref} role="img" aria-label="统计计算结果图表" style={{ width: '100%', height, marginTop: 12 }} />;
 }
 
 /** 从 CSS 变量获取图表配色 */

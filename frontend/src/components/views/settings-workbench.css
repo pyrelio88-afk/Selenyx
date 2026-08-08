@@ -1,0 +1,96 @@
+.settings-workbench {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 720px);
+  align-items: start;
+  gap: 24px;
+  min-height: 100%;
+}
+
+.settings-rail {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+.settings-heading {
+  margin-bottom: 12px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-tab {
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  text-align: left;
+}
+
+.settings-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.settings-data-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-content > [role="tabpanel"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+@media (max-width: 760px) {
+  .settings-workbench {
+    display: block;
+  }
+
+  .settings-rail {
+    position: static;
+    margin-bottom: 16px;
+  }
+
+  .settings-heading {
+    min-height: 0;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+
+  .settings-tabs {
+    flex-direction: row;
+    gap: 4px;
+    margin-inline: -16px;
+    padding: 0 16px 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+  }
+
+  .settings-tab {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    padding-inline: 13px;
+    scroll-snap-align: start;
+    white-space: nowrap;
+  }
+
+  .settings-content .card {
+    padding: 16px;
+  }
+
+  .settings-content dl {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .settings-data-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

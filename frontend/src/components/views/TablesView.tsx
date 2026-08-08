@@ -1,16 +1,10 @@
-/**
- * Selenyx 多维表格视图。
- * 支持自定义字段类型、表格视图、排序、筛选、行内编辑
- */
-
-import { useState, useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
+import { BottomSheet } from '@components/layout/BottomSheet';
+import { useIsMobile } from '@lib/useIsMobile';
 import type { MultiDimTable, TableField, FieldType } from '@apptypes/index';
-
-function genId() {
-  return 'f_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
+import '../../styles/tables-workbench.css';
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text', label: '文本' },
@@ -23,85 +17,186 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'rating', label: '评分' },
 ];
 
-const FIELD_COLORS = ['#c3272b', '#21a675', '#3b7dd8', '#e8a317', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+const FIELD_COLORS = ['#a64734', '#4f7256', '#506885', '#9a7837', '#7a5b86', '#3d7770', '#a86235', '#4f5f58'];
 
-function createNewTable(name: string): MultiDimTable {
-  const fid1 = genId();
-  const fid2 = genId();
+function genId(prefix = 'f') {
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export function csvEscape(value: unknown): string {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+export function buildTableCsv(fields: TableField[], records: Record<string, unknown>[]): string {
+  const lines = [fields.map((field) => csvEscape(field.name)).join(',')];
+  for (const record of records) lines.push(fields.map((field) => csvEscape(record[field.id])).join(','));
+  return `\uFEFF${lines.join('\r\n')}`;
+}
+
+export function parseCsvText(source: string): string[][] {
+  const text = source.replace(/^\uFEFF/, '');
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (quoted && text[index + 1] === '"') { cell += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      row.push(cell); cell = '';
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(cell); cell = '';
+      if (row.some((value) => value.length > 0)) rows.push(row);
+      row = [];
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell);
+  if (row.some((value) => value.length > 0)) rows.push(row);
+  return rows;
+}
+
+export function prepareTableRecords(
+  table: MultiDimTable,
+  filterText: string,
+  sortField: string | null,
+  sortDir: 'asc' | 'desc',
+) {
+  let records: (Record<string, unknown> & { __idx: number })[] = table.records.map((record, index) => ({ ...record, __idx: index }));
+  const query = filterText.trim().toLocaleLowerCase('zh-CN');
+  if (query) {
+    records = records.filter((record) => table.fields.some((field) => String(record[field.id] ?? '').toLocaleLowerCase('zh-CN').includes(query)));
+  }
+  if (sortField) {
+    records.sort((first, second) => {
+      const a = first[sortField] ?? '';
+      const b = second[sortField] ?? '';
+      const comparison = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'zh-CN');
+      return sortDir === 'asc' ? comparison : -comparison;
+    });
+  }
+  return records;
+}
+
+function createNewTable(name: string, projectId: string): MultiDimTable {
+  const nameFieldId = genId();
+  const statusFieldId = genId();
   return {
-    id: 'tbl_' + Date.now().toString(36),
-    projectId: '',
-    name,
+    id: genId('tbl'), projectId, name,
     fields: [
-      { id: fid1, name: '名称', type: 'text' as FieldType, required: true, defaultValue: '' },
-      { id: fid2, name: '状态', type: 'select' as FieldType, required: false, defaultValue: '', options: [
-        { label: '待处理', color: '#e8a317' },
-        { label: '进行中', color: '#3b7dd8' },
-        { label: '已完成', color: '#21a675' },
-      ]},
+      { id: nameFieldId, name: '名称', type: 'text', required: true, defaultValue: '' },
+      { id: statusFieldId, name: '状态', type: 'select', required: false, defaultValue: '', options: [
+        { label: '待处理', color: '#9a7837' },
+        { label: '进行中', color: '#506885' },
+        { label: '已完成', color: '#4f7256' },
+      ] },
     ],
-    views: [{
-      id: 'v_' + genId(),
-      name: '默认视图',
-      type: 'table' as const,
-      fieldIds: [fid1, fid2],
-      filters: [],
-      sorts: [],
-      groupFieldId: null,
-      freezeColumns: 1,
-    }],
-    records: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    views: [{ id: genId('v'), name: '默认视图', type: 'table', fieldIds: [nameFieldId, statusFieldId], filters: [], sorts: [], groupFieldId: null, freezeColumns: 1 }],
+    records: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
 }
 
-function CellEditor({ field, value, onChange }: { field: TableField; value: unknown; onChange: (v: unknown) => void }) {
+function FieldBadge({ type }: { type: FieldType }) {
+  const label = FIELD_TYPES.find((item) => item.value === type)?.label ?? type;
+  return <span className="tables-field-badge">{label}</span>;
+}
+
+function CellEditor({ field, value, onChange, onClose }: { field: TableField; value: unknown; onChange: (value: unknown) => void; onClose: () => void }) {
   if (field.type === 'checkbox') {
-    return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
+    return <input className="tables-checkbox" aria-label={`编辑${field.name}`} type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} onBlur={onClose} autoFocus />;
   }
   if (field.type === 'select' && field.options) {
     return (
-      <select value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} className="cell-select">
+      <select aria-label={`编辑${field.name}`} value={String(value ?? '')} onChange={(event) => onChange(event.target.value)} onBlur={onClose} className="tables-cell-select" autoFocus>
         <option value="">—</option>
-        {field.options.map((opt) => (
-          <option key={opt.label} value={opt.label}>{opt.label}</option>
-        ))}
+        {field.options.map((option) => <option key={option.label} value={option.label}>{option.label}</option>)}
       </select>
     );
   }
-  if (field.type === 'date') {
-    return <input type="date" value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} className="cell-input" />;
-  }
-  if (field.type === 'url') {
-    return <input type="url" value={(value as string) || ''} placeholder="https://" onChange={(e) => onChange(e.target.value)} className="cell-input" />;
-  }
   if (field.type === 'rating') {
-    const n = (value as number) || 0;
+    const rating = Number(value) || 0;
     return (
-      <div className="rating-cell" style={{ display: 'flex', gap: 2 }}>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <button key={i} className="rating-star" style={{
-            border: 'none', background: 'none', cursor: 'pointer', fontSize: 14,
-            color: i <= n ? '#e8a317' : 'var(--border)',
-          }} onClick={() => onChange(i === n ? 0 : i)}>★</button>
+      <div className="tables-rating-editor" role="group" aria-label={`编辑${field.name}`}>
+        {[1, 2, 3, 4, 5].map((score) => (
+          <button key={score} aria-label={`${score} 星`} aria-pressed={score <= rating} onClick={() => onChange(score === rating ? 0 : score)}>★</button>
         ))}
       </div>
     );
   }
-  return <input type={field.type === 'number' ? 'number' : 'text'} value={(value as string) ?? ''} onChange={(e) => onChange(field.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)} className="cell-input" />;
+  const inputType = field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'url' ? 'url' : 'text';
+  return (
+    <input
+      className="tables-cell-input" aria-label={`编辑${field.name}`} type={inputType} autoFocus
+      value={String(value ?? '')}
+      onChange={(event) => onChange(field.type === 'number' ? (event.target.value === '' ? null : Number(event.target.value)) : event.target.value)}
+      onBlur={onClose}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'Escape') onClose(); }}
+    />
+  );
 }
 
-function FieldBadge({ type }: { type: FieldType }) {
-  const labels: Record<string, string> = { text: '文本', number: '数字', select: '单选', multiSelect: '多选', date: '日期', checkbox: '复选', url: '链接', email: '邮箱', formula: '公式', rating: '评分', attachment: '附件' };
-  return <span className="field-badge">{labels[type] || type}</span>;
+function CellDisplay({ field, value }: { field: TableField; value: unknown }) {
+  if (value === null || value === undefined || value === '') return <span className="tables-cell-empty">—</span>;
+  if (field.type === 'checkbox') return <span className="tables-boolean">{value ? '✓ 是' : '○ 否'}</span>;
+  if (field.type === 'select' && field.options) {
+    const option = field.options.find((item) => item.label === value);
+    return <span className="tables-select-value" style={option ? { borderColor: `${option.color}55`, color: option.color, background: `${option.color}12` } : undefined}>{String(value)}</span>;
+  }
+  if (field.type === 'url') return <a href={String(value)} target="_blank" rel="noopener noreferrer" className="tables-cell-link" onClick={(event) => event.stopPropagation()}>{String(value)}</a>;
+  if (field.type === 'rating') return <span className="tables-rating" aria-label={`${Number(value) || 0} 星`}>{'★'.repeat(Number(value) || 0)}<span>{'★'.repeat(5 - (Number(value) || 0))}</span></span>;
+  return <span>{String(value)}</span>;
+}
+
+interface TableDirectoryProps {
+  tables: MultiDimTable[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  projectsById: Map<string, string>;
+  mobile?: boolean;
+}
+
+function TableDirectory({ tables, selectedId, onSelect, onCreate, projectsById, mobile }: TableDirectoryProps) {
+  return (
+    <aside className={`tables-directory ${mobile ? 'is-mobile' : ''}`} aria-label="数据表目录">
+      <div className="tables-directory-head">
+        <div><h1>数据表格</h1></div>
+        <button className="btn btn-primary" onClick={onCreate}><Icon name="plus" size={15} /> 新建表</button>
+      </div>
+      {tables.length === 0 ? (
+        <div className="tables-directory-empty"><Icon name="tables" size={30} strokeWidth={1.2} /><p>还没有数据表</p><button className="btn" onClick={onCreate}>创建第一张表</button></div>
+      ) : (
+        <div className="tables-directory-list">
+          {tables.map((table) => (
+            <button key={table.id} className={`tables-directory-item ${selectedId === table.id ? 'is-active' : ''}`} onClick={() => onSelect(table.id)} aria-current={selectedId === table.id ? 'page' : undefined}>
+              <span className="tables-directory-icon"><Icon name="tables" size={16} /></span>
+              <span className="tables-directory-copy">
+                <strong>{table.name}</strong>
+                <small>{table.records.length} 行 · {table.fields.length} 列{table.projectId && projectsById.get(table.projectId) ? ` · ${projectsById.get(table.projectId)}` : ''}</small>
+              </span>
+              <Icon name="chevronRight" size={15} />
+            </button>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
 }
 
 export function TablesView() {
   const { tables, addTable, deleteTable, addTableField, removeTableField, addTableRecord, updateTableRecord, deleteTableRecord, projects } = useAppStore();
-  const [selectedId, setSelectedId] = useState<string | null>(tables[0]?.id || null);
+  const isMobile = useIsMobile();
+  const [selectedId, setSelectedId] = useState<string | null>(tables[0]?.id ?? null);
+  const [mobileListOpen, setMobileListOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(() => !isMobile);
   const [showCreate, setShowCreate] = useState(false);
   const [newTableName, setNewTableName] = useState('');
+  const [newTableProjectId, setNewTableProjectId] = useState('');
   const [showAddField, setShowAddField] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState<FieldType>('text');
@@ -111,406 +206,189 @@ export function TablesView() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [filterText, setFilterText] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
-  // R86: 看板拖拽状态
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetGroup, setDropTargetGroup] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const importInputRef = useRef<HTMLInputElement>(null);
 
-  const selected = tables.find((t) => t.id === selectedId);
+  const selected = tables.find((table) => table.id === selectedId) ?? null;
+  const projectsById = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
+  const visibleRecords = useMemo(
+    () => selected ? prepareTableRecords(selected, filterText, sortField, sortDir) : [],
+    [selected, filterText, sortField, sortDir],
+  );
+
+  function selectTable(id: string) {
+    setSelectedId(id);
+    setMobileListOpen(false);
+    setEditingCell(null);
+    setFilterText('');
+  }
 
   function handleCreate() {
-    if (!newTableName.trim()) return;
-    const t = createNewTable(newTableName.trim());
-    addTable(t);
-    setSelectedId(t.id);
-    setNewTableName('');
-    setShowCreate(false);
+    const name = newTableName.trim();
+    if (!name) return;
+    const table = createNewTable(name, newTableProjectId);
+    addTable(table);
+    selectTable(table.id);
+    setNewTableName(''); setNewTableProjectId(''); setShowCreate(false);
   }
 
   function handleAddField() {
-    if (!newFieldName.trim() || !selected) return;
-    const field: TableField = {
-      id: genId(),
-      name: newFieldName.trim(),
-      type: newFieldType,
-      required: false,
-      defaultValue: null,
-    };
+    if (!selected || !newFieldName.trim()) return;
+    const field: TableField = { id: genId(), name: newFieldName.trim(), type: newFieldType, required: false, defaultValue: null };
     if ((newFieldType === 'select' || newFieldType === 'multiSelect') && newFieldOptions.trim()) {
-      field.options = newFieldOptions.split(/[,，]/).map((label, i) => ({
-        label: label.trim(),
-        color: FIELD_COLORS[i % FIELD_COLORS.length],
-      })).filter((o) => o.label);
+      field.options = newFieldOptions.split(/[,，]/).map((label, index) => ({ label: label.trim(), color: FIELD_COLORS[index % FIELD_COLORS.length] })).filter((option) => option.label);
     }
     addTableField(selected.id, field);
-    setNewFieldName('');
-    setNewFieldType('text');
-    setNewFieldOptions('');
-    setShowAddField(false);
+    setNewFieldName(''); setNewFieldType('text'); setNewFieldOptions(''); setShowAddField(false);
   }
 
   function handleAddRow() {
     if (!selected) return;
-    const record: Record<string, unknown> = {};
-    selected.fields.forEach((f) => { record[f.id] = f.defaultValue; });
-    addTableRecord(selected.id, record);
+    addTableRecord(selected.id, Object.fromEntries(selected.fields.map((field) => [field.id, field.defaultValue])));
   }
-
-  const sortedFilteredRecords = useMemo(() => {
-    if (!selected) return [];
-    let records: (Record<string, unknown> & { __idx: number })[] = selected.records.map((r, i) => ({ ...r, __idx: i }));
-    if (filterText.trim()) {
-      const q = filterText.toLowerCase();
-      records = records.filter((r) =>
-        selected.fields.some((f) => String(r[f.id] ?? '').toLowerCase().includes(q))
-      );
-    }
-    if (sortField) {
-      records.sort((a, b) => {
-        const va = a[sortField] ?? '';
-        const vb = b[sortField] ?? '';
-        if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va;
-        const cmp = String(va).localeCompare(String(vb), 'zh');
-        return sortDir === 'asc' ? cmp : -cmp;
-      });
-    }
-    return records;
-  }, [selected, sortField, sortDir, filterText]);
 
   function toggleSort(fieldId: string) {
-    if (sortField === fieldId) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(fieldId);
-      setSortDir('asc');
-    }
+    if (sortField === fieldId) setSortDir((direction) => direction === 'asc' ? 'desc' : 'asc');
+    else { setSortField(fieldId); setSortDir('asc'); }
   }
 
-  return (
-    <div style={{ display: 'flex', height: '100%', gap: 0 }}>
-      {/* 左侧表格列表 */}
-      <div className="table-list-panel">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600 }}>多维表格</h2>
-          <button className="btn btn-sm btn-primary" onClick={() => setShowCreate(true)}>
-            <Icon name="plus" size={14} /> 新建
-          </button>
+  function handleExport() {
+    if (!selected) return;
+    const blob = new Blob([buildTableCsv(selected.fields, selected.records)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url; anchor.download = `${selected.name.replace(/[\\/:*?"<>|]/g, '_')}.csv`; anchor.click();
+    URL.revokeObjectURL(url);
+    setMessage(`已导出 ${selected.records.length} 行 CSV`);
+  }
+
+  async function handleImport(file: File) {
+    if (!selected) return;
+    const rows = parseCsvText(await file.text());
+    const headers = rows[0]?.map((header) => header.trim()).filter(Boolean) ?? [];
+    if (headers.length === 0) { setMessage('CSV 没有可识别的表头'); return; }
+    const existingByName = new Map(selected.fields.map((field) => [field.name, field]));
+    const importFields = headers.map((name) => existingByName.get(name) ?? { id: genId(), name, type: 'text' as const, required: false, defaultValue: null });
+    for (const field of importFields) if (!existingByName.has(field.name)) addTableField(selected.id, field);
+    for (const values of rows.slice(1)) {
+      const record: Record<string, unknown> = {};
+      importFields.forEach((field, index) => { record[field.id] = values[index] ?? ''; });
+      addTableRecord(selected.id, record);
+    }
+    setMessage(`已从 CSV 导入 ${Math.max(0, rows.length - 1)} 行，新增字段会按文本保存`);
+  }
+
+  function deleteSelectedTable() {
+    if (!selected || !confirm(`删除表格「${selected.name}」？此操作不可撤销。`)) return;
+    deleteTable(selected.id);
+    const remaining = tables.find((table) => table.id !== selected.id);
+    setSelectedId(remaining?.id ?? null);
+    if (isMobile) setMobileListOpen(true);
+  }
+
+  const inspector = selected ? (
+    <div className="tables-inspector-content">
+      <section>
+        <div className="tables-inspector-heading"><div><h2>字段 · {selected.fields.length}</h2></div><button className="btn" onClick={() => setShowAddField((value) => !value)}><Icon name="plus" size={14} /> 添加字段</button></div>
+        {showAddField && (
+          <div className="tables-add-field-form">
+            <label>字段名称<input className="input" value={newFieldName} onChange={(event) => setNewFieldName(event.target.value)} placeholder="例如：效应量" autoFocus /></label>
+            <label>字段类型<select className="input" value={newFieldType} onChange={(event) => setNewFieldType(event.target.value as FieldType)}>{FIELD_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
+            {(newFieldType === 'select' || newFieldType === 'multiSelect') && <label>选项<input className="input" value={newFieldOptions} onChange={(event) => setNewFieldOptions(event.target.value)} placeholder="用逗号分隔" /></label>}
+            <div><button className="btn" onClick={() => setShowAddField(false)}>取消</button><button className="btn btn-primary" onClick={handleAddField} disabled={!newFieldName.trim()}>保存字段</button></div>
+          </div>
+        )}
+        <div className="tables-field-list">
+          {selected.fields.map((field, index) => (
+            <div className="tables-field-item" key={field.id}>
+              <span className="tables-field-order">{index + 1}</span>
+              <div><strong>{field.name}</strong><FieldBadge type={field.type} /></div>
+              <button className="tables-icon-button is-danger" aria-label={`删除字段 ${field.name}`} onClick={() => { if (confirm(`删除字段「${field.name}」及其全部单元格数据？`)) removeTableField(selected.id, field.id); }}><Icon name="close" size={16} /></button>
+            </div>
+          ))}
         </div>
-        {tables.length === 0 ? (
-          <div className="empty-state" style={{ padding: '24px 8px' }}>
-            <div className="icon"><Icon name="tables" size={32} strokeWidth={1.2} /></div>
-            <p style={{ fontSize: 13 }}>还没有表格，创建第一个数据库</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {tables.map((t) => (
-              <button
-                key={t.id}
-                className={`table-list-item ${selectedId === t.id ? 'active' : ''}`}
-                onClick={() => setSelectedId(t.id)}
-              >
-                <Icon name="tables" size={16} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
-                <span className="record-count">{t.records.length}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      </section>
+      <section className="tables-operation-section">
+        <h2>表格操作</h2>
+        <button className="btn" onClick={() => importInputRef.current?.click()}><Icon name="import" size={15} /> 导入 CSV</button>
+        <button className="btn" onClick={handleExport}><Icon name="download" size={15} /> 导出 CSV</button>
+        <button className="btn btn-danger-ghost" onClick={deleteSelectedTable}><Icon name="close" size={15} /> 删除此表</button>
+      </section>
+    </div>
+  ) : null;
 
-      {/* 右侧表格区域 */}
-      <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-        {!selected ? (
-          <div className="empty-state" style={{ marginTop: 80 }}>
-            <div className="icon"><Icon name="tables" size={48} strokeWidth={1.2} /></div>
-            <p>选择左侧表格或创建新表格</p>
+  const tableCanvas = selected ? (
+    <section className="tables-canvas" aria-label={`数据表：${selected.name}`}>
+      <header className="tables-canvas-header">
+        {isMobile && <button className="tables-icon-button" aria-label="返回数据表目录" onClick={() => setMobileListOpen(true)}><Icon name="chevronLeft" size={19} /></button>}
+        <div className="tables-canvas-title"><h1>{selected.name}</h1><span>{selected.records.length} 行 · {selected.fields.length} 列{selected.projectId && projectsById.get(selected.projectId) ? ` · ${projectsById.get(selected.projectId)}` : ''}</span></div>
+        <button className="tables-icon-button tables-inspector-trigger" aria-label="打开字段和操作检查区" aria-haspopup="dialog" onClick={() => setInspectorOpen(true)}><Icon name="more" size={19} /></button>
+      </header>
+
+      <div className="tables-toolbar-scroll" aria-label="数据表工具栏">
+        <div className="tables-toolbar">
+          <div className="tables-filter-input"><Icon name="search" size={15} /><input value={filterText} onChange={(event) => setFilterText(event.target.value)} placeholder="筛选当前表…" aria-label="筛选当前表" /></div>
+          <div className="tables-view-switch" role="group" aria-label="视图模式">
+            <button aria-pressed={viewMode === 'table'} className={viewMode === 'table' ? 'is-active' : ''} onClick={() => setViewMode('table')}><Icon name="tables" size={15} /> 表格</button>
+            <button aria-pressed={viewMode === 'board'} className={viewMode === 'board' ? 'is-active' : ''} onClick={() => setViewMode('board')}><Icon name="list" size={15} /> 看板</button>
           </div>
-        ) : (
-          <>
-            <div className="view-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h1 className="view-title">{selected.name}</h1>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {selected.records.length} 条记录 · {selected.fields.length} 个字段
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  className="input"
-                  placeholder="筛选..."
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  style={{ width: 160 }}
-                />
-                <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-                  <button
-                    className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : ''}`}
-                    onClick={() => setViewMode('table')}
-                    style={{ borderRadius: 0, border: 'none' }}
-                  >📊 表格</button>
-                  <button
-                    className={`btn btn-sm ${viewMode === 'board' ? 'btn-primary' : ''}`}
-                    onClick={() => setViewMode('board')}
-                    style={{ borderRadius: 0, border: 'none' }}
-                  >📋 看板</button>
-                </div>
-                <button className="btn btn-danger-ghost" onClick={() => { if (confirm(`删除表格「${selected.name}」？此操作不可撤销。`)) { deleteTable(selected.id); setSelectedId(null); } }}>
-                  删除表格
+          <button className="btn btn-primary" onClick={handleAddRow}><Icon name="plus" size={15} /> 添加记录</button>
+          <button className="btn" onClick={() => importInputRef.current?.click()}><Icon name="import" size={15} /> 导入</button>
+          <button className="btn" onClick={handleExport}><Icon name="download" size={15} /> 导出</button>
+          {!isMobile && <button className="btn" aria-expanded={inspectorOpen} onClick={() => setInspectorOpen((value) => !value)}><Icon name="more" size={15} /> 字段与操作</button>}
+        </div>
+      </div>
+      {message && <div className="tables-message" role="status">{message}</div>}
+
+      {viewMode === 'table' ? (
+        <div className="tables-grid-scroll" tabIndex={0} aria-label="可横向滚动的数据表格">
+          <table className="tables-grid">
+            <thead><tr><th className="tables-row-number">#</th>{selected.fields.map((field) => (
+              <th key={field.id}>
+                <button className="tables-sort-button" onClick={() => toggleSort(field.id)} aria-label={`按${field.name}${sortField === field.id && sortDir === 'asc' ? '降序' : '升序'}排序`}>
+                  <Icon name={field.type === 'checkbox' ? 'check' : field.type === 'date' ? 'calendar' : 'tag'} size={13} /><span>{field.name}</span><FieldBadge type={field.type} />{sortField === field.id && <b>{sortDir === 'asc' ? '↑' : '↓'}</b>}
                 </button>
-              </div>
-            </div>
+              </th>
+            ))}<th className="tables-row-actions">行操作</th></tr></thead>
+            <tbody>
+              {visibleRecords.map((record) => {
+                const rowIndex = record.__idx;
+                return <tr key={rowIndex}><td className="tables-row-number">{rowIndex + 1}</td>{selected.fields.map((field) => {
+                  const isEditing = editingCell?.rowIdx === rowIndex && editingCell.fieldId === field.id;
+                  return (
+                    <td key={field.id} className="tables-editable-cell" tabIndex={isEditing ? -1 : 0} onClick={() => setEditingCell({ rowIdx: rowIndex, fieldId: field.id })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setEditingCell({ rowIdx: rowIndex, fieldId: field.id }); } }}>
+                      {isEditing ? <CellEditor field={field} value={record[field.id]} onChange={(value) => updateTableRecord(selected.id, rowIndex, { [field.id]: value })} onClose={() => setEditingCell(null)} /> : <CellDisplay field={field} value={record[field.id]} />}
+                    </td>
+                  );
+                })}<td className="tables-row-actions"><button className="tables-icon-button is-danger" aria-label={`删除第 ${rowIndex + 1} 行`} onClick={() => deleteTableRecord(selected.id, rowIndex)}><Icon name="close" size={15} /></button></td></tr>;
+              })}
+            </tbody>
+          </table>
+          {visibleRecords.length === 0 && <div className="tables-grid-empty">{selected.records.length === 0 ? '表格为空，点击“添加记录”开始录入。' : '没有记录符合当前筛选。'}</div>}
+        </div>
+      ) : <BoardCanvas table={selected} records={visibleRecords} dragRowIdx={dragRowIdx} dropTargetGroup={dropTargetGroup} onDragRow={setDragRowIdx} onDropGroup={setDropTargetGroup} onUpdate={updateTableRecord} />}
+    </section>
+  ) : <div className="tables-no-selection"><Icon name="tables" size={42} strokeWidth={1.2} /><p>从目录选择数据表，或新建一张表。</p></div>;
 
-            {/* 看板视图 */}
-            {viewMode === 'board' && (() => {
-              const selectField = selected.fields.find((f) => f.type === 'select' && f.options);
-              if (!selectField || !selectField.options) {
-                return (
-                  <div className="empty-state" style={{ marginTop: 40 }}>
-                    <p>看板视图需要一个「单选」字段来分组</p>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>请先添加一个单选字段并设置选项</p>
-                  </div>
-                );
-              }
-              const groups = selectField.options;
-              const titleField = selected.fields.find((f) => f.type === 'text') || selected.fields[0];
-              return (
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    // 边缘自动滚动：指针距容器左右边缘 <60px 时滚动
-                    const c = e.currentTarget;
-                    const rect = c.getBoundingClientRect();
-                    const margin = 60;
-                    if (e.clientX - rect.left < margin) c.scrollLeft -= 10;
-                    else if (rect.right - e.clientX < margin) c.scrollLeft += 10;
-                  }}
-                  style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12, minHeight: 400 }}
-                >
-                  {groups.map((group) => {
-                    const groupRecords = sortedFilteredRecords.filter((r) => {
-                      const val = r[selectField.id];
-                      return val === group.label || (!val && group.label === groups[0]?.label);
-                    });
-                    const isDropTarget = dropTargetGroup === group.label && dragRowIdx !== null;
-                    return (
-                      <div
-                        key={group.label}
-                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dropTargetGroup !== group.label) setDropTargetGroup(group.label); }}
-                        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTargetGroup(null); }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (dragRowIdx !== null) {
-                            updateTableRecord(selected.id, dragRowIdx, { [selectField.id]: group.label });
-                          }
-                          setDragRowIdx(null);
-                          setDropTargetGroup(null);
-                        }}
-                        style={{
-                          minWidth: 240, flex: '0 0 240px',
-                          background: isDropTarget ? 'var(--accent-light)' : 'var(--bg-canvas)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: 10, display: 'flex', flexDirection: 'column',
-                          outline: isDropTarget ? '2px dashed var(--accent)' : 'none',
-                          outlineOffset: -2,
-                          transition: 'background .15s, outline .15s',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, padding: '0 4px' }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: group.color, flexShrink: 0 }} />
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{group.label}</span>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{groupRecords.length}</span>
-                        </div>
-                        <div
-                          onDragOver={(e) => {
-                            // 垂直边缘自动滚动
-                            const c = e.currentTarget;
-                            const rect = c.getBoundingClientRect();
-                            const margin = 50;
-                            if (e.clientY - rect.top < margin) c.scrollTop -= 10;
-                            else if (rect.bottom - e.clientY < margin) c.scrollTop += 10;
-                          }}
-                          style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 60 }}
-                        >
-                          {groupRecords.map((record) => {
-                            const rowIdx = record.__idx;
-                            const isDragging = dragRowIdx === rowIdx;
-                            return (
-                              <div
-                                key={rowIdx}
-                                className="card"
-                                draggable
-                                onDragStart={(e) => {
-                                  e.dataTransfer.effectAllowed = 'move';
-                                  e.dataTransfer.setData('text/plain', String(rowIdx));
-                                  // 自定义拖拽预览：克隆节点 + 轻微旋转 + 阴影
-                                  const el = e.currentTarget as HTMLElement;
-                                  const clone = el.cloneNode(true) as HTMLElement;
-                                  clone.style.position = 'absolute';
-                                  clone.style.top = '-9999px';
-                                  clone.style.opacity = '0.85';
-                                  clone.style.transform = 'rotate(2deg) scale(0.95)';
-                                  clone.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
-                                  clone.style.width = el.offsetWidth + 'px';
-                                  document.body.appendChild(clone);
-                                  e.dataTransfer.setDragImage(clone, 12, 12);
-                                  setTimeout(() => document.body.removeChild(clone), 0);
-                                  setDragRowIdx(rowIdx);
-                                }}
-                                onDragEnd={() => { setDragRowIdx(null); setDropTargetGroup(null); }}
-                                style={{
-                                  padding: 10, cursor: 'grab', fontSize: 13,
-                                  borderLeft: `3px solid ${group.color}`,
-                                  minHeight: 48,
-                                  opacity: isDragging ? 0.4 : 1,
-                                  transition: 'opacity .15s',
-                                }}
-                                onClick={() => setEditingCell({ rowIdx, fieldId: titleField.id })}
-                              >
-                                <div style={{ fontWeight: 500, marginBottom: 4 }}>
-                                  {String(record[titleField.id] ?? '未命名') || '未命名'}
-                                </div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                  {selected.fields.filter((f) => f.id !== selectField.id && f.id !== titleField.id).slice(0, 3).map((f) => {
-                                    const v = record[f.id];
-                                    if (v === null || v === undefined || v === '') return null;
-                                    return (
-                                      <span key={f.id} style={{
-                                        fontSize: 10, padding: '1px 5px', borderRadius: 'var(--radius-sm)',
-                                        background: 'var(--bg-surface)', color: 'var(--text-secondary)',
-                                      }}>{String(v)}</span>
-                                    );
-                                  })}
-                                </div>
-                                {editingCell?.rowIdx === rowIdx && editingCell?.fieldId === titleField.id && (
-                                  <input
-                                    className="cell-input"
-                                    autoFocus
-                                    value={String(record[titleField.id] ?? '')}
-                                    onChange={(e) => updateTableRecord(selected.id, rowIdx, { [titleField.id]: e.target.value })}
-                                    onBlur={() => setEditingCell(null)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingCell(null); }}
-                                    style={{ marginTop: 4, width: '100%' }}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
-                          {groupRecords.length === 0 && (
-                            <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>
-                              拖拽或添加记录
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+  return (
+    <div className="tables-workbench">
+      {isMobile ? (mobileListOpen || !selected ? <TableDirectory mobile tables={tables} selectedId={selectedId} onSelect={selectTable} onCreate={() => setShowCreate(true)} projectsById={projectsById} /> : tableCanvas) : (
+        <div className={`tables-workbench-grid ${inspectorOpen ? '' : 'is-inspector-hidden'}`}><TableDirectory tables={tables} selectedId={selectedId} onSelect={selectTable} onCreate={() => setShowCreate(true)} projectsById={projectsById} />{tableCanvas}{inspectorOpen && <aside className="tables-inspector" aria-label="字段和表格操作">{inspector}</aside>}</div>
+      )}
 
-            {/* 表格视图 */}
-            {viewMode === 'table' && (
-            <div className="data-table-wrapper" style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="row-num-cell">#</th>
-                    {selected.fields.map((field) => (
-                      <th key={field.id} onClick={() => toggleSort(field.id)} className="sortable-th">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                          <Icon name={field.type === 'checkbox' ? 'check' : field.type === 'date' ? 'calendar' : 'tag'} size={13} />
-                          <span>{field.name}</span>
-                          <FieldBadge type={field.type} />
-                          {sortField === field.id && <span style={{ fontSize: 10 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
-                        </div>
-                        <button
-                          className="field-remove-btn"
-                          onClick={(e) => { e.stopPropagation(); removeTableField(selected.id, field.id); }}
-                          title="删除字段"
-                        >×</button>
-                      </th>
-                    ))}
-                    <th className="add-field-th">
-                      {showAddField ? (
-                        <div className="add-field-inline">
-                          <input className="cell-input" placeholder="字段名" value={newFieldName} onChange={(e) => setNewFieldName(e.target.value)} style={{ width: 80 }} />
-                          <select className="cell-select" value={newFieldType} onChange={(e) => setNewFieldType(e.target.value as FieldType)}>
-                            {FIELD_TYPES.map((ft) => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
-                          </select>
-                          {(newFieldType === 'select' || newFieldType === 'multiSelect') && (
-                            <input className="cell-input" placeholder="选项,逗号分隔" value={newFieldOptions} onChange={(e) => setNewFieldOptions(e.target.value)} style={{ width: 100 }} />
-                          )}
-                          <button className="btn btn-sm btn-primary" onClick={handleAddField}><Icon name="check" size={14} /></button>
-                          <button className="btn btn-sm" onClick={() => { setShowAddField(false); setNewFieldName(''); setNewFieldOptions(''); }}>取消</button>
-                        </div>
-                      ) : (
-                        <button className="add-field-btn" onClick={() => setShowAddField(true)}>
-                          <Icon name="plus" size={14} /> 添加字段
-                        </button>
-                      )}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedFilteredRecords.map((record) => {
-                    const rowIdx = record.__idx;
-                    return (
-                      <tr key={rowIdx}>
-                        <td className="row-num-cell">
-                          <span className="row-num">{rowIdx + 1}</span>
-                          <button className="row-delete-btn" onClick={() => deleteTableRecord(selected.id, rowIdx)}>×</button>
-                        </td>
-                        {selected.fields.map((field) => (
-                          <td key={field.id} onClick={() => setEditingCell({ rowIdx, fieldId: field.id })}>
-                            {editingCell?.rowIdx === rowIdx && editingCell?.fieldId === field.id ? (
-                              <CellEditor
-                                field={field}
-                                value={record[field.id]}
-                                onChange={(v) => { updateTableRecord(selected.id, rowIdx, { [field.id]: v }); }}
-                              />
-                            ) : (
-                              <CellDisplay field={field} value={record[field.id]} />
-                            )}
-                          </td>
-                        ))}
-                        <td></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            )}
+      <input ref={importInputRef} type="file" accept=".csv,text/csv" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleImport(file); event.target.value = ''; }} />
 
-            <button className="btn add-row-btn" onClick={handleAddRow}>
-              <Icon name="plus" size={16} /> 添加记录
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* 创建表格弹窗 */}
+      {isMobile && <BottomSheet open={inspectorOpen} onClose={() => setInspectorOpen(false)} title="字段与表格操作">{inspector}</BottomSheet>}
       {showCreate && (
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginBottom: 16, fontSize: 16 }}>新建表格</h3>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>表格名称</label>
-              <input className="input" placeholder="如：数据提取表" value={newTableName} onChange={(e) => setNewTableName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }} autoFocus />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>关联项目（可选）</label>
-              <select className="input" value="" onChange={() => {}}>
-                <option value="">不关联</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-              新表格预置「名称」和「状态」两个字段，之后可随时添加更多字段。
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn" onClick={() => setShowCreate(false)}>取消</button>
-              <button className="btn btn-primary" onClick={handleCreate}>创建</button>
-            </div>
+          <div className="modal-card tables-create-modal" role="dialog" aria-modal="true" aria-labelledby="tables-create-title" onClick={(event) => event.stopPropagation()}>
+            <h2 id="tables-create-title">新建数据表</h2>
+            <label>表格名称<input className="input" value={newTableName} onChange={(event) => setNewTableName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') handleCreate(); }} placeholder="例如：文献数据提取表" autoFocus /></label>
+            <label>关联项目（可选）<select className="input" value={newTableProjectId} onChange={(event) => setNewTableProjectId(event.target.value)}><option value="">不关联</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+            <p>新表预置“名称”和“状态”字段；可在字段检查区继续扩展。</p>
+            <div><button className="btn" onClick={() => setShowCreate(false)}>取消</button><button className="btn btn-primary" onClick={handleCreate} disabled={!newTableName.trim()}>创建</button></div>
           </div>
         </div>
       )}
@@ -518,22 +396,37 @@ export function TablesView() {
   );
 }
 
-function CellDisplay({ field, value }: { field: TableField; value: unknown }) {
-  if (value === null || value === undefined || value === '') {
-    return <span className="cell-empty">—</span>;
-  }
-  if (field.type === 'checkbox') {
-    return <span style={{ color: value ? 'var(--accent)' : 'var(--text-muted)' }}>{value ? '✓' : '○'}</span>;
-  }
-  if (field.type === 'select' && field.options) {
-    const opt = field.options.find((o) => o.label === value);
-    return <span className="select-tag" style={opt ? { background: opt.color + '20', color: opt.color, borderColor: opt.color + '40' } : {}}>{String(value)}</span>;
-  }
-  if (field.type === 'url') {
-    return <a href={String(value)} target="_blank" rel="noopener noreferrer" className="cell-link">{String(value)}</a>;
-  }
-  if (field.type === 'rating') {
-    return <span style={{ color: '#e8a317' }}>{'★'.repeat(Number(value) || 0)}<span style={{ color: 'var(--border)' }}>{'★'.repeat(5 - (Number(value) || 0))}</span></span>;
-  }
-  return <span>{String(value)}</span>;
+interface BoardCanvasProps {
+  table: MultiDimTable;
+  records: (Record<string, unknown> & { __idx: number })[];
+  dragRowIdx: number | null;
+  dropTargetGroup: string | null;
+  onDragRow: (index: number | null) => void;
+  onDropGroup: (group: string | null) => void;
+  onUpdate: (tableId: string, recordIndex: number, patch: Record<string, unknown>) => void;
+}
+
+function BoardCanvas({ table, records, dragRowIdx, dropTargetGroup, onDragRow, onDropGroup, onUpdate }: BoardCanvasProps) {
+  const selectField = table.fields.find((field) => field.type === 'select' && field.options?.length);
+  if (!selectField?.options) return <div className="tables-board-empty"><Icon name="list" size={30} /><strong>看板需要单选字段</strong><p>请在右侧字段检查区添加单选字段和分组选项。</p></div>;
+  const titleField = table.fields.find((field) => field.type === 'text') ?? table.fields[0];
+  return (
+    <div className="tables-board-scroll">
+      {selectField.options.map((group) => {
+        const groupRecords = records.filter((record) => record[selectField.id] === group.label || (!record[selectField.id] && group.label === selectField.options?.[0]?.label));
+        const isTarget = dropTargetGroup === group.label && dragRowIdx !== null;
+        return (
+          <section className={`tables-board-column ${isTarget ? 'is-drop-target' : ''}`} key={group.label} onDragOver={(event) => { event.preventDefault(); onDropGroup(group.label); }} onDrop={(event) => { event.preventDefault(); if (dragRowIdx !== null) onUpdate(table.id, dragRowIdx, { [selectField.id]: group.label }); onDragRow(null); onDropGroup(null); }}>
+            <header><span style={{ background: group.color }} /><strong>{group.label}</strong><small>{groupRecords.length}</small></header>
+            <div className="tables-board-cards">{groupRecords.map((record) => (
+              <article key={record.__idx} draggable onDragStart={() => onDragRow(record.__idx)} onDragEnd={() => { onDragRow(null); onDropGroup(null); }} className={dragRowIdx === record.__idx ? 'is-dragging' : ''}>
+                <strong>{String(record[titleField.id] ?? '未命名') || '未命名'}</strong>
+                <label>移动到<select value={String(record[selectField.id] || group.label)} onChange={(event) => onUpdate(table.id, record.__idx, { [selectField.id]: event.target.value })}>{selectField.options?.map((option) => <option key={option.label} value={option.label}>{option.label}</option>)}</select></label>
+              </article>
+            ))}{groupRecords.length === 0 && <p>暂无记录，可拖入此列。</p>}</div>
+          </section>
+        );
+      })}
+    </div>
+  );
 }

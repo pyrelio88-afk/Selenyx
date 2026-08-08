@@ -9,6 +9,7 @@ import { Icon } from '@components/ui/Icon';
 import { versionedLoad, versionedSave } from '@lib/storage';
 import { useIsMobile } from '@lib/useIsMobile';
 import { BottomSheet } from '@components/layout/BottomSheet';
+import { safeExternalUrl } from '@utils/referenceIntegrity';
 import {
   DISCIPLINES,
   type Discipline,
@@ -17,6 +18,7 @@ import {
   type DisciplineFormula,
   type DisciplineStandard,
 } from '../../data/disciplines';
+import './clinical-data-workbench.css';
 
 type Tab = 'glossary' | 'parameters' | 'formulas' | 'standards' | 'officialDocs';
 type EntryKind = Tab;
@@ -84,6 +86,47 @@ function paramCount(d: Discipline): number {
   return d.parameters?.length ?? 0;
 }
 
+export const DISCIPLINE_GROUPS: { label: string; ids: string[] }[] = [
+  { label: '人文与艺术', ids: ['philosophy', 'literature', 'history', 'art'] },
+  { label: '社会与治理', ids: ['economics', 'law', 'education', 'management', 'military'] },
+  { label: '自然、工程与健康', ids: ['science', 'engineering', 'agriculture', 'medicine'] },
+];
+
+export interface DisciplineCounts {
+  glossary: number;
+  parameters: number;
+  formulas: number;
+  standards: number;
+  officialDocs: number;
+}
+
+export function disciplineCounts(discipline: Discipline): DisciplineCounts {
+  return {
+    glossary: discipline.glossary.length,
+    parameters: discipline.parameters?.length ?? 0,
+    formulas: discipline.formulas.length,
+    standards: discipline.standards.length,
+    officialDocs: discipline.officialDocs?.length ?? 0,
+  };
+}
+
+export function filterDisciplineDirectory(disciplines: Discipline[], search: string): Discipline[] {
+  const query = search.trim().toLocaleLowerCase();
+  if (!query) return disciplines;
+  return disciplines.filter((discipline) => {
+    const values = [discipline.name, discipline.nameEn, discipline.description];
+    values.push(...discipline.glossary.flatMap((item) => [item.term, item.termEn, item.definition]));
+    values.push(...(discipline.parameters ?? []).flatMap((item) => [item.name, item.value, item.description]));
+    values.push(...discipline.formulas.flatMap((item) => [item.name, item.formula, item.description]));
+    values.push(...[...discipline.standards, ...(discipline.officialDocs ?? [])].flatMap((item) => [item.name, item.code, item.description, item.issuer ?? '']));
+    return values.some((value) => value.toLocaleLowerCase().includes(query));
+  });
+}
+
+export function safeOfficialDocumentUrl(url: string | undefined): string | null {
+  return safeExternalUrl(url);
+}
+
 export function ClinicalDataView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -99,16 +142,7 @@ export function ClinicalDataView() {
 
   const selected = useMemo(() => DISCIPLINES.find((d) => d.id === selectedId), [selectedId]);
 
-  const filteredDisciplines = useMemo(() => {
-    if (!search) return DISCIPLINES;
-    const s = search.toLowerCase();
-    return DISCIPLINES.filter((d) =>
-      d.name.includes(search) || d.nameEn.toLowerCase().includes(s) ||
-      d.description.includes(search) ||
-      d.glossary.some((g) => g.term.includes(search) || g.termEn.toLowerCase().includes(s)) ||
-      d.formulas.some((f) => f.name.includes(search))
-    );
-  }, [search]);
+  const filteredDisciplines = useMemo(() => filterDisciplineDirectory(DISCIPLINES, search), [search]);
 
   function saveCustom(next: CustomEntry[]) {
     setCustomEntries(next);
@@ -122,62 +156,57 @@ export function ClinicalDataView() {
     setDetail(null);
   }
 
+  function openSourcePreview(url: string, title: string) {
+    const safeUrl = safeOfficialDocumentUrl(url);
+    if (safeUrl) setSourcePreview({ url: safeUrl, title });
+  }
+
   // 学科卡片网格视图
   if (!selected) {
     const totalParams = DISCIPLINES.reduce((a, d) => a + paramCount(d), 0);
+    const totalGlossary = DISCIPLINES.reduce((total, discipline) => total + discipline.glossary.length, 0);
+    const totalFormulas = DISCIPLINES.reduce((total, discipline) => total + discipline.formulas.length, 0);
+    const totalStandards = DISCIPLINES.reduce((total, discipline) => total + discipline.standards.length, 0);
+    const totalOfficialDocs = DISCIPLINES.reduce((total, discipline) => total + (discipline.officialDocs?.length ?? 0), 0);
     return (
-      <div>
-        <div className="view-header" style={{ marginBottom: 16 }}>
-          <h1 className="view-title">学科数据</h1>
-          <p className="cd-header-desc" style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
-            覆盖中国 13 个学科门类 · {DISCIPLINES.reduce((a, d) => a + d.glossary.length, 0)} 名词 / {totalParams} 数值参数 / {DISCIPLINES.reduce((a, d) => a + d.formulas.length, 0)} 公式 / {DISCIPLINES.reduce((a, d) => a + d.standards.length, 0)} 标准规范 / {DISCIPLINES.reduce((a, d) => a + (d.officialDocs?.length ?? 0), 0)} 官方源文件
-            {customEntries.length > 0 && ` · ${customEntries.length} 条自定义`}
-          </p>
+      <div className="clinical-data-workbench">
+        <div className="view-header clinical-directory-header">
+          <div><h1 className="view-title">学科数据</h1><p>按学科浏览内置名词、数值、公式、标准规范和官方来源入口。</p></div>
         </div>
-        <div style={{ position: 'relative', marginBottom: 20 }}>
-          <input
-            className="input"
-            placeholder="搜索学科、术语或公式…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ paddingLeft: 36 }}
-          />
-          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
-            <Icon name="search" size={16} />
-          </span>
+        <label className="clinical-directory-search"><Icon name="search" size={17} /><span className="sr-only">搜索学科资料</span><input placeholder="搜索学科、术语、数值、公式或规范" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <div className="clinical-directory-layout">
+          <main className="clinical-directory" aria-label="学科资料目录">
+            {DISCIPLINE_GROUPS.map((group) => {
+              const disciplines = filteredDisciplines.filter((discipline) => group.ids.includes(discipline.id));
+              if (disciplines.length === 0) return null;
+              return (
+                <section key={group.label} className="clinical-directory-group">
+                  <h2>{group.label}<span>{disciplines.length} 个学科</span></h2>
+                  <div>
+                    {disciplines.map((discipline) => {
+                      const counts = disciplineCounts(discipline);
+                      return (
+                        <button key={discipline.id} className="clinical-directory-row" onClick={() => { setSelectedId(discipline.id); setTab('glossary'); setGlossaryCategory(''); setPage(0); setSearch(''); }}>
+                          <span className="clinical-directory-icon"><DisciplineIcon id={discipline.id} size={23} color={discipline.color} /></span>
+                          <span className="clinical-directory-copy"><strong>{discipline.name}<small>{discipline.nameEn}</small></strong><span>{discipline.description}</span></span>
+                          <span className="clinical-directory-counts"><i>{counts.glossary} 名词</i><i>{counts.parameters} 数值</i><i>{counts.formulas} 公式</i><i>{counts.standards} 规范</i>{counts.officialDocs > 0 && <i>{counts.officialDocs} 源文件</i>}</span>
+                          <Icon name="chevronRight" size={16} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+            {filteredDisciplines.length === 0 && <div className="clinical-directory-empty"><Icon name="search" size={24} /><span>未找到匹配的学科资料</span></div>}
+          </main>
+          <aside className="clinical-directory-summary" aria-label="资料库摘要">
+            <h2>资料库摘要</h2>
+            <dl><div><dt>学科门类</dt><dd>{DISCIPLINES.length}</dd></div><div><dt>名词</dt><dd>{totalGlossary}</dd></div><div><dt>数值参数</dt><dd>{totalParams}</dd></div><div><dt>公式</dt><dd>{totalFormulas}</dd></div><div><dt>标准规范</dt><dd>{totalStandards}</dd></div><div><dt>官方来源入口</dt><dd>{totalOfficialDocs}</dd></div></dl>
+            {customEntries.length > 0 && <p>本机另有 {customEntries.length} 条自定义资料。</p>}
+            <p>“官方源文件”展示内置公开摘录及发布机构入口；正式使用时应打开原文核验。</p>
+          </aside>
         </div>
-        <div className="grid discipline-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          {filteredDisciplines.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => { setSelectedId(d.id); setTab('glossary'); setGlossaryCategory(''); setPage(0); setSearch(''); }}
-              className="stat-card"
-              style={{
-                cursor: 'pointer', textAlign: 'left', borderLeft: `4px solid ${d.color}`,
-                transition: 'transform var(--motion-fast) var(--ease-standard)',
-              }}
-            >
-              <div style={{ marginBottom: 8 }}>
-                <DisciplineIcon id={d.id} size={32} color={d.color} />
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{d.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{d.nameEn}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{d.description}</div>
-              <div className="discipline-card-counts" style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 10, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                <span>{d.glossary.length} 名词</span>
-                <span>{paramCount(d)} 数值</span>
-                <span>{d.formulas.length} 公式</span>
-                <span>{d.standards.length} 标准</span>
-                {(d.officialDocs?.length ?? 0) > 0 && <span>{d.officialDocs!.length} 官方源文件</span>}
-              </div>
-            </button>
-          ))}
-        </div>
-        {filteredDisciplines.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
-            未找到匹配的学科或术语
-          </div>
-        )}
       </div>
     );
   }
@@ -259,60 +288,54 @@ export function ClinicalDataView() {
   ];
 
   return (
-    <div>
+    <div className="clinical-data-workbench clinical-discipline-view">
       {/* 顶部导航 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <button className="btn" onClick={() => { setSelectedId(null); setSearch(''); }} style={{ padding: '6px 12px' }}>
-          <Icon name="close" size={16} /> 返回
+      <div className="clinical-discipline-header">
+        <button className="clinical-back-button" onClick={() => { setSelectedId(null); setSearch(''); }}>
+          <Icon name="chevronLeft" size={18} /> 返回学科目录
         </button>
         <DisciplineIcon id={selected.id} size={28} color={selected.color} />
         <div style={{ flex: 1, minWidth: 140 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>{selected.name}</h1>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selected.nameEn} · {selected.description}</span>
         </div>
-        <div style={{ position: 'relative' }}>
+        <label className="clinical-detail-search">
+          <Icon name="search" size={15} />
+          <span className="sr-only">在当前学科内搜索</span>
           <input
-            className="input"
             placeholder="本学科内搜索…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            style={{ paddingLeft: 32, width: 200, fontSize: 13 }}
           />
-          <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
-            <Icon name="search" size={14} />
-          </span>
-        </div>
-        <button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ fontSize: 13 }}>
+        </label>
+        <button className="btn btn-primary clinical-add-button" onClick={() => setShowAdd(true)}>
           <Icon name="plus" size={14} /> 自定义添加
         </button>
       </div>
 
+      <div className="clinical-detail-layout">
+      <aside className="clinical-section-index" aria-label="资料分区索引">
       {/* 标签页 */}
-      <div className="cd-tabbar" style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid var(--border)', flexWrap: 'wrap' }}>
+      <div className="cd-tabbar">
         {tabMeta.map((t) => (
           <button
             key={t.key}
             onClick={() => { setTab(t.key); setPage(0); }}
-            style={{
-              padding: '8px 16px', border: 'none', background: 'transparent',
-              borderBottom: tab === t.key ? `2px solid ${selected.color}` : '2px solid transparent',
-              color: tab === t.key ? selected.color : 'var(--text-secondary)',
-              fontWeight: tab === t.key ? 600 : 400, cursor: 'pointer', fontSize: 13,
-              marginBottom: '-2px', transition: 'all var(--transition)',
-            }}
+            className={tab === t.key ? 'is-active' : ''}
+            aria-current={tab === t.key ? 'page' : undefined}
           >
-            {t.label} ({t.count})
+            <span>{t.label}</span><small>{t.count}</small>
           </button>
         ))}
       </div>
 
       {/* 名词分类筛选 */}
       {tab === 'glossary' && glossaryCats.length > 1 && (
-        <div className="cd-cat-chips" style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div className="cd-cat-chips">
           <button
             onClick={() => { setGlossaryCategory(''); setPage(0); }}
-            className={`btn ${!glossaryCategory ? 'btn-primary' : ''}`}
-            style={{ padding: '4px 12px', fontSize: 12 }}
+            className={!glossaryCategory ? 'is-active' : ''}
+            aria-pressed={!glossaryCategory}
           >全部 ({mergedGlossary.length})</button>
           {glossaryCats.map((c) => {
             const count = mergedGlossary.filter((g) => g.category === c).length;
@@ -320,8 +343,8 @@ export function ClinicalDataView() {
               <button
                 key={c}
                 onClick={() => { setGlossaryCategory(c); setPage(0); }}
-                className={`btn ${glossaryCategory === c ? 'btn-primary' : ''}`}
-                style={{ padding: '4px 12px', fontSize: 12 }}
+                className={glossaryCategory === c ? 'is-active' : ''}
+                aria-pressed={glossaryCategory === c}
               >{c} ({count})</button>
             );
           })}
@@ -457,28 +480,31 @@ export function ClinicalDataView() {
       {tab === 'officialDocs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {(pagedList as typeof filteredOfficialDocs).map((s, i) => (
-            <button
+            <article
               key={`doc-${s.code}-${i}`}
-              className="card cd-entry-row"
-              onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}
-              style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', borderLeft: `4px solid ${selected.color}`, background: 'var(--bg-surface)' }}
+              className="cd-entry-row clinical-official-row"
+              style={{ borderLeftColor: selected.color }}
             >
               <div style={{
                 fontSize: 9, padding: '2px 6px', borderRadius: 'var(--radius-sm)',
                 background: selected.color, color: '#fff', fontWeight: 700, flexShrink: 0, marginTop: 2, whiteSpace: 'nowrap',
               }}>{s.code || '官方文件'}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                <button className="clinical-official-title" onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}>
                   {s.name}
                   {s.__customIdx !== undefined && (
                     <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
                   )}
-                </div>
+                </button>
                 {s.issuer && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>颁布机构：{s.issuer}{s.year && ` · ${s.year}年`}</div>}
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.description}</div>
+                <div className="clinical-source-actions">
+                  <button onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}>查看摘录与详情</button>
+                  {safeOfficialDocumentUrl(s.docUrl) && <button onClick={() => openSourcePreview(s.docUrl!, s.name)}><Icon name="link" size={14} /> 查看源文件</button>}
+                  {safeOfficialDocumentUrl(s.docUrl) && <a href={safeOfficialDocumentUrl(s.docUrl)!} target="_blank" rel="noopener noreferrer">外部原文入口</a>}
+                </div>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>详情 →</span>
-            </button>
+            </article>
           ))}
           {filteredOfficialDocs.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>
@@ -497,101 +523,116 @@ export function ClinicalDataView() {
         </div>
       )}
       {hasMore && (
-        <button className="btn cd-loadmore" onClick={() => setPage(page + 1)}>
-          加载更多 · 还有 {currentList.length - pagedList.length} 条
-        </button>
-      )}
-
-      {/* ===== 词典级详情弹窗 ===== */}
-      {detail && !isMobile && (
-        <div className="modal-overlay cd-detail-modal" onClick={() => setDetail(null)}>
-          <div
-            className="modal-card"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 640, width: '92%', maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto', padding: 24 }}
-          >
-            {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
-            {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
-            {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
-            {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
-            {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} color={selected.color} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, position: 'sticky', bottom: -24, background: 'var(--bg-surface)', padding: '12px 24px', margin: '20px -24px -24px', borderTop: '1px solid var(--border)', zIndex: 1 }}>
-              {detail.customIndex !== undefined && (
-                <button
-                  className="btn btn-danger-ghost"
-                  onClick={() => { if (confirm('删除这条自定义条目？')) deleteCustom(detail.customIndex!); }}
-                >删除此自定义条目</button>
-              )}
-              <button className="btn btn-primary" onClick={() => setDetail(null)}>关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* 移动端: 详情走 BottomSheet */}
-      {detail && isMobile && (
-        <BottomSheet open onClose={() => setDetail(null)} title="条目详情">
-          {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
-          {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
-          {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
-          {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
-          {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} color={selected.color} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-            {detail.customIndex !== undefined && (
-              <button
-                className="btn"
-                style={{ height: 48, color: 'var(--danger, #c3272b)', borderColor: 'var(--danger, #c3272b)' }}
-                onClick={() => { if (confirm('删除这条自定义条目？')) deleteCustom(detail.customIndex!); }}
-              >删除此自定义条目</button>
+              <button className="btn cd-loadmore" onClick={() => setPage(page + 1)}>
+                加载更多 · 还有 {currentList.length - pagedList.length} 条
+              </button>
             )}
-            <button className="btn btn-primary" style={{ height: 48 }} onClick={() => setDetail(null)}>关闭</button>
-          </div>
-        </BottomSheet>
-      )}
+            </aside>
 
-      {sourcePreview && (
-        <div className="modal-overlay" onClick={() => setSourcePreview(null)}>
-          <div
-            className="modal-card"
-            onClick={(event) => event.stopPropagation()}
-            style={{ width: 'min(1100px, 96vw)', height: 'min(780px, 92vh)', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>原始发布文件</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sourcePreview.title}</div>
+            <main className="clinical-content-pane">
+              {tab === 'officialDocs' && (
+                <div className="clinical-official-notice">
+                  <Icon name="warning" size={16} />
+                  <span>这里保存的是公开摘录和发布机构入口，不替代盖章全文；请点击“查看源文件”核验原文。</span>
+                </div>
+              )}
+              <div className="clinical-content-hint">
+                <p>左侧浏览本学科名词、参数、公式与标准。点击条目可打开词典级详情；官方源文件支持应用内预览或外开原文。</p>
+                <p className="clinical-content-meta">{selected.name} · 当前 {currentList.length} 条</p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                <a href={sourcePreview.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm">外部打开</a>
-                <button className="btn btn-primary btn-sm" onClick={() => setSourcePreview(null)}>关闭</button>
-              </div>
+            </main>
             </div>
-            <div style={{ padding: '8px 18px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border)' }}>
-              正在应用内加载官网原始页面；若发布机构禁止嵌入，可使用“外部打开”。
-            </div>
-            <iframe
-              src={sourcePreview.url}
-              title={`${sourcePreview.title} 原始发布文件`}
-              sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
-              referrerPolicy="no-referrer"
-              style={{ flex: 1, width: '100%', border: 0, background: '#fff' }}
-            />
-          </div>
-        </div>
-      )}
 
-      {/* ===== 自定义添加弹窗 ===== */}
-      {showAdd && (
-        <AddEntryModal
-          disciplineId={selected.id}
-          disciplineName={selected.name}
-          defaultKind={tab}
-          onClose={() => setShowAdd(false)}
-          onSave={(entry) => { saveCustom([...customEntries, entry]); setShowAdd(false); }}
-        />
-      )}
-    </div>
-  );
-}
+            {/* ===== 词典级详情弹窗 ===== */}
+            {detail && !isMobile && (
+              <div className="modal-overlay cd-detail-modal" onClick={() => setDetail(null)}>
+                <div
+                  className="modal-card"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ maxWidth: 640, width: '92%', maxHeight: 'calc(100vh - 2rem)', overflowY: 'auto', padding: 24 }}
+                >
+                  {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
+                  {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
+                  {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
+                  {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
+                  {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} color={selected.color} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, position: 'sticky', bottom: -24, background: 'var(--bg-surface)', padding: '12px 24px', margin: '20px -24px -24px', borderTop: '1px solid var(--border)', zIndex: 1 }}>
+                    {detail.customIndex !== undefined && (
+                      <button
+                        className="btn btn-danger-ghost"
+                        onClick={() => { if (confirm('删除这条自定义条目？')) deleteCustom(detail.customIndex!); }}
+                      >删除此自定义条目</button>
+                    )}
+                    <button className="btn btn-primary" onClick={() => setDetail(null)}>关闭</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 移动端: 详情走 BottomSheet */}
+            {detail && isMobile && (
+              <BottomSheet open onClose={() => setDetail(null)} title="条目详情">
+                {detail.kind === 'glossary' && <GlossaryDetail g={detail.data as DisciplineGlossary} color={selected.color} discipline={selected.name} />}
+                {detail.kind === 'parameters' && <ParameterDetail p={detail.data as DisciplineParameter} color={selected.color} discipline={selected.name} />}
+                {detail.kind === 'formulas' && <FormulaDetail f={detail.data as DisciplineFormula} color={selected.color} discipline={selected.name} />}
+                {detail.kind === 'standards' && <StandardDetail s={detail.data as DisciplineStandard} color={selected.color} discipline={selected.name} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
+                {detail.kind === 'officialDocs' && <OfficialDocDetail doc={detail.data as DisciplineStandard} discipline={selected.name} color={selected.color} onPreviewSource={(url, title) => setSourcePreview({ url, title })} />}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+                  {detail.customIndex !== undefined && (
+                    <button
+                      className="btn"
+                      style={{ height: 48, color: 'var(--danger, #c3272b)', borderColor: 'var(--danger, #c3272b)' }}
+                      onClick={() => { if (confirm('删除这条自定义条目？')) deleteCustom(detail.customIndex!); }}
+                    >删除此自定义条目</button>
+                  )}
+                  <button className="btn btn-primary" style={{ height: 48 }} onClick={() => setDetail(null)}>关闭</button>
+                </div>
+              </BottomSheet>
+            )}
+
+            {sourcePreview && (
+              <div className="modal-overlay" onClick={() => setSourcePreview(null)}>
+                <div
+                  className="modal-card"
+                  onClick={(event) => event.stopPropagation()}
+                  style={{ width: 'min(1100px, 96vw)', height: 'min(780px, 92vh)', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>原始发布文件</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sourcePreview.title}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <a href={sourcePreview.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm">外部打开</a>
+                      <button className="btn btn-primary btn-sm" onClick={() => setSourcePreview(null)}>关闭</button>
+                    </div>
+                  </div>
+                  <div style={{ padding: '8px 18px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border)' }}>
+                    正在应用内加载官网原始页面；若发布机构禁止嵌入，可使用“外部打开”。
+                  </div>
+                  <iframe
+                    src={sourcePreview.url}
+                    title={`${sourcePreview.title} 原始发布文件`}
+                    sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
+                    referrerPolicy="no-referrer"
+                    style={{ flex: 1, width: '100%', border: 0, background: '#fff' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ===== 自定义添加弹窗 ===== */}
+            {showAdd && (
+              <AddEntryModal
+                disciplineId={selected.id}
+                disciplineName={selected.name}
+                defaultKind={tab}
+                onClose={() => setShowAdd(false)}
+                onSave={(entry) => { saveCustom([...customEntries, entry]); setShowAdd(false); }}
+              />
+            )}
+          </div>
+        );
+      }
 
 // ===== 词典级详情组件 =====
 

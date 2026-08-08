@@ -16,6 +16,7 @@ import {
   createWorkspaceBackupJson,
   restoreWorkspaceBackup,
 } from '@services/workspaceBackup';
+import './settings-workbench.css';
 
 type SettingsTab = 'appearance' | 'llm' | 'data' | 'shortcuts' | 'about';
 
@@ -159,11 +160,20 @@ export function SettingsView() {
     }
   }
 
+  function moveTab(current: SettingsTab, direction: -1 | 1) {
+    const index = TABS.findIndex((item) => item.key === current);
+    const next = TABS[(index + direction + TABS.length) % TABS.length];
+    setTab(next.key);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`settings-tab-${next.key}`)?.focus();
+    });
+  }
+
   return (
-    <div style={{ display: 'flex', gap: 24, minHeight: '100%' }}>
-      <nav aria-label="设置分类" style={{ width: 180, flexShrink: 0 }}>
-        <div className="view-header" style={{ marginBottom: 12 }}><h1 className="view-title">设置</h1></div>
-        <div role="tablist" aria-label="设置分类">
+    <div className="settings-workbench">
+      <nav className="settings-rail" aria-label="设置分类">
+        <div className="view-header settings-heading"><h1 className="view-title">设置</h1></div>
+        <div className="settings-tabs" role="tablist" aria-label="设置分类">
           {TABS.map((item) => (
             <button
               key={item.key}
@@ -172,9 +182,27 @@ export function SettingsView() {
               role="tab"
               aria-selected={tab === item.key}
               aria-controls={`settings-panel-${item.key}`}
-              className={`nav-item ${tab === item.key ? 'active' : ''}`}
+              tabIndex={tab === item.key ? 0 : -1}
+              className={`nav-item settings-tab ${tab === item.key ? 'active' : ''}`}
               onClick={() => setTab(item.key)}
-              style={{ width: '100%', marginBottom: 2 }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  moveTab(item.key, 1);
+                } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  moveTab(item.key, -1);
+                } else if (event.key === 'Home') {
+                  event.preventDefault();
+                  setTab(TABS[0].key);
+                  window.requestAnimationFrame(() => document.getElementById(`settings-tab-${TABS[0].key}`)?.focus());
+                } else if (event.key === 'End') {
+                  event.preventDefault();
+                  const last = TABS[TABS.length - 1];
+                  setTab(last.key);
+                  window.requestAnimationFrame(() => document.getElementById(`settings-tab-${last.key}`)?.focus());
+                }
+              }}
             >
               <Icon name={item.icon} size={15} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'middle' }} />
               <span>{item.label}</span>
@@ -183,7 +211,7 @@ export function SettingsView() {
         </div>
       </nav>
 
-      <div style={{ flex: 1, maxWidth: 720 }}>
+      <div className="settings-content">
         {tab === 'appearance' && (
           <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance">
             <div className="card" style={{ marginBottom: 16 }}>
@@ -323,7 +351,7 @@ export function SettingsView() {
           <section id="settings-panel-data" role="tabpanel" aria-labelledby="settings-tab-data">
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ marginBottom: 12, fontSize: 16 }}>数据统计</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+              <div className="settings-data-stats">
                 {[
                   ['项目', projects.length], ['文献', references.length], ['表格', tables.length], ['笔记', notes.length],
                 ].map(([label, count]) => (
@@ -371,7 +399,7 @@ export function SettingsView() {
         {tab === 'about' && (
           <section id="settings-panel-about" role="tabpanel" aria-labelledby="settings-tab-about">
             <div className="card" style={{ marginBottom: 16 }}>
-              <h3 style={{ marginBottom: 12, fontSize: 16 }}>Selenyx 科研工作台</h3>
+              <h3 style={{ marginBottom: 12, fontSize: 16 }}>Selenyx</h3>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
                 Selenyx · 本地优先的科研工作区。前端缓存保证离线可用；本机服务负责文献持久镜像、RAG、证据链、学术连接器与 AI 密钥网关。
               </p>

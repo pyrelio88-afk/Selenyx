@@ -29,6 +29,7 @@ import {
 import { SVGRenderer } from 'echarts/renderers';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { useAppStore } from '@stores/appStore';
+import '../../styles/chart-workbench.css';
 
 echarts.use([
   BarChart, LineChart, ScatterChart, PieChart,
@@ -38,13 +39,13 @@ echarts.use([
   SVGRenderer,
 ]);
 
-type ChartType =
+export type ChartType =
   | 'bar' | 'line' | 'area' | 'scatter'
   | 'pie' | 'donut' | 'boxplot' | 'forest' | 'heatmap';
 
 interface ChartTypeMeta { key: ChartType; label: string; icon: IconName; hint: string }
 
-const CHART_TYPES: ChartTypeMeta[] = [
+export const CHART_TYPES: ChartTypeMeta[] = [
   { key: 'bar', label: '柱状图', icon: 'chart', hint: '类别对比' },
   { key: 'line', label: '折线图', icon: 'chart', hint: '趋势变化' },
   { key: 'area', label: '面积图', icon: 'chart', hint: '累积趋势' },
@@ -187,7 +188,7 @@ function getChartTheme(): ChartTheme {
 }
 
 // ===== CSV 解析（支持引号字段） =====
-function parseCSV(text: string): string[][] {
+export function parseCSV(text: string): string[][] {
   const rows: string[][] = [];
   let cur: string[] = [];
   let field = '';
@@ -209,6 +210,10 @@ function parseCSV(text: string): string[][] {
   }
   if (field.length > 0 || cur.length > 0) { cur.push(field); rows.push(cur); }
   return rows.filter((r) => r.some((c) => c.trim() !== ''));
+}
+
+export function hasChartData(headers: string[], rows: string[][]): boolean {
+  return headers.length >= 2 && rows.some((row) => row.some((cell, index) => index > 0 && cell.trim() !== ''));
 }
 
 // ===== 统计：四分位数（线性插值，与统计计算器一致） =====
@@ -266,6 +271,7 @@ export function ChartTool() {
   });
   const [csvOpen, setCsvOpen] = useState(false);
   const [csvText, setCsvText] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
   const theme = useAppStore((s) => s.theme);
   const mode = useAppStore((s) => s.mode);
@@ -279,6 +285,7 @@ export function ChartTool() {
     setHeaders(defaultHeaders(t));
     setRows(defaultRows(t));
     if (t === 'forest') setCfg((c) => ({ ...c, refValue: '1' }));
+    setStatusMessage('');
   }
 
   // 数据编辑
@@ -307,7 +314,10 @@ export function ChartTool() {
 
   function importCSV() {
     const parsed = parseCSV(csvText);
-    if (parsed.length === 0) return;
+    if (parsed.length < 2 || Math.max(0, ...parsed.map((r) => r.length)) < 2) {
+      setStatusMessage('CSV 至少需要一行表头、一行数据和两列内容。');
+      return;
+    }
     const w = Math.max(...parsed.map((r) => r.length));
     const norm = parsed.map((r) => {
       const out = [...r];
@@ -318,6 +328,7 @@ export function ChartTool() {
     setRows(norm.slice(1));
     setCsvOpen(false);
     setCsvText('');
+    setStatusMessage(`已导入 ${norm.length - 1} 行、${w} 列数据。`);
   }
 
   function loadSample() {
@@ -356,25 +367,34 @@ export function ChartTool() {
   }, []);
 
   function exportPNG() {
-    if (!instRef.current) return;
+    if (!instRef.current || !hasChartData(headers, rows)) {
+      setStatusMessage('当前没有可导出的图表数据。');
+      return;
+    }
     const ct = getChartTheme();
     const url = instRef.current.getDataURL({
       type: 'png', pixelRatio: 2, backgroundColor: ct.canvasBg,
     });
     triggerDownload(url, `selenyx-chart-${type}.png`);
+    setStatusMessage('PNG 已生成并开始下载。');
   }
 
   function exportSVG() {
-    if (!instRef.current) return;
+    if (!instRef.current || !hasChartData(headers, rows)) {
+      setStatusMessage('当前没有可导出的图表数据。');
+      return;
+    }
     const svg = instRef.current.renderToSVGString();
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     triggerDownload(url, `selenyx-chart-${type}.svg`);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatusMessage('SVG 已生成并开始下载。');
   }
 
   const ct = getChartTheme();
   const dyn = dynamicCols(type);
+  const chartReady = hasChartData(headers, rows);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -399,14 +419,16 @@ export function ChartTool() {
         {/* 图表渲染区 */}
         <div className="card" style={{ padding: 16 }}>
           <div ref={chartDivRef} style={{ width: '100%', height: 460 }} />
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-            <button className="btn btn-sm" onClick={exportPNG} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end', flexWrap: 'wrap', alignItems: 'center' }}>
+            {!chartReady && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 'auto' }}>补充数据后可导出</span>}
+            <button className="btn btn-sm" onClick={exportPNG} disabled={!chartReady} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <Icon name="download" size={14} /> 导出 PNG
             </button>
-            <button className="btn btn-sm" onClick={exportSVG} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <button className="btn btn-sm" onClick={exportSVG} disabled={!chartReady} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <Icon name="download" size={14} /> 导出 SVG
             </button>
           </div>
+          {statusMessage && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>{statusMessage}</div>}
         </div>
 
         {/* 配置面板 */}

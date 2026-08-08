@@ -1,0 +1,11 @@
+/* Chart workbench layout helpers (keeps ChartView CSS import resolvable). */
+.chart-workbench {
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.chart-workbench-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}

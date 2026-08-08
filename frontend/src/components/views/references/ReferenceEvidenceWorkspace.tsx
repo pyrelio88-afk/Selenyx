@@ -116,7 +116,6 @@ export function ReferenceEvidenceWorkspace({
     <section className="reference-evidence-workspace" aria-labelledby="reference-evidence-title">
       <div className="reference-evidence-heading">
         <div>
-          <span className="reference-eyebrow">PROJECT EVIDENCE</span>
           <h2 id="reference-evidence-title">项目证据检索</h2>
           <p>只检索本机已索引的摘要、笔记与原文片段；空结果不会由模型补写。</p>
         </div>
