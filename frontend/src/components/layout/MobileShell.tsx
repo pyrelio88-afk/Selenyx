@@ -1,53 +1,112 @@
-/**
- * MobileShell — 移动端外壳：TopBar(56px) + Drawer(左滑出导航)
- * 依据 Selenyx Mobile Spec v1 (UI设计师)：
- *   - TopBar: hamburger(44px热区) + 视图标题 + 日夜切换(44px热区)
- *   - Drawer: 280px 宽(≤85% 视口), 行高 48px, 遮罩 rgba(0,0,0,0.4), 点遮罩/选项关闭
- *   - 桌面 ≤768px 时隐藏常驻 Sidebar, 改用本组件
- * 复用 Sidebar 的 NAV_GROUPS, 不重复维护导航数据。
- */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { NAV_GROUPS } from '@components/layout/Sidebar';
+import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
 
 const VIEW_LABELS: Record<ViewKey, string> = (() => {
-  const m: Partial<Record<ViewKey, string>> = {};
-  for (const g of NAV_GROUPS) for (const it of g.items) m[it.key] = it.label;
-  return m as Record<ViewKey, string>;
+  const labels: Partial<Record<ViewKey, string>> = {};
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) labels[item.key] = item.label;
+  }
+  return labels as Record<ViewKey, string>;
 })();
 
+const QUICK_NAV: Array<{ key: ViewKey; label: string }> = [
+  { key: 'dashboard', label: '总览' },
+  { key: 'pipeline', label: '流水线' },
+  { key: 'references', label: '文献' },
+  { key: 'aiChat', label: 'AI' },
+];
+
+function focusMainContent() {
+  requestAnimationFrame(() => document.querySelector<HTMLElement>('#workspace-main')?.focus());
+}
+
 export function MobileShell() {
-  const { currentView, setView, mode, toggleMode } = useAppStore();
+  const {
+    currentView, setView, mode, toggleMode,
+    projects, currentProjectId,
+  } = useAppStore();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const isDark = mode === 'dark';
-
-  // 视图切换时关闭抽屉
-  useEffect(() => { setDrawerOpen(false); }, [currentView]);
-
-  // 抽屉打开时锁 body 滚动
-  useEffect(() => {
-    if (drawerOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [drawerOpen]);
-
+  const backend = useLocalBackendStatus();
+  const activeProject = projects.find((project) => project.id === currentProjectId) ?? projects[0] ?? null;
   const title = VIEW_LABELS[currentView] || 'Selenyx';
+  const isQuickView = QUICK_NAV.some((item) => item.key === currentView);
+
+  function closeDrawer({ restoreFocus = true } = {}) {
+    setDrawerOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => menuButtonRef.current?.focus());
+  }
+
+  function navigate(view: ViewKey) {
+    setView(view);
+    setDrawerOpen(false);
+    focusMainContent();
+  }
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const content = document.querySelector<HTMLElement>('.app-view-region');
+    document.body.style.overflow = 'hidden';
+    content?.setAttribute('inert', '');
+    content?.setAttribute('aria-hidden', 'true');
+    requestAnimationFrame(() => closeButtonRef.current?.focus());
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeDrawer();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = drawerRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      content?.removeAttribute('inert');
+      content?.removeAttribute('aria-hidden');
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [drawerOpen]);
 
   return (
     <>
-      {/* TopBar */}
-      <header className="mobile-topbar" role="banner">
+      <header className="mobile-topbar">
         <button
+          ref={menuButtonRef}
           className="mobile-topbar-btn"
           onClick={() => setDrawerOpen(true)}
-          aria-label="打开导航菜单"
+          aria-label="打开全部导航"
+          aria-haspopup="dialog"
           aria-expanded={drawerOpen}
+          aria-controls="mobile-navigation-drawer"
         >
           <Icon name="menu" size={22} strokeWidth={2} />
         </button>
-        <span className="mobile-topbar-title">{title}</span>
+        <div className="mobile-topbar-copy">
+          <strong>{title}</strong>
+          <span>{activeProject?.name || '未选择项目'}</span>
+        </div>
         <button
           className="mobile-topbar-btn"
           onClick={toggleMode}
@@ -57,37 +116,98 @@ export function MobileShell() {
         </button>
       </header>
 
-      {/* Drawer + 遮罩 */}
       {drawerOpen && (
-        <div className="mobile-drawer-overlay" onClick={() => setDrawerOpen(false)} />
-      )}
-      <nav
-        className={`mobile-drawer ${drawerOpen ? 'open' : ''}`}
-        aria-label="移动端导航"
-        aria-hidden={!drawerOpen}
-      >
-        <div className="mobile-drawer-header">
-          <Icon name="moon" size={20} strokeWidth={1.8} />
-          <span>Selenyx</span>
-        </div>
-        <div className="mobile-drawer-body">
-          {NAV_GROUPS.map((group, gi) => (
-            <div key={gi} className="mobile-drawer-group">
-              {group.label && <div className="mobile-drawer-group-label">{group.label}</div>}
-              {group.items.map((item) => (
-                <button
-                  key={item.key}
-                  className={`mobile-drawer-item ${currentView === item.key ? 'active' : ''}`}
-                  onClick={() => setView(item.key)}
-                  aria-current={currentView === item.key ? 'page' : undefined}
-                >
-                  <span className="icon"><Icon name={NAV_ICONS[item.key]} size={18} /></span>
-                  <span>{item.label}</span>
-                </button>
-              ))}
+        <>
+          <button
+            className="mobile-drawer-overlay"
+            onClick={() => closeDrawer()}
+            aria-label="关闭导航菜单"
+            tabIndex={-1}
+          />
+          <aside
+            ref={drawerRef}
+            id="mobile-navigation-drawer"
+            className="mobile-drawer open"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-navigation-title"
+          >
+            <div className="mobile-drawer-header">
+              <div className="mobile-drawer-brand">
+                <img className="mobile-drawer-brand-crane" src="/brand/selenyx-crane.png" alt="" aria-hidden="true" />
+                <span id="mobile-navigation-title">Selenyx</span>
+              </div>
+              <button
+                ref={closeButtonRef}
+                className="mobile-drawer-close"
+                onClick={() => closeDrawer()}
+                aria-label="关闭导航菜单"
+              >
+                <Icon name="close" size={20} />
+              </button>
             </div>
-          ))}
-        </div>
+
+            <button className="mobile-project-context" onClick={() => navigate('projects')}>
+              <span className="workspace-switcher-avatar" aria-hidden="true">研</span>
+              <span>
+                <strong>{activeProject?.name || '未选择项目'}</strong>
+                <small>{activeProject ? '查看或切换当前项目' : '创建项目后开始科研闭环'}</small>
+              </span>
+              <Icon name="chevronDown" size={16} />
+            </button>
+
+            <nav className="mobile-drawer-body" aria-label="全部工作区">
+              {NAV_GROUPS.map((group) => (
+                <section key={group.label} className="mobile-drawer-group" aria-labelledby={`mobile-group-${group.label}`}>
+                  <div id={`mobile-group-${group.label}`} className="mobile-drawer-group-label">{group.label}</div>
+                  {group.items.map((item) => (
+                    <button
+                      key={item.key}
+                      className={`mobile-drawer-item ${currentView === item.key ? 'active' : ''}`}
+                      onClick={() => navigate(item.key)}
+                      aria-current={currentView === item.key ? 'page' : undefined}
+                    >
+                      <span className="icon"><Icon name={NAV_ICONS[item.key]} size={18} /></span>
+                      <span className="mobile-drawer-item-copy">
+                        <strong>{item.label}</strong>
+                        {item.hint && <small>{item.hint}</small>}
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              ))}
+            </nav>
+
+            <div className={`mobile-local-status is-${backend.tone}`} role="status" aria-live="polite">
+              <span className="workspace-status-dot" aria-hidden="true" />
+              <span>{backend.label}</span>
+            </div>
+          </aside>
+        </>
+      )}
+
+      <nav className="mobile-bottom-nav" aria-label="移动端快捷导航">
+        {QUICK_NAV.map((item) => (
+          <button
+            key={item.key}
+            className={currentView === item.key ? 'active' : ''}
+            onClick={() => navigate(item.key)}
+            aria-current={currentView === item.key ? 'page' : undefined}
+          >
+            <Icon name={NAV_ICONS[item.key]} size={20} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+        <button
+          className={!isQuickView ? 'active' : ''}
+          onClick={() => setDrawerOpen(true)}
+          aria-label="打开更多功能"
+          aria-expanded={drawerOpen}
+          aria-controls="mobile-navigation-drawer"
+        >
+          <Icon name="menu" size={20} />
+          <span>更多</span>
+        </button>
       </nav>
     </>
   );

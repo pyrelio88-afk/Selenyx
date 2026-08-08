@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { selectPrimaryProject } from '@lib/projectPriority';
 import type {
   Reference, ResearchProject, RefCollection, RefTag,
   KanbanTask, LLMConfig, MultiDimTable, TableField,
@@ -76,6 +77,7 @@ interface AppState {
   setCurrentProject: (id: string | null) => void;
   addProject: (p: ResearchProject) => void;
   updateProject: (id: string, patch: Partial<ResearchProject>) => void;
+  setPrimaryProject: (id: string) => void;
 
   // === 任务看板 ===
   tasks: KanbanTask[];
@@ -205,7 +207,7 @@ export const useAppStore = create<AppState>()(
         tasks,
         currentProjectId: s.currentProjectId && projects.some((project) => project.id === s.currentProjectId)
           ? s.currentProjectId
-          : projects[0]?.id ?? null,
+          : selectPrimaryProject(projects)?.id ?? null,
       })),
       currentProjectId: null,
       setCurrentProject: (id) => set({ currentProjectId: id }),
@@ -218,6 +220,22 @@ export const useAppStore = create<AppState>()(
         const projects = s.projects.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p));
         void mirrorWorkspace(projects, s.tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
         return { projects, workspaceSyncStatus: 'syncing', workspaceSyncMessage: '正在同步本机 SQLite 项目与任务…' };
+      }),
+      setPrimaryProject: (id) => set((s) => {
+        const updatedAt = new Date().toISOString();
+        const projects = s.projects.map((project) => ({
+          ...project,
+          isPrimary: project.id === id,
+          ownerRole: project.id === id ? 'lead' as const : project.ownerRole,
+          updatedAt: project.isPrimary !== (project.id === id) ? updatedAt : project.updatedAt,
+        }));
+        void mirrorWorkspace(projects, s.tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
+        return {
+          projects,
+          currentProjectId: id,
+          workspaceSyncStatus: 'syncing',
+          workspaceSyncMessage: '正在同步主线课题…',
+        };
       }),
 
       tasks: [],

@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
-import { localApi } from '@services/api';
+import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 
 /**
  * 主导航按「证据门科研流水线」编排（Claude Scholar / nature-skills / Zotero 类工具对齐）：
@@ -50,32 +49,20 @@ export function Sidebar() {
   } = useAppStore();
   const isDark = mode === 'dark';
   const activeProject = projects.find((project) => project.id === currentProjectId) ?? projects[0] ?? null;
-  const [backendLabel, setBackendLabel] = useState('检测本地服务…');
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const health = await localApi.health();
-        if (!cancelled) setBackendLabel(`后端在线 · v${health.version}`);
-      } catch {
-        if (!cancelled) setBackendLabel('后端离线 · 前端降级');
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const backend = useLocalBackendStatus();
 
   function openProjects() {
     setView('projects');
   }
 
   return (
-    <aside className="sidebar workspace-sidebar">
+    <aside className="sidebar workspace-sidebar" aria-label="科研工作台侧栏">
       <div className="workspace-brand">
-        <div className="workspace-brand-mark" aria-hidden="true"><Icon name="moon" size={19} strokeWidth={1.9} /></div>
+        <div className="workspace-brand-mark" aria-hidden="true">
+          <img src="/brand/selenyx-crane.png" alt="" />
+        </div>
         <div>
           <div className="workspace-brand-name">Selenyx</div>
-          <div className="workspace-brand-subtitle">本地科研工作台</div>
         </div>
       </div>
 
@@ -129,9 +116,14 @@ export function Sidebar() {
       </nav>
 
       <div className="workspace-sidebar-footer">
-        <div className="workspace-local-status" title="数据默认留在本机；后端提供 RAG/学术 API/密钥网关">
+        <div
+          className={`workspace-local-status is-${backend.tone}`}
+          title="数据默认留在本机；后端提供 RAG/学术 API/密钥网关"
+          role="status"
+          aria-live="polite"
+        >
           <span className="workspace-status-dot" aria-hidden="true" />
-          {backendLabel}
+          <span className="workspace-local-status-label">{backend.label}</span>
         </div>
         <button
           className="icon-btn"

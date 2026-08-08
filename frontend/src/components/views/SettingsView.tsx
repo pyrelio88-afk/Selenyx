@@ -73,7 +73,7 @@ export function SettingsView() {
       try {
         const health = await localApi.health();
         if (cancelled) return;
-        setBackendHealth(`在线 · v${health.version}`);
+        setBackendHealth('在线');
         setBackendDetail(`存储 ${health.storage} · LLM 网关 ${health.llmConfigured ? '已配置' : '未配置'}`);
       } catch (error) {
         if (cancelled) return;
@@ -373,7 +373,7 @@ export function SettingsView() {
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ marginBottom: 12, fontSize: 16 }}>Selenyx 科研工作台</h3>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                0.01 · 本地优先的前后端一体科研工作区。前端缓存保证离线可用；本机 FastAPI/SQLite 服务负责文献持久镜像、RAG、证据链、学术连接器与 AI 密钥网关。
+                Selenyx · 本地优先的科研工作区。前端缓存保证离线可用；本机服务负责文献持久镜像、RAG、证据链、学术连接器与 AI 密钥网关。
               </p>
             </div>
             <div className="card">

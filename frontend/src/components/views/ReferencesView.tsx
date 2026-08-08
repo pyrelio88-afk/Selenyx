@@ -21,6 +21,8 @@ import { useIsMobile } from '@lib/useIsMobile';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { searchApi, zoteroApi, type ScholarlyCandidate, type ZoteroReferenceCandidate } from '@services/api';
 import { referenceFromZotero } from '@utils/zoteroReference';
+import { ReferenceEvidenceWorkspace } from './references/ReferenceEvidenceWorkspace';
+import './references/references-workspace.css';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
@@ -190,6 +192,7 @@ export function ReferencesView() {
     references, searchQuery, setSearchQuery,
     addReferences, updateReference, deleteReferenceAndRelations,
     referenceSyncStatus, referenceSyncMessage,
+    projects, currentProjectId,
   } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -676,17 +679,21 @@ export function ReferencesView() {
   }, [anydocRefId, references, updateReference, flashToast]);
 
   const pdfRef = pdfRefId ? references.find((r) => r.id === pdfRefId) : null;
+  const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
 
   return (
-    <div>
+    <div className="references-workspace">
       <div className="view-header">
-        <div>
-          <h1 className="view-title">文献库</h1>
-          <div role="status" title={referenceSyncMessage} style={{ marginTop: 3, fontSize: 11.5, color: referenceSyncStatus === 'synced' ? 'var(--success)' : 'var(--text-muted)' }}>
-            {referenceSyncStatus === 'synced' ? '● SQLite / RAG 已同步' : referenceSyncStatus === 'syncing' ? '◌ 正在同步 SQLite…' : '○ 离线缓存模式'}
+        <div className="reference-view-heading">
+          <div>
+            <h1 className="view-title">文献库</h1>
+            <p className="reference-view-description">围绕当前项目收集、核验并回到原文，而不是只保存题录。</p>
+            <div role="status" title={referenceSyncMessage} className={`reference-header-status is-${referenceSyncStatus}`}>
+              {referenceSyncStatus === 'synced' ? 'SQLite 文献库已同步' : referenceSyncStatus === 'syncing' ? '正在同步 SQLite' : referenceSyncStatus === 'offline' ? '本机后端离线，仅使用缓存' : referenceSyncStatus === 'error' ? '同步异常，仅使用缓存' : '等待本机后端同步'}
+            </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="reference-header-actions">
           <input
             ref={fileInputRef}
             type="file"
@@ -695,30 +702,44 @@ export function ReferencesView() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
           />
           <button className="btn ref-desktop-only" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
-          <button className="btn ref-desktop-only" aria-label="从本机 Zotero 只读导入" onClick={() => void openZoteroImport()} title="先预览并勾选；只读复制，不会修改 Zotero">
-            <Icon name="references" size={16} /> 从 Zotero 导入
-          </button>
-          <button className="btn ref-desktop-only" aria-label="文档转 Markdown" onClick={() => { setAnydocRefId(selectedId); setAnydocOpen(true); }} title="上传 PDF/Word/Excel 等文档，本地转为 Markdown 进入精读"><Icon name="download" size={16} /> 文档转MD</button>
-          <button className="btn ref-desktop-only" onClick={() => {
-            import('@data/seedReferences').then(({ getSeedReferences }) => {
-              const refs = getSeedReferences();
-              const existingDois = new Set(references.map((r) => r.doi).filter(Boolean));
-              const newRefs = refs.filter((r) => !r.doi || !existingDois.has(r.doi));
-              if (newRefs.length === 0) { flashToast('精读文献已全部导入，无新增'); return; }
-              addReferences(newRefs);
-              flashToast(`成功导入 ${newRefs.length} 篇精读文献（来自每日精读自动化）`);
-            });
-          }}><Icon name="references" size={16} /> 导入精读文献</button>
-          <button className="btn ref-desktop-only" aria-label="导出 BibTeX" onClick={() => handleExport('bibtex')}><Icon name="download" size={16} /> 导出 BibTeX</button>
-          <button className="btn ref-desktop-only" aria-label="导出 RIS" onClick={() => handleExport('ris')}><Icon name="download" size={16} /> 导出 RIS</button>
           <button className="btn ref-desktop-only" aria-label="在线检索" onClick={() => setSearchOpen(true)}><Icon name="search" size={16} /> 检索</button>
-          {/* 移动端: 更多操作(桌面隐藏) */}
           <button className="btn ref-more-btn" aria-label="更多操作" onClick={() => setShowMoreMenu(true)}><Icon name="more" size={16} /> 更多</button>
           <button className="btn btn-primary" aria-label="新建文献" onClick={openManualCreate}><Icon name="plus" size={16} /> 新建</button>
+
+          {!isMobile && showMoreMenu && (
+            <div className="reference-more-popover" role="menu" aria-label="文献库更多操作">
+              <button role="menuitem" onClick={() => { setShowMoreMenu(false); void openZoteroImport(); }}><Icon name="references" size={16} /><span><strong>从 Zotero 导入</strong><small>先预览再只读复制</small></span></button>
+              <button role="menuitem" onClick={() => { setShowMoreMenu(false); setAnydocRefId(selectedId); setAnydocOpen(true); }}><Icon name="download" size={16} /><span><strong>文档转 Markdown</strong><small>本地转换并进入精读</small></span></button>
+              <button role="menuitem" onClick={() => {
+                setShowMoreMenu(false);
+                void import('@data/seedReferences').then(({ getSeedReferences }) => {
+                  const refs = getSeedReferences();
+                  const existingDois = new Set(references.map((reference) => reference.doi).filter(Boolean));
+                  const newRefs = refs.filter((reference) => !reference.doi || !existingDois.has(reference.doi));
+                  if (newRefs.length === 0) { flashToast('精读文献已全部导入，无新增'); return; }
+                  addReferences(newRefs);
+                  flashToast(`成功导入 ${newRefs.length} 篇精读文献`);
+                });
+              }}><Icon name="import" size={16} /><span><strong>导入精读文献</strong><small>导入本机每日精读结果</small></span></button>
+              <div className="reference-more-divider" />
+              <button role="menuitem" onClick={() => { setShowMoreMenu(false); void handleExport('bibtex'); }}><Icon name="download" size={16} /><span><strong>导出 BibTeX</strong><small>适用于 LaTeX 与文献工具</small></span></button>
+              <button role="menuitem" onClick={() => { setShowMoreMenu(false); void handleExport('ris'); }}><Icon name="download" size={16} /><span><strong>导出 RIS</strong><small>适用于 EndNote 等工具</small></span></button>
+              <button className="reference-more-close" onClick={() => setShowMoreMenu(false)}>关闭</button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="ref-search-row" style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      <ReferenceEvidenceWorkspace
+        references={references}
+        project={currentProject}
+        syncStatus={referenceSyncStatus}
+        syncMessage={referenceSyncMessage}
+        onOpenReference={setSelectedId}
+      />
+
+      <div className="reference-search-cluster">
+      <div className="ref-search-row reference-library-toolbar" style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
           placeholder="搜索标题、作者、DOI..."
@@ -747,7 +768,7 @@ export function ReferencesView() {
       </div>
 
       {/* DOI 自动抓取元数据 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <div className="reference-doi-row" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
           className="input"
           placeholder="粘贴 DOI 自动抓取文献信息（如 10.1234/abc.def）"
@@ -761,10 +782,11 @@ export function ReferencesView() {
           {doiLoading ? '抓取中...' : '抓取元数据'}
         </button>
       </div>
+      </div>
 
       {/* 统计概览 */}
       {references.length > 0 && (
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', fontSize: 12 }}>
+        <div className="reference-library-stats" style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', fontSize: 12 }}>
           <span className="status-chip" style={{ background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>
             共 {references.length} 篇
           </span>
@@ -841,7 +863,7 @@ export function ReferencesView() {
       ) : viewMode === 'calendar' ? (
         <CalendarView references={filtered} onSelect={setSelectedId} />
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="reference-library-table"><div style={{ overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -883,7 +905,7 @@ export function ReferencesView() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div></div>
       )}
 
       {/* 详情面板: 桌面侧滑 / 移动端 BottomSheet */}
@@ -1239,7 +1261,7 @@ function LiteratureSearchContent({
         {results.map((result, index) => {
           const saved = Boolean(result.doi && savedDois.has(result.doi.toLowerCase()));
           return (
-            <article key={`${result.doi || result.title}-${index}`} className="card" style={{ padding: 14, border: '1px solid var(--border)' }}>
+            <article key={`${result.doi || result.title}-${index}`} className="card reference-search-result" style={{ padding: 14, border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, lineHeight: 1.45 }}>{result.title}</div>
@@ -1249,9 +1271,14 @@ function LiteratureSearchContent({
                     {result.year ? ` · ${result.year}` : ''}{result.publication ? ` · ${result.publication}` : ''}
                   </div>
                   {result.doi && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>DOI: {result.doi}</div>}
-                  {result.source && <div style={{ fontSize: 10.5, color: 'var(--accent)', marginTop: 4 }}>来源：{result.source}</div>}
+                  {result.source && <span className="reference-source-badge">来源 · {result.source}</span>}
                 </div>
-                <button className="btn btn-sm" disabled={saved} onClick={() => onAdd(result)}>{saved ? '已在库中' : '加入本地库'}</button>
+                <div className="reference-search-result-actions">
+                  {safeExternalUrl(result.url) && (
+                    <a className="btn btn-sm" href={safeExternalUrl(result.url) ?? undefined} target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} /> 核验来源</a>
+                  )}
+                  <button className="btn btn-sm" disabled={saved} onClick={() => onAdd(result)}>{saved ? '已在库中' : '加入本地库'}</button>
+                </div>
               </div>
             </article>
           );

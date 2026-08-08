@@ -6,11 +6,14 @@
 import { useState, useEffect } from 'react';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/index';
-import { Icon, NAV_ICONS, STAGE_ICONS, type IconName } from '@components/ui/Icon';
-import { StatusChip, ProjectStatusChip } from '@components/ui/StatusChip';
+import { Icon, NAV_ICONS } from '@components/ui/Icon';
+import { StatusChip } from '@components/ui/StatusChip';
 import { versionedLoad, versionedSave, getOnboardingState, setOnboardingState } from '@lib/storage';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
+import { evidenceApi } from '@services/api';
+import { projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
+import './dashboard-workbench.css';
 
 // === 番茄钟组件（R86: 自定义事件） ===
 interface PomodoroEvent {
@@ -421,85 +424,6 @@ function ClockWidget() {
   );
 }
 
-// === 横向时间线 ===
-function TimelineWidget() {
-  const { projects, currentProjectId, setView } = useAppStore();
-  const currentProject = projects.find((p) => p.id === currentProjectId) || projects[0];
-  const stageIdx = currentProject ? PIPELINE_STAGES.findIndex((s) => s.key === currentProject.currentStage) : -1;
-
-  return (
-    <div className="card" style={{ padding: 16, marginBottom: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Icon name="pipeline" size={18} /> 科研时间线
-        </h3>
-        {currentProject && (
-          <button className="btn btn-sm" onClick={() => setView('pipeline')} style={{ fontSize: 12 }}>
-            进入流水线 →
-          </button>
-        )}
-      </div>
-
-      {/* 横向时间线 */}
-      <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
-        <div style={{ display: 'flex', minWidth: 700, position: 'relative' }}>
-          {/* 连接线 */}
-          <div style={{
-            position: 'absolute', top: 18, left: '4%', right: '4%', height: 2,
-            background: 'var(--border)', zIndex: 0,
-          }} />
-          {PIPELINE_STAGES.map((stage, i) => {
-            const isDone = currentProject && i < stageIdx;
-            const isCurrent = currentProject && i === stageIdx;
-            return (
-              <div
-                key={stage.key}
-                style={{
-                  flex: 1, textAlign: 'center', position: 'relative', zIndex: 1,
-                  cursor: 'pointer',
-                }}
-                onClick={() => setView('pipeline')}
-                title={stage.description}
-              >
-                {/* 节点圆 */}
-                <div style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  margin: '0 auto 8px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: isDone ? 'var(--accent)' : isCurrent ? 'var(--accent)' : 'var(--bg-surface)',
-                  border: `2px solid ${isDone || isCurrent ? 'var(--accent)' : 'var(--border)'}`,
-                  color: isDone || isCurrent ? '#fff' : 'var(--text-muted)',
-                  transition: 'all .2s',
-                }}>
-                  {isDone ? <Icon name="check" size={16} strokeWidth={2.5} /> : <Icon name={STAGE_ICONS[stage.key]} size={16} />}
-                </div>
-                {/* 标签 */}
-                <div style={{
-                  fontSize: 11, fontWeight: isCurrent ? 600 : 400,
-                  color: isCurrent ? 'var(--accent)' : 'var(--text-secondary)',
-                  lineHeight: 1.3,
-                }}>
-                  {stage.order}. {stage.label}
-                </div>
-                {/* 门控 */}
-                <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {stage.qualityGate}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {!currentProject && (
-        <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-muted)', marginTop: 12 }}>
-          创建项目后，时间线将显示当前进度
-        </div>
-      )}
-    </div>
-  );
-}
-
 // === P0-6 新手引导 Checklist ===
 // D6：onboarding 状态走 storage.ts 统一收口（含旧 selenyx-onboarding-done 兼容）
 
@@ -534,8 +458,8 @@ function OnboardingChecklist() {
   return (
     <div className="card" style={{ marginBottom: 24, padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600 }}>
-          🚀 新手指南 · {completed}/4 完成
+          <h3 style={{ fontSize: 15, fontWeight: 600 }}>
+          开始使用 · {completed}/4 完成
         </h3>
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -581,172 +505,178 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 }
 
 export function DashboardView() {
-  const { references, projects, tasks, tables, setView, currentProjectId } = useAppStore();
+  const { references, projects, tasks, tables, setView, setCurrentProject, workspaceSyncStatus } = useAppStore();
+  const primaryProject = selectPrimaryProject(projects);
+  const [evidenceSummary, setEvidenceSummary] = useState<{ total: number; accepted: number; pending: number } | null>(null);
+  const [evidenceAvailable, setEvidenceAvailable] = useState(false);
 
   const unread = references.filter((r) => r.readStatus === 'unread').length;
   const reading = references.filter((r) => r.readStatus === 'reading').length;
-  const activeProjects = projects.filter((p) => p.status === 'active' || p.status === 'planning').length;
   const todoTasks = tasks.filter((t) => t.column === 'todo').length;
   const doingTasks = tasks.filter((t) => t.column === 'doing').length;
+  const participantProjects = projects.filter((project) => project.ownerRole === 'participant');
+  const primaryTasks = primaryProject ? tasks.filter((task) => task.projectId === primaryProject.id) : [];
+  const nextTask = primaryTasks.find((task) => task.column === 'doing')
+    ?? primaryTasks.find((task) => task.column === 'todo')
+    ?? null;
+  const stageIndex = primaryProject
+    ? PIPELINE_STAGES.findIndex((stage) => stage.key === primaryProject.currentStage)
+    : -1;
+  const stage = stageIndex >= 0 ? PIPELINE_STAGES[stageIndex] : null;
+  const primaryProjectId = primaryProject?.id ?? null;
 
-  const now = new Date();
-  const thisMonth = references.filter((r) => {
-    const d = new Date(r.createdAt);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
+  useEffect(() => {
+    let active = true;
+    setEvidenceSummary(null);
+    setEvidenceAvailable(false);
+    if (!primaryProjectId) return () => { active = false; };
+    void evidenceApi.summary(primaryProjectId).then((summary) => {
+      if (!active) return;
+      setEvidenceSummary({
+        total: Number(summary.total ?? 0),
+        accepted: Number(summary.accepted ?? 0),
+        pending: Number(summary.pending ?? 0),
+      });
+      setEvidenceAvailable(true);
+    }).catch(() => {
+      if (active) setEvidenceAvailable(false);
+    });
+    return () => { active = false; };
+  }, [primaryProjectId]);
 
-  const stats: { label: string; value: number; delta: string; icon: IconName; view: ViewKey }[] = [
-    { label: '文献总数', value: references.length, delta: `未读 ${unread} · 阅读中 ${reading}`, icon: NAV_ICONS.references, view: 'references' },
-    { label: '活跃项目', value: activeProjects, delta: `共 ${projects.length} 个项目`, icon: NAV_ICONS.projects, view: 'projects' },
-    { label: '待办任务', value: todoTasks, delta: `进行中 ${doingTasks}`, icon: NAV_ICONS.pipeline, view: 'pipeline' },
-    { label: '本月新增', value: thisMonth, delta: `文献入库`, icon: NAV_ICONS.references, view: 'references' },
-  ];
-
-  const currentProject = projects.find((p) => p.id === currentProjectId) || projects[0];
+  function continuePrimaryProject() {
+    if (!primaryProject) return;
+    setCurrentProject(primaryProject.id);
+    setView('pipeline');
+  }
 
   return (
-    <div>
-      <div className="view-header">
-        <h1 className="view-title">总览</h1>
-      </div>
+    <div className="research-dashboard">
+      <header className="research-dashboard-header">
+        <div>
+          <h1>科研总览</h1>
+          <p>以主线课题为中心，先过证据门，再进入写作。</p>
+        </div>
+        <div className={`research-local-pill is-${workspaceSyncStatus}`} role="status">
+          <span aria-hidden="true" />
+          {workspaceSyncStatus === 'synced' ? '本机数据已同步' : workspaceSyncStatus === 'syncing' ? '正在同步本机数据' : '离线缓存可用'}
+        </div>
+      </header>
 
-      {/* P0-6 新手引导 */}
+      {primaryProject ? (
+        <section className="research-command" aria-labelledby="mainline-title">
+          <div className="research-command-main">
+            <div className="research-command-titleline">
+              <div>
+                <span className="research-section-kicker">主线课题</span>
+                <h2 id="mainline-title">{primaryProject.name}</h2>
+                <div className="research-project-meta">
+                  <span className="project-role-badge is-lead">{projectRoleLabel(primaryProject)}</span>
+                  <span className="project-primary-badge">首页主线</span>
+                  {primaryProject.frameworkId && <span>{primaryProject.frameworkId.toUpperCase()}</span>}
+                </div>
+              </div>
+              <button className="btn btn-primary research-continue" onClick={continuePrimaryProject}>
+                继续流水线 <Icon name="chevronRight" size={16} />
+              </button>
+            </div>
+
+            <div className="research-stage-rail" aria-label="八段科研流水线进度">
+              {PIPELINE_STAGES.map((item, index) => (
+                <button
+                  key={item.key}
+                  className={index < stageIndex ? 'is-done' : index === stageIndex ? 'is-current' : ''}
+                  onClick={continuePrimaryProject}
+                  aria-label={`${item.order}. ${item.label}${index === stageIndex ? '，当前阶段' : ''}`}
+                >
+                  <span>{index < stageIndex ? <Icon name="check" size={13} /> : item.order}</span>
+                  <small>{item.label}</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="research-gate-grid">
+              <article>
+                <span>当前阶段</span>
+                <strong>{stage ? `${stage.order}. ${stage.label}` : '尚未开始'}</strong>
+                <small>{stage?.description}</small>
+              </article>
+              <article>
+                <span>本阶段质量门</span>
+                <strong>{stage?.qualityGate ?? '先建立结构化研究问题'}</strong>
+                <small>只有人工确认后才进入下一阶段</small>
+              </article>
+              <article>
+                <span>下一步动作</span>
+                <strong>{nextTask?.title ?? '为当前阶段创建一项可执行任务'}</strong>
+                <small>{nextTask ? (nextTask.column === 'doing' ? '正在进行' : '待开始') : '进入流水线补充任务与产出'}</small>
+              </article>
+            </div>
+          </div>
+
+          <aside className="research-evidence-health" aria-label="主线证据健康">
+            <div className="research-evidence-heading">
+              <div>
+                <span className="research-section-kicker">证据健康</span>
+                <h3>本机证据门</h3>
+              </div>
+              <Icon name="shield" size={22} />
+            </div>
+            <dl>
+              <div><dt><span className="evidence-dot is-accepted" /> 已接受</dt><dd>{evidenceSummary?.accepted ?? '—'}</dd></div>
+              <div><dt><span className="evidence-dot is-pending" /> 待人工审核</dt><dd>{evidenceSummary?.pending ?? '—'}</dd></div>
+              <div><dt><span className="evidence-dot is-total" /> 证据条目</dt><dd>{evidenceSummary?.total ?? '—'}</dd></div>
+            </dl>
+            <p>{evidenceAvailable ? '本机索引可用；AI 检索命中仍需你接受后才能写入提纲。' : '当前使用离线缓存；连接本地后端后显示证据审核统计。'}</p>
+            <button className="btn" onClick={() => { setCurrentProject(primaryProject.id); setView('references'); }}>
+              检查文献与证据
+            </button>
+          </aside>
+        </section>
+      ) : (
+        <section className="research-command research-empty-mainline">
+          <span className="research-section-kicker">先建立主线</span>
+          <h2>从项目名称开始，研究框架完全可选</h2>
+          <p>创建项目时标注“我主导”或“我参与”，首页只把主线课题放在第一位。</p>
+          <button className="btn btn-primary" onClick={() => setView('projects')}><Icon name="plus" size={16} /> 新建项目</button>
+        </section>
+      )}
+
+      <section className="research-metrics" aria-label="工作区概况">
+        <button onClick={() => setView('references')}><span>文献</span><strong>{references.length}</strong><small>未读 {unread} · 阅读中 {reading}</small></button>
+        <button onClick={() => setView('pipeline')}><span>任务</span><strong>{todoTasks + doingTasks}</strong><small>进行中 {doingTasks} · 待办 {todoTasks}</small></button>
+        <button onClick={() => setView('projects')}><span>参与项目</span><strong>{participantProjects.length}</strong><small>不会覆盖主线课题</small></button>
+        <button onClick={() => setView('tables')}><span>研究表格</span><strong>{tables.length}</strong><small>结构化数据与分析</small></button>
+      </section>
+
       <OnboardingChecklist />
 
-      {/* 统计卡片 */}
-      <div className="grid grid-4" style={{ marginBottom: 24 }}>
-        {stats.map((s) => (
-          <div className="stat-card clickable" key={s.label} onClick={() => setView(s.view)} style={{ cursor: 'pointer', transition: 'all .15s' }}>
-            <span className="label" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-              <span style={{ color: 'var(--accent)', display: 'inline-flex' }}><Icon name={s.icon} size={18} strokeWidth={1.8} /></span> {s.label}
-            </span>
-            <span className="value">{s.value}</span>
-            <span className="delta" style={{ color: 'var(--text-muted)' }}>{s.delta}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* ===== 区块一：今日（时钟 + 番茄钟） ===== */}
-      <SectionTitle title="今日" subtitle="北京时间 · 专注节奏" />
-      <div className="grid grid-2" style={{ gap: 16, alignItems: 'stretch' }}>
+      <div className="research-today-grid">
         <ClockWidget />
         <PomodoroTimer />
       </div>
 
-      {/* ===== 区块二：项目进展（流水线时间线 + 当前项目） ===== */}
-      <SectionTitle title="项目进展" subtitle="八段流水线 · 当前项目" />
-      <TimelineWidget />
-
-      {/* 当前项目进度 */}
-      {currentProject && (
-        <div className="card" style={{ marginTop: 16, cursor: 'pointer' }} onClick={() => setView('pipeline')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600 }}>{currentProject.name}</h3>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>点击进入流水线 →</span>
-          </div>
-          <div className="pipeline-progress" style={{ marginBottom: 8 }}>
-            {PIPELINE_STAGES.map((s, i) => {
-              const stageIdx = PIPELINE_STAGES.findIndex((s) => s.key === currentProject.currentStage);
-              return (
-                <div key={s.key} className={`pp-segment ${i < stageIdx ? 'done' : i === stageIdx ? 'current' : ''}`} title={s.label} />
-              );
-            })}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
-            <span>当前：{PIPELINE_STAGES[PIPELINE_STAGES.findIndex((s) => s.key === currentProject.currentStage)]?.label}</span>
-            <span>进度 {Math.round((PIPELINE_STAGES.findIndex((s) => s.key === currentProject.currentStage) / 8) * 100)}%</span>
-          </div>
-        </div>
-      )}
-
-      {/* ===== 区块三：快捷操作 ===== */}
-      <SectionTitle title="快捷操作" />
-      <div className="card" style={{ padding: 16 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={() => setView('projects')}><Icon name="plus" size={16} /> 新建项目</button>
-          <button className="btn" onClick={() => setView('references')}><Icon name={NAV_ICONS.references} size={16} /> 管理文献</button>
-          <button className="btn" onClick={() => setView('tables')}><Icon name={NAV_ICONS.tables} size={16} /> 多维表格</button>
-          <button className="btn" onClick={() => setView('pipeline')}><Icon name={NAV_ICONS.pipeline} size={16} /> 科研流水线</button>
-          <button className="btn" onClick={() => setView('aiChat')}><Icon name={NAV_ICONS.aiChat} size={16} /> AI 对话</button>
-          <button className="btn" onClick={() => setView('skills')}><Icon name={NAV_ICONS.skills} size={16} /> 科研技能</button>
-          {useAppStore.getState().llmConfig == null && (
-            <button className="btn btn-danger-ghost" onClick={() => setView('settings')}><Icon name="warning" size={16} /> 先配置 LLM</button>
-          )}
-        </div>
+      <SectionTitle title="最近工作" subtitle="文献与参与项目" />
+      <div className="research-recent-grid">
+        <section className="research-list-panel">
+          <header><h2><Icon name={NAV_ICONS.references} size={18} /> 最近文献</h2><button onClick={() => setView('references')}>查看全部</button></header>
+          {references.length === 0 ? <p className="research-list-empty">文献库为空，先导入真实来源再开始 RAG。</p> : references.slice(0, 5).map((reference) => (
+            <button key={reference.id} className="research-list-row" onClick={() => setView('references')}>
+              <span><strong>{reference.title}</strong><small>{reference.year || '年份未知'} · {reference.publication || '来源待补充'}</small></span>
+              <StatusChip status={reference.readStatus} size="xs" />
+            </button>
+          ))}
+        </section>
+        <section className="research-list-panel">
+          <header><h2><Icon name={NAV_ICONS.projects} size={18} /> 参与项目</h2><button onClick={() => setView('projects')}>查看全部</button></header>
+          {participantProjects.length === 0 ? <p className="research-list-empty">暂无参与项目；协作课题不会占用首页主线。</p> : participantProjects.slice(0, 5).map((project) => (
+            <button key={project.id} className="research-list-row" onClick={() => { setCurrentProject(project.id); setView('projects'); }}>
+              <span><strong>{project.name}</strong><small>{PIPELINE_STAGES.find((item) => item.key === project.currentStage)?.label} · 文献 {project.referenceIds.length}</small></span>
+              <span className="project-role-badge is-participant">我参与</span>
+            </button>
+          ))}
+        </section>
       </div>
-
-      {/* ===== 区块四：最近动态（文献 / 项目 / 表格） ===== */}
-      <SectionTitle title="最近动态" subtitle="文献 · 项目 · 表格" />
-      <div className="grid grid-2">
-        <div className="card">
-          <h3 style={{ marginBottom: 12, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name={NAV_ICONS.references} size={17} /> 最近文献</span>
-            <button className="btn btn-sm" onClick={() => setView('references')}>查看全部</button>
-          </h3>
-          {references.length === 0 ? (
-            <div className="empty-state">
-              <div className="icon" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="references" size={40} strokeWidth={1.2} /></div>
-              <p>文献库为空，去「文献库」页面导入或检索</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {references.slice(0, 5).map((r) => (
-                <div key={r.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.year} · {r.publication}</div>
-                  </div>
-                  <StatusChip status={r.readStatus} size="xs" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="card">
-          <h3 style={{ marginBottom: 12, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name={NAV_ICONS.projects} size={17} /> 活跃项目</span>
-            <button className="btn btn-sm" onClick={() => setView('projects')}>查看全部</button>
-          </h3>
-          {projects.length === 0 ? (
-            <div className="empty-state">
-              <div className="icon" style={{ display: 'flex', justifyContent: 'center' }}><Icon name="projects" size={40} strokeWidth={1.2} /></div>
-              <p>暂无项目，创建第一个科研项目开始</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {projects.filter((p) => p.status === 'active' || p.status === 'planning').slice(0, 5).map((p) => (
-                <div key={p.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{p.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {PIPELINE_STAGES.find((s) => s.key === p.currentStage)?.label} · 文献 {p.referenceIds.length}
-                    </div>
-                  </div>
-                  <ProjectStatusChip status={p.status} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 多维表格预览 */}
-      {tables.length > 0 && (
-        <div className="card" style={{ marginTop: 24 }}>
-          <h3 style={{ marginBottom: 12, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name={NAV_ICONS.tables} size={17} /> 我的表格</span>
-            <button className="btn btn-sm" onClick={() => setView('tables')}>管理</button>
-          </h3>
-          <div className="grid grid-3">
-            {tables.slice(0, 3).map((t) => (
-              <div key={t.id} className="card" style={{ padding: 12, cursor: 'pointer' }} onClick={() => setView('tables')}>
-                <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.records.length} 条 · {t.fields.length} 字段</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

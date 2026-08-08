@@ -20,10 +20,9 @@ import { readEnvironmentLLM } from '@services/envLLM';
 import { bootstrapReferenceRepository } from '@services/referenceRepository';
 import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
 import './styles/tokens.css';
+import './styles/mobile-shell.css';
 
 export type { ViewKey } from '@stores/appStore';
-
-const APP_VERSION = '0.01 · 2026-08-07';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -126,13 +125,16 @@ export default function App() {
 
   return (
     <ThemeProvider>
+      <a className="skip-to-content" href="#workspace-main">跳到主要内容</a>
       <div className="app-shell">
         <Sidebar />
-        <main className="app-main">
+        <main id="workspace-main" className="app-main" tabIndex={-1}>
           <MobileShell />
-          <ErrorBoundary>{renderView()}</ErrorBoundary>
-          <div style={{ textAlign: 'center', padding: '12px 0 4px', fontSize: 11, color: 'var(--text-muted)', opacity: 0.6 }}>
-            Selenyx {APP_VERSION}<span style={{ marginLeft: 8 }}>· 本地工作区 · 前端+后端</span>
+          <div className="app-view-region">
+            <ErrorBoundary>{renderView()}</ErrorBoundary>
+            <div className="app-version-footer">
+              Selenyx
+            </div>
           </div>
         </main>
       </div>

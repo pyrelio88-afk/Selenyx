@@ -3,7 +3,7 @@
  * R84: 新增研究框架选择（PICO/PRISMA/CONSORT/STROBE/IMRaD）
  */
 
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/index';
 import type { ResearchProject, PipelineStageKey } from '@apptypes/index';
@@ -12,6 +12,7 @@ import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
 import { CORE_RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
+import { projectRoleLabel } from '@lib/projectPriority';
 
 const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
   { label: '全部', match: [] },
@@ -29,15 +30,71 @@ function genId() {
   return 'proj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+interface ProjectFormState {
+  name: string;
+  description: string;
+  frameworkId: string;
+  ownerRole: 'lead' | 'participant';
+  makePrimary: boolean;
+}
+
+function ProjectOwnershipFields({
+  form,
+  setForm,
+}: {
+  form: ProjectFormState;
+  setForm: Dispatch<SetStateAction<ProjectFormState>>;
+}) {
+  return (
+    <fieldset className="project-ownership" style={{ marginBottom: 14 }}>
+      <legend className="form-label">你在项目中的角色</legend>
+      <div className="project-role-options">
+        <label className={form.ownerRole === 'lead' ? 'is-selected' : ''}>
+          <input
+            type="radio"
+            name="project-role"
+            value="lead"
+            checked={form.ownerRole === 'lead'}
+            onChange={() => setForm((current) => ({ ...current, ownerRole: 'lead' }))}
+          />
+          <span><strong>我主导</strong><small>负责研究决策与每日推进</small></span>
+        </label>
+        <label className={form.ownerRole === 'participant' ? 'is-selected' : ''}>
+          <input
+            type="radio"
+            name="project-role"
+            value="participant"
+            checked={form.ownerRole === 'participant'}
+            onChange={() => setForm((current) => ({ ...current, ownerRole: 'participant', makePrimary: false }))}
+          />
+          <span><strong>我参与</strong><small>只显示分工、待办与可迁移方法</small></span>
+        </label>
+      </div>
+      {form.ownerRole === 'lead' && (
+        <label className="project-primary-option">
+          <input
+            type="checkbox"
+            checked={form.makePrimary}
+            onChange={(event) => setForm((current) => ({ ...current, makePrimary: event.target.checked }))}
+          />
+          设为首页主线课题
+        </label>
+      )}
+    </fieldset>
+  );
+}
+
 export function ProjectsView() {
   const {
-    projects, tasks, setCurrentProject, addProject, setView,
+    projects, tasks, setCurrentProject, addProject, setPrimaryProject, setView,
     workspaceSyncStatus, workspaceSyncMessage,
   } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
   const [showFrameworks, setShowFrameworks] = useState(false);
   const [selectedFramework, setSelectedFramework] = useState<ResearchFramework | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', frameworkId: '' });
+  const [form, setForm] = useState({
+    name: '', description: '', frameworkId: '', ownerRole: 'lead' as 'lead' | 'participant', makePrimary: true,
+  });
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [disciplineFilter, setDisciplineFilter] = useState(DISCIPLINE_FILTERS[0]);
   const isMobile = useIsMobile();
@@ -49,7 +106,7 @@ export function ProjectsView() {
   function startCreate() {
     setShowFrameworks(false);
     setSelectedFramework(null);
-    setForm({ name: '', description: '', frameworkId: '' });
+    setForm({ name: '', description: '', frameworkId: '', ownerRole: 'lead', makePrimary: projects.length === 0 });
     setFieldValues({});
     setShowCreate(true);
   }
@@ -79,6 +136,8 @@ export function ProjectsView() {
       id: genId(),
       name: form.name.trim(),
       description: form.description.trim() || selectedFramework?.description || '',
+      ownerRole: form.ownerRole,
+      isPrimary: form.ownerRole === 'lead' && (form.makePrimary || projects.length === 0),
       currentStage: 'problem' as PipelineStageKey,
       frameworkId: selectedFramework?.id || undefined,
       pico: selectedFramework?.id === 'pico' ? {
@@ -108,8 +167,9 @@ export function ProjectsView() {
     // Without this, the sidebar could display the first project while the
     // pipeline still saw currentProjectId=null and refused to run.
     setCurrentProject(proj.id);
+    if (proj.isPrimary) setPrimaryProject(proj.id);
     setShowCreate(false);
-    setForm({ name: '', description: '', frameworkId: '' });
+    setForm({ name: '', description: '', frameworkId: '', ownerRole: 'lead', makePrimary: false });
     setFieldValues({});
     setSelectedFramework(null);
   }
@@ -153,7 +213,13 @@ export function ProjectsView() {
             return (
               <div key={p.id} className="card project-card" style={{ cursor: 'pointer' }} onClick={() => { setCurrentProject(p.id); setView('pipeline'); }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ fontSize: 16 }}>{p.name}</h3>
+                  <h3 style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {p.name}
+                    <span className={`project-role-badge is-${p.ownerRole === 'participant' ? 'participant' : 'lead'}`}>
+                      {projectRoleLabel(p)}
+                    </span>
+                    {p.isPrimary && <span className="project-primary-badge">主线课题</span>}
+                  </h3>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '3px 10px', borderRadius: 10, background: 'var(--accent-light)', color: 'var(--accent)' }}>
                     {stage && <Icon name={STAGE_ICONS[stage.key]} size={13} />} {stage?.label}
                   </span>
@@ -184,6 +250,12 @@ export function ProjectsView() {
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name={NAV_ICONS.pipeline} size={13} /> 任务 {projectTasks.length}</span>
                   <span style={{ marginLeft: 'auto' }}><ProjectStatusChip status={p.status} /></span>
                 </div>
+                {!p.isPrimary && p.ownerRole !== 'participant' && (
+                  <button
+                    className="btn btn-sm project-make-primary"
+                    onClick={(event) => { event.stopPropagation(); setPrimaryProject(p.id); }}
+                  >设为主线</button>
+                )}
               </div>
             );
           })}
@@ -199,13 +271,15 @@ export function ProjectsView() {
 
                 {/* 项目名称 - 必填，优先 */}
                 <div style={{ marginBottom: 12 }}>
-                  <label className="form-label">项目名称 *</label>
-                  <input className="input" placeholder="如：AI辅助SBAR护理交接训练研究" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+                  <label className="form-label" htmlFor="project-name">项目名称 *</label>
+                  <input id="project-name" className="input" placeholder="如：AI辅助SBAR护理交接训练研究" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
                 </div>
                 <div style={{ marginBottom: 12 }}>
-                  <label className="form-label">项目描述</label>
-                  <textarea className="input" placeholder="简述研究背景和目标..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
+                  <label className="form-label" htmlFor="project-description">项目描述</label>
+                  <textarea id="project-description" className="input" placeholder="简述研究背景和目标..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
                 </div>
+
+                <ProjectOwnershipFields form={form} setForm={setForm} />
 
                 {/* 框架选择 - 可选可折叠 */}
                 <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
@@ -313,13 +387,15 @@ export function ProjectsView() {
 
                 {/* 项目名称 - 必填，优先 */}
                 <div style={{ marginBottom: 12 }}>
-                  <label className="form-label">项目名称 *</label>
-                  <input className="input" placeholder="如：AI辅助SBAR护理交接训练研究" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+                  <label className="form-label" htmlFor="project-name">项目名称 *</label>
+                  <input id="project-name" className="input" placeholder="如：AI辅助SBAR护理交接训练研究" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
                 </div>
                 <div style={{ marginBottom: 12 }}>
-                  <label className="form-label">项目描述</label>
-                  <textarea className="input" placeholder="简述研究背景和目标..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
+                  <label className="form-label" htmlFor="project-description">项目描述</label>
+                  <textarea id="project-description" className="input" placeholder="简述研究背景和目标..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
                 </div>
+
+                <ProjectOwnershipFields form={form} setForm={setForm} />
 
                 {/* 框架选择 - 可选可折叠 */}
                 <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
