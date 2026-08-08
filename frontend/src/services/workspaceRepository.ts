@@ -18,6 +18,64 @@ export interface WorkspaceBootstrapResult {
   message: string;
 }
 
+// A local deletion must outlive an unavailable sidecar. Without this marker,
+// startup's conservative union reconciliation would resurrect a project the
+// user deleted while SQLite was offline.
+const DELETED_PROJECT_KEY = 'selenyx-deleted-project-ids';
+const RESTORED_PROJECT_IDS_KEY = 'selenyx-restored-project-ids';
+const volatileStringSets = new Map<string, string[]>();
+
+function readStringSet(key: string): string[] | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(key);
+    if (raw === null || raw === undefined) return volatileStringSets.get(key) ?? null;
+    const decoded: unknown = JSON.parse(raw);
+    return Array.isArray(decoded)
+      ? [...new Set(decoded.filter((id): id is string => typeof id === 'string' && Boolean(id)))]
+      : null;
+  } catch {
+    return volatileStringSets.get(key) ?? null;
+  }
+}
+
+function writeStringSet(key: string, ids: string[]): void {
+  const unique = [...new Set(ids)];
+  volatileStringSets.set(key, unique);
+  try {
+    globalThis.localStorage?.setItem(key, JSON.stringify(unique));
+  } catch {
+    // The current Zustand mutation remains correct even if browser storage is
+    // disabled. The next online delete will still repair SQLite.
+  }
+}
+
+function clearStringSet(key: string): void {
+  volatileStringSets.delete(key);
+  try {
+    globalThis.localStorage?.removeItem(key);
+  } catch {
+    // Best effort only; retaining an intent is safer than losing it.
+  }
+}
+
+function readDeletedProjectIds(): string[] {
+  return readStringSet(DELETED_PROJECT_KEY) ?? [];
+}
+
+function rememberDeletedProject(id: string): void {
+  writeStringSet(DELETED_PROJECT_KEY, [...readDeletedProjectIds(), id]);
+}
+
+function forgetDeletedProject(id: string): void {
+  writeStringSet(DELETED_PROJECT_KEY, readDeletedProjectIds().filter((candidate) => candidate !== id));
+}
+
+function rememberAuthoritativeRestore(projects: ResearchProject[]): void {
+  // An empty list is meaningful: restoring an empty backup must not bring
+  // every old SQLite project back on the next online launch.
+  writeStringSet(RESTORED_PROJECT_IDS_KEY, projects.map((project) => project.id));
+}
+
 function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
@@ -107,13 +165,15 @@ export function reconcileWorkspace(
 let writeQueue: Promise<void> = Promise.resolve();
 
 export function removeMirroredProject(projectId: string): Promise<void> {
+  rememberDeletedProject(projectId);
   writeQueue = writeQueue
     .then(async () => {
       await projectApi.delete(projectId);
+      forgetDeletedProject(projectId);
     })
     .catch(() => {
-      // Offline / backend down: local Zustand already dropped the project.
-      // Startup reconcile may reintroduce it until DELETE succeeds later.
+      // Keep the tombstone. It is replayed before reconciliation when the
+      // local backend becomes available, so a deleted project cannot return.
     });
   return writeQueue;
 }
@@ -127,6 +187,7 @@ export function mirrorWorkspace(
   writeQueue = writeQueue
     .then(async () => {
       await projectApi.bulkUpsertWorkspace(projects, tasks);
+      for (const project of projects) forgetDeletedProject(project.id);
       report?.('synced', `SQLite 已同步 ${projects.length} 个项目、${tasks.length} 个任务`);
     })
     .catch((error: unknown) => {
@@ -136,6 +197,43 @@ export function mirrorWorkspace(
         'offline',
         error instanceof Error ? error.message : '本地后端不可用，修改已保存在离线工作区',
       );
+    });
+  return writeQueue;
+}
+
+/**
+ * Mirrors a user-selected backup as an authoritative workspace replacement.
+ * Normal working copies are union-reconciled; an explicit restore is not.
+ */
+export function replaceMirroredWorkspace(
+  projects: ResearchProject[],
+  tasks: KanbanTask[],
+  report?: (status: WorkspaceSyncStatus, message: string) => void,
+): Promise<void> {
+  rememberAuthoritativeRestore(projects);
+  // A backup can intentionally restore a project id that was deleted in a
+  // later local session. The user's explicit restore wins over that old
+  // tombstone, even if the sidecar is currently offline.
+  for (const project of projects) forgetDeletedProject(project.id);
+  report?.('syncing', '正在将恢复的工作区写入本机 SQLite…');
+  writeQueue = writeQueue
+    .then(async () => {
+      const snapshot = await projectApi.workspaceSnapshot();
+      const desiredIds = new Set(projects.map((project) => project.id));
+      for (const remoteProject of snapshot.projects) {
+        if (!desiredIds.has(remoteProject.id)) {
+          rememberDeletedProject(remoteProject.id);
+          await projectApi.delete(remoteProject.id);
+          forgetDeletedProject(remoteProject.id);
+        }
+      }
+      await projectApi.bulkUpsertWorkspace(projects, tasks);
+      for (const project of projects) forgetDeletedProject(project.id);
+      clearStringSet(RESTORED_PROJECT_IDS_KEY);
+      report?.('synced', `已恢复并同步 ${projects.length} 个项目、${tasks.length} 个任务`);
+    })
+    .catch((error: unknown) => {
+      report?.('offline', error instanceof Error ? error.message : '本机后端不可用；恢复内容已保存在离线工作区');
     });
   return writeQueue;
 }
@@ -156,9 +254,29 @@ export function bootstrapWorkspaceRepository(
       const remoteTasks = snapshot.tasks.map((task) => normalizeBackendTask(
         task as KanbanTask & Record<string, unknown>,
       ));
-      const workspace = reconcileWorkspace(localProjects, localTasks, remoteProjects, remoteTasks);
+      const restoredIds = readStringSet(RESTORED_PROJECT_IDS_KEY);
+      const restoredIdSet = restoredIds ? new Set(restoredIds) : null;
+      const deletedIds = new Set(
+        readDeletedProjectIds().filter((id) => !restoredIdSet?.has(id)),
+      );
+      const projectsToDelete = remoteProjects.filter((project) => (
+        deletedIds.has(project.id) || (restoredIdSet !== null && !restoredIdSet.has(project.id))
+      ));
+      for (const project of projectsToDelete) {
+        await projectApi.delete(project.id);
+        forgetDeletedProject(project.id);
+      }
+      if (restoredIdSet !== null) clearStringSet(RESTORED_PROJECT_IDS_KEY);
+      const removedProjectIds = new Set(projectsToDelete.map((project) => project.id));
+      const workspace = reconcileWorkspace(
+        localProjects.filter((project) => !deletedIds.has(project.id)),
+        localTasks.filter((task) => !deletedIds.has(task.projectId)),
+        remoteProjects.filter((project) => !deletedIds.has(project.id) && !removedProjectIds.has(project.id)),
+        remoteTasks.filter((task) => !deletedIds.has(task.projectId) && !removedProjectIds.has(task.projectId)),
+      );
       if (workspace.projects.length || workspace.tasks.length) {
         await projectApi.bulkUpsertWorkspace(workspace.projects, workspace.tasks);
+        for (const project of workspace.projects) forgetDeletedProject(project.id);
       }
       return {
         ...workspace,

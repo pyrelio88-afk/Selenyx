@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { KanbanTask, ResearchProject } from '@apptypes/index';
 import { projectApi } from '../api';
 import {
+  bootstrapWorkspaceRepository,
   mirrorWorkspace,
   normalizeBackendProject,
   normalizeBackendTask,
   reconcileWorkspace,
+  removeMirroredProject,
 } from '../workspaceRepository';
 
 afterEach(() => {
@@ -92,5 +94,24 @@ describe('workspaceRepository', () => {
     await mirrorWorkspace([], [], (status) => statuses.push(status));
 
     expect(statuses).toEqual(['syncing', 'synced']);
+  });
+
+  it('replays an offline project deletion before startup reconciliation', async () => {
+    const deleted = project('project-deleted', '2026-08-07T01:00:00Z', 'deleted offline');
+    const deleteSpy = vi.spyOn(projectApi, 'delete').mockRejectedValueOnce(new Error('offline'));
+    await removeMirroredProject(deleted.id);
+
+    deleteSpy.mockResolvedValue({ deleted: deleted.id, deletedTasks: 0, deletedEvidence: 0 });
+    vi.spyOn(projectApi, 'workspaceSnapshot').mockResolvedValue({
+      projects: [deleted], tasks: [], projectCount: 1, taskCount: 0, payloadVersion: 1,
+    });
+    vi.spyOn(projectApi, 'bulkUpsertWorkspace').mockResolvedValue({
+      storedProjects: 0, storedTasks: 0, createdProjects: 0, updatedProjects: 0, createdTasks: 0, updatedTasks: 0,
+    });
+
+    const result = await bootstrapWorkspaceRepository([], []);
+
+    expect(deleteSpy).toHaveBeenCalledWith(deleted.id);
+    expect(result.projects).toEqual([]);
   });
 });

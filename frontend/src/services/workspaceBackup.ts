@@ -1,4 +1,6 @@
 import { useAppStore } from '@stores/appStore';
+import type { KanbanTask, ResearchProject } from '@apptypes/index';
+import { replaceMirroredWorkspace } from './workspaceRepository';
 
 export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2;
 const CHAT_PREFIX = 'selenyx_chat_';
@@ -422,6 +424,14 @@ export function restoreWorkspaceBackup(text: string, storage: StorageLike | null
     }
   }
   useAppStore.setState(backup.data as Partial<ReturnType<typeof useAppStore.getState>>);
+  const projects = backup.data.projects as ResearchProject[];
+  const tasks = backup.data.tasks as KanbanTask[];
+  // A deliberately selected backup is a replacement, not a merge. Keep the
+  // local UI usable when SQLite is unavailable, while recording an intent so
+  // stale remote projects are removed before any later reconciliation.
+  void replaceMirroredWorkspace(projects, tasks, (status, message) => {
+    useAppStore.setState({ workspaceSyncStatus: status, workspaceSyncMessage: message });
+  });
   return backup;
 }
 

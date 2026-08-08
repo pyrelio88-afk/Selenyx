@@ -245,6 +245,13 @@ export const useAppStore = create<AppState>()(
       deleteProject: (id) => set((s) => {
         const projects = s.projects.filter((project) => project.id !== id);
         const tasks = s.tasks.filter((task) => task.projectId !== id);
+        const scopedKeyPrefix = `${id}::`;
+        const pipelineRuns = Object.fromEntries(
+          Object.entries(s.pipelineRuns).filter(([key]) => !key.startsWith(scopedKeyPrefix)),
+        );
+        const stageConfigs = Object.fromEntries(
+          Object.entries(s.stageConfigs).filter(([key]) => !key.startsWith(scopedKeyPrefix)),
+        );
         const currentProjectId = s.currentProjectId === id
           ? (selectPrimaryProject(projects)?.id ?? null)
           : s.currentProjectId;
@@ -254,6 +261,9 @@ export const useAppStore = create<AppState>()(
         return {
           projects,
           tasks,
+          tables: s.tables.filter((table) => table.projectId !== id),
+          pipelineRuns,
+          stageConfigs,
           currentProjectId,
           workspaceSyncStatus: 'syncing',
           workspaceSyncMessage: '正在删除本机项目…',
