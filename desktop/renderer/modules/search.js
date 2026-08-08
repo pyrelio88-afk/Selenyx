@@ -300,7 +300,67 @@ function setupSearch() {
     renderRight();
     toast('文献已保存到本地');
   });
+  $('#export-bibtex')?.addEventListener('click', () => exportLibrary('bibtex'));
+  $('#export-csv')?.addEventListener('click', () => exportLibrary('csv'));
   $$('[data-close-modal]').forEach((button) => button.addEventListener('click', () => { $(`#${button.dataset.closeModal}`).hidden = true; }));
+}
+
+function bibtexKey(record) {
+  const author = (record.authors?.[0] || 'anon').split(/\s+/).pop().replace(/[^A-Za-z]/g, '') || 'anon';
+  const word = (record.title || 'untitled').split(/\s+/).find((w) => /^[A-Za-z]/.test(w)) || 'untitled';
+  return `${author}${record.year || 'nd'}${word}`.replace(/[^A-Za-z0-9]/g, '');
+}
+
+function bibtexEscape(value) {
+  return String(value ?? '').replace(/[{}\\]/g, '\\$&');
+}
+
+function downloadText(filename, content, mime) {
+  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// 本地离线导出：从 library 生成 BibTeX / CSV，不联网、不上传。
+function exportLibrary(format) {
+  const records = state.workspace?.library ?? [];
+  if (!records.length) return toast('本地文献库为空，无可导出内容', 'error');
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (format === 'bibtex') {
+    const body = records.map((record) => {
+      const authors = (record.authors?.length ? record.authors : ['Anonymous']).map((a) => bibtexEscape(a)).join(' and ');
+      const lines = [
+        `@${record.sourceType === 'book' ? 'book' : 'article'}{${bibtexKey(record)},`,
+        `  title = {${bibtexEscape(record.title)}}`,
+        `  author = {${authors}}`,
+      ];
+      if (record.year) lines.push(`  year = {${record.year}}`);
+      if (record.venue) lines.push(`  journal = {${bibtexEscape(record.venue)}}`);
+      if (record.externalIds?.doi) lines.push(`  doi = {${bibtexEscape(record.externalIds.doi)}}`);
+      if (record.url) lines.push(`  url = {${bibtexEscape(record.url)}}`);
+      if (record.abstract) lines.push(`  abstract = {${bibtexEscape(record.abstract.slice(0, 500))}}`);
+      return lines.join(',\n') + ',\n}';
+    }).join('\n\n');
+    downloadText(`selenyx-library-${stamp}.bib`, body, 'text/plain');
+    toast(`已导出 ${records.length} 条 BibTeX`);
+    return;
+  }
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = [['title', 'authors', 'year', 'venue', 'doi', 'url', 'abstract']];
+  for (const record of records) {
+    rows.push([
+      esc(record.title), esc((record.authors || []).join('; ')), esc(record.year), esc(record.venue),
+      esc(record.externalIds?.doi), esc(record.url), esc(record.abstract),
+    ]);
+  }
+  downloadText(`selenyx-library-${stamp}.csv`, '\ufeff' + rows.map((r) => r.join(',')).join('\n'), 'text/csv');
+  toast(`已导出 ${records.length} 条 CSV`);
 }
 
 export { setupSearch, renderControls, renderResults, renderLibrary };

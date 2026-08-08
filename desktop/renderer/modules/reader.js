@@ -560,6 +560,13 @@ function renderEvidence() {
             setView('reader');
           }
         } }),
+        el('button', { className: 'chip-button danger', text: '删除', onClick: async (event) => {
+          event.stopPropagation();
+          await workspaceEvent({ type: 'evidence:remove', id: item.id });
+          renderEvidence();
+          renderRight();
+          toast('证据已删除');
+        } }),
       ]),
     ]);
     host.append(el('article', { className: 'evidence-card' }, [body]));
@@ -600,9 +607,18 @@ function renderRight() {
     host.append(el('section', { className: 'side-section' }, [
       el('h3', { text: `批注 · ${notes.length}` }),
       ...(notes.length
-        ? notes.map((item) => el('button', { type: 'button', className: 'side-card annotation-card', onClick: () => jumpToAnnotation(item) }, [
-          el('b', { text: `${item.style === 'highlight' ? '高亮' : '批注'}${item.page ? ` · p.${item.page}` : ''}` }),
-          el('p', { text: item.content }),
+        ? notes.map((item) => el('article', { className: 'side-card annotation-card' }, [
+          el('button', { type: 'button', className: 'annotation-jump', onClick: () => jumpToAnnotation(item) }, [
+            el('b', { text: `${item.style === 'highlight' ? '高亮' : '批注'}${item.page ? ` · p.${item.page}` : ''}` }),
+            el('p', { text: item.content }),
+          ]),
+          el('button', { type: 'button', className: 'annotation-remove', 'aria-label': '删除批注', onClick: async (event) => {
+            event.stopPropagation();
+            await workspaceEvent({ type: 'annotation:remove', id: item.id });
+            renderRight();
+            renderReader();
+            toast('批注已删除');
+          } }, [icon('close')]),
         ]))
         : [el('div', { className: 'side-empty', text: '选中 PDF/摘要文字后添加批注' })]),
     ]));

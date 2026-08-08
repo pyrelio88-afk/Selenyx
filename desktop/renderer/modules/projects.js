@@ -17,12 +17,15 @@ function renderProjectList() {
   const host = $('#project-list');
   if (!host) return;
   clear(host);
-  const projects = state.projects || [];
+  const filter = ($('#project-filter')?.value || '').trim().toLocaleLowerCase();
+  const all = state.projects || [];
+  let projects = filter ? all.filter((p) => (p.name || '未命名项目').toLocaleLowerCase().includes(filter)) : all;
+  projects = [...projects].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   if (!projects.length) {
     host.append(el('div', { className: 'empty-state project-empty' }, [
       el('span', { 'data-icon': 'library' }),
-      el('h3', { text: '还没有项目' }),
-      el('p', { text: '点击右上「新建项目」，从一个研究问题开始。' }),
+      el('h3', { text: filter ? '没有匹配的项目' : '还没有项目' }),
+      el('p', { text: filter ? '换个关键词试试' : '点击右上「新建项目」，从一个研究问题开始。' }),
     ]));
     hydrateIconsLocal(host);
     return;
@@ -154,6 +157,8 @@ function setupProjects({ applySnapshot } = {}) {
   applySnapshotRef.current = applySnapshot || null;
   const newSession = $('#new-session');
   if (newSession) newSession.addEventListener('click', startNewResearch);
+  const filterInput = $('#project-filter');
+  if (filterInput) filterInput.addEventListener('input', renderProjectList);
   const form = $('#project-form');
   if (form) form.addEventListener('submit', submitNewResearch);
   $$('[data-close-modal="project-modal"]').forEach((button) => button.addEventListener('click', () => {

@@ -60,6 +60,9 @@
             </div>
           </header>
           <p class="paper-hint">项目、PDF、批注与证据只保存在本机。点击卡片切换项目；卡片内操作按钮可重命名或删除（删除会级联清理该项目全部任务与证据）。</p>
+          <div class="project-filter-row">
+            <input id="project-filter" type="search" placeholder="搜索项目名称…" aria-label="搜索项目">
+          </div>
           <div id="project-list" class="project-list project-grid"></div>
         </div>
       </section>
@@ -138,6 +141,8 @@
             <div class="heading-actions">
               <button id="import-pdf" class="primary-button"><span data-icon="plus"></span>导入 PDF</button>
               <button id="manual-add" class="secondary-button"><span data-icon="plus"></span>手动添加</button>
+              <button id="export-bibtex" class="secondary-button" type="button">导出 BibTeX</button>
+              <button id="export-csv" class="secondary-button" type="button">导出 CSV</button>
             </div>
           </header>
           <p class="paper-hint">推荐闭环：检索 → 获取全文（浏览器）→ 系统下载 PDF → 这里导入 → 阅读批注。</p>
