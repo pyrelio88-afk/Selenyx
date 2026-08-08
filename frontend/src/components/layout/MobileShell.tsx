@@ -14,7 +14,10 @@ const VIEW_LABELS: Record<ViewKey, string> = (() => {
 
 const QUICK_NAV: Array<{ key: ViewKey; label: string }> = [
   { key: 'dashboard', label: '总览' },
-  { key: 'pipeline', label: '流水线' },
+  // The mobile primary route begins with the user's projects. The pipeline is
+  // still available from a project and the complete “更多” drawer, but it is
+  // not a substitute for project ownership and project switching.
+  { key: 'projects', label: '项目' },
   { key: 'references', label: '文献' },
   { key: 'aiChat', label: 'AI' },
 ];

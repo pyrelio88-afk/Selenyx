@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npm run dev:local",
+    "beforeDevCommand": "node scripts/ensure-local-dev-services.mjs",
     "beforeBuildCommand": "npm --prefix frontend run build"
   },
   "app": {
