@@ -1,0 +1,467 @@
+/* Clinical / discipline data workbench */
+
+.clinical-data-workbench {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--text-primary);
+}
+
+.clinical-directory-header {
+  margin-bottom: 0;
+}
+
+.clinical-directory-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated, var(--bg-surface));
+}
+
+.clinical-directory-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.clinical-directory-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  align-items: start;
+}
+
+.clinical-directory {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.clinical-directory-group h2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.clinical-directory-group h2 span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.clinical-directory-group > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clinical-directory-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.clinical-directory-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--bg-hover, var(--bg-elevated));
+}
+
+.clinical-directory-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--bg-canvas);
+}
+
+.clinical-directory-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.clinical-directory-copy strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.clinical-directory-copy small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.clinical-directory-copy > span {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.clinical-directory-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.clinical-directory-counts i {
+  font-style: normal;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-canvas);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.clinical-directory-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 20px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+.clinical-directory-summary {
+  position: sticky;
+  top: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.clinical-directory-summary h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.clinical-directory-summary dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.clinical-directory-summary dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.clinical-directory-summary dt {
+  color: var(--text-muted);
+}
+
+.clinical-directory-summary dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.clinical-directory-summary p {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.clinical-discipline-view {
+  gap: 14px;
+}
+
+.clinical-discipline-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.clinical-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.clinical-back-button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border));
+}
+
+.clinical-detail-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+  flex: 1;
+  max-width: 320px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated, var(--bg-surface));
+}
+
+.clinical-detail-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+}
+
+.clinical-add-button {
+  white-space: nowrap;
+}
+
+.clinical-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.clinical-section-index {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cd-tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cd-tabbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.cd-tabbar button small {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cd-tabbar button.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 650;
+}
+
+.cd-cat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cd-cat-chips button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cd-cat-chips button.is-active {
+  background: var(--accent-light);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cd-entry-row {
+  width: 100%;
+}
+
+.cd-entry-summary {
+  color: var(--text-secondary);
+}
+
+.cd-pager {
+  margin-top: 8px;
+}
+
+.cd-loadmore {
+  width: 100%;
+  height: 44px;
+}
+
+.clinical-content-pane {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  min-height: 180px;
+}
+
+.clinical-content-hint p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.clinical-content-meta {
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+}
+
+.clinical-official-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning, #9a7837) 12%, var(--bg-canvas));
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.clinical-official-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.clinical-official-title {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.clinical-official-title:hover {
+  color: var(--accent);
+}
+
+.clinical-source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.clinical-source-actions button,
+.clinical-source-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.clinical-source-actions button:hover,
+.clinical-source-actions a:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.cd-official-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 960px) {
+  .clinical-directory-layout,
+  .clinical-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-directory-summary,
+  .clinical-content-pane {
+    position: static;
+  }
+
+  .clinical-directory-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .clinical-directory-counts {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .clinical-directory-row > svg,
+  .clinical-directory-row > .icon {
+    display: none;
+  }
+}
