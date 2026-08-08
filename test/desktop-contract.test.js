@@ -282,6 +282,16 @@ test('desktop: multi-project IPC is Hermes-style free create/switch', () => {
   assert.match(html, /随时切换/);
 });
 
+test('desktop: sidebar is navigation-only, project list lives in projects overview', () => {
+  assert.doesNotMatch(html, /<section class="sessions"/);
+  assert.doesNotMatch(html, /class="new-session"/);
+  assert.match(html, /id="projects-view"/);
+  assert.match(html, /id="new-session"/);
+  assert.match(html, /id="project-list"/);
+  assert.match(html, /data-view="projects"/);
+  assert.match(html, /项目 · 随时切换/);
+});
+
 test('desktop: new projects start from a required research question', () => {
   assert.match(html, /id="project-modal"/);
   assert.match(html, /name="question"[^>]*required/);

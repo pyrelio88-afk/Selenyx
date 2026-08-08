@@ -172,6 +172,11 @@ function applyWorkspaceEvent(current, event) {
       createdAt: text(item.createdAt, 80) || nowIso(),
     };
     state.annotations.push(result);
+  } else if (action.type === 'annotation:remove') {
+    const id = text(action.id, 300);
+    if (!id) throw new TypeError('annotation:remove 需要批注 id');
+    state.annotations = state.annotations.filter((item) => item.id !== id);
+    result = { removed: id };
   } else if (action.type === 'evidence:add') {
     const item = object(action.evidence);
     if (!text(item.sourceId) || !text(item.quote)) throw new TypeError('证据必须包含来源和原文');
@@ -191,6 +196,11 @@ function applyWorkspaceEvent(current, event) {
   } else if (action.type === 'evidence:relation') {
     const relation = ['supports', 'contradicts', 'qualifies'].includes(action.relation) ? action.relation : 'supports';
     state.evidence = state.evidence.map((item) => item.id === action.id ? { ...item, relation } : item);
+  } else if (action.type === 'evidence:remove') {
+    const id = text(action.id, 300);
+    if (!id) throw new TypeError('evidence:remove 需要证据 id');
+    state.evidence = state.evidence.filter((item) => item.id !== id);
+    result = { removed: id };
   } else if (action.type === 'workspace:reset') {
     const keepUi = {
       leftWidth: state.ui.leftWidth,

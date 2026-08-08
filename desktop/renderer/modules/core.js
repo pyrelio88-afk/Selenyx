@@ -103,9 +103,12 @@ async function workspaceEvent(event) {
 function updateCounts() {
   $('#library-count').textContent = String(state.workspace?.library?.length ?? 0);
   $('#evidence-count').textContent = String(state.workspace?.evidence?.length ?? 0);
+  const projectsNode = $('#projects-count');
+  if (projectsNode) projectsNode.textContent = String(state.projects?.length ?? 0);
 }
 
 const viewNames = {
+  projects: ['项目', '项目总览'],
   question: ['项目简报', '研究问题'],
   research: ['发现文献', '文献检索'],
   library: ['本地库', '本地文献库'],

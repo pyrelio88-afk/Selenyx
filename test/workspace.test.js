@@ -100,6 +100,45 @@ test('workspace evidence relation can be updated after review', () => {
   assert.equal(state.evidence[0].relation, 'contradicts');
 });
 
+test('workspace annotation:remove deletes a single annotation by id', () => {
+  let state = applyWorkspaceEvent(emptyWorkspace(), { type: 'library:save', record: paper() }).state;
+  state = applyWorkspaceEvent(state, {
+    type: 'annotation:add',
+    annotation: { sourceId: 'openalex:W1', content: '批注一', quote: 'careful study', style: 'note' },
+  }).state;
+  const firstId = state.annotations[0].id;
+  state = applyWorkspaceEvent(state, {
+    type: 'annotation:add',
+    annotation: { sourceId: 'openalex:W1', content: '批注二', quote: 'study', style: 'highlight' },
+  }).state;
+  assert.equal(state.annotations.length, 2);
+  state = applyWorkspaceEvent(state, { type: 'annotation:remove', id: firstId }).state;
+  assert.equal(state.annotations.length, 1);
+  assert.equal(state.annotations[0].content, '批注二');
+});
+
+test('workspace evidence:remove deletes a single evidence by id without reviving', () => {
+  let state = applyWorkspaceEvent(emptyWorkspace(), { type: 'library:save', record: paper() }).state;
+  state = applyWorkspaceEvent(state, {
+    type: 'evidence:add',
+    evidence: { sourceId: 'openalex:W1', quote: '证据一', method: 'selection' },
+  }).state;
+  const firstId = state.evidence[0].id;
+  state = applyWorkspaceEvent(state, {
+    type: 'evidence:add',
+    evidence: { sourceId: 'openalex:W1', quote: '证据二', method: 'manual' },
+  }).state;
+  assert.equal(state.evidence.length, 2);
+  const removed = applyWorkspaceEvent(state, { type: 'evidence:remove', id: firstId });
+  state = removed.state;
+  assert.equal(state.evidence.length, 1);
+  assert.equal(state.evidence[0].quote, '证据二');
+  // reconcile (normalize) must not revive the removed evidence
+  const restored = normalizeWorkspace(JSON.parse(JSON.stringify(state)));
+  assert.equal(restored.evidence.length, 1);
+  assert.equal(restored.evidence[0].id, state.evidence[0].id);
+});
+
 test('workspace starts new research at the question view with per-document reader state', () => {
   const state = emptyWorkspace();
   assert.equal(state.ui.lastView, 'question');

@@ -7,6 +7,7 @@ import { setupBrowser, renderSites, syncBrowserBounds } from './modules/browserW
 import { setupSettings, refreshProviders } from './modules/settings.js';
 import { setupAssistant, renderAssistant } from './modules/assistant.js';
 import { setupDrafts, hydrateDrafts } from './modules/drafts.js';
+import { setupProjects, renderProjectList } from './modules/projects.js';
 
 const honestUiCopy = Object.freeze(['真实检索返回 0 条', '改用系统浏览器', '离线 L1', 'L2 · 内容将发送至所选提供方']);
 void honestUiCopy;
@@ -61,6 +62,7 @@ function renderMessages() {
   ]));
 }
 
+// 项目切换后统一刷新所有视图快照。项目列表渲染由 projects 模块负责。
 function applyWorkspaceSnapshot(workspace) {
   state.workspace = workspace;
   state.searchResult = null;
@@ -80,126 +82,6 @@ function applyWorkspaceSnapshot(workspace) {
   renderRight();
   renderProjectList();
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
-}
-
-function renderProjectList() {
-  const host = $('#project-list');
-  if (!host) return;
-  clear(host);
-  const projects = state.projects || [];
-  if (!projects.length) {
-    host.append(el('div', { className: 'side-empty', text: '还没有项目，点上方「新建项目」' }));
-    return;
-  }
-  for (const project of projects) {
-    const row = el('button', {
-      type: 'button',
-      className: `project-row ${project.active || project.id === state.activeProjectId ? 'active' : ''}`,
-      onClick: () => switchProject(project.id),
-    }, [
-      el('span', { className: 'project-dot' }),
-      el('span', {}, [
-        el('b', { text: project.name || '未命名项目' }),
-        el('small', { text: project.active || project.id === state.activeProjectId ? '当前项目 · 自动保存' : '点击切换' }),
-      ]),
-    ]);
-    row.addEventListener('contextmenu', (event) => {
-      event.preventDefault();
-      projectContextMenu(project);
-    });
-    host.append(row);
-  }
-}
-
-async function refreshProjects() {
-  const response = await api.projects.list();
-  if (!response?.ok) return;
-  state.projects = response.projects || [];
-  state.activeProjectId = response.activeId;
-  renderProjectList();
-}
-
-async function switchProject(id) {
-  if (!id || id === state.activeProjectId) return;
-  const response = await api.projects.switch(id);
-  if (!response?.ok) return toast(response?.error?.message || '切换项目失败', 'error');
-  state.projects = response.projects || [];
-  state.activeProjectId = response.activeId;
-  applyWorkspaceSnapshot(response.workspace);
-  const view = response.workspace?.ui?.lastView || 'research';
-  await setView(view, false);
-  toast(`已切换到：${response.projects.find((item) => item.id === id)?.name || '项目'}`);
-}
-
-async function projectContextMenu(project) {
-  const action = window.prompt(`项目「${project.name}」\n输入 rename 重命名，delete 删除，其它取消`, 'rename');
-  if (!action) return;
-  if (action === 'rename') {
-    const name = (window.prompt('新项目名称', project.name) || '').trim();
-    if (!name) return;
-    const response = await api.projects.rename({ id: project.id, name });
-    if (!response?.ok) return toast(response?.error?.message || '重命名失败', 'error');
-    state.projects = response.projects || [];
-    if (response.workspace) state.workspace = response.workspace;
-    renderProjectList();
-    toast('项目已重命名');
-    return;
-  }
-  if (action === 'delete') {
-    if (!window.confirm(`确定删除项目「${project.name}」？此操作不可恢复。`)) return;
-    const response = await api.projects.remove(project.id);
-    if (!response?.ok) return toast(response?.error?.message || '删除失败', 'error');
-    state.projects = response.projects || [];
-    state.activeProjectId = response.activeId;
-    if (response.workspace) applyWorkspaceSnapshot(response.workspace);
-    else renderProjectList();
-    await setView(state.workspace?.ui?.lastView || 'question', false);
-    toast('项目已删除');
-  }
-}
-
-async function startNewResearch() {
-  const modal = $('#project-modal');
-  const form = $('#project-form');
-  form.reset();
-  form.elements.name.value = `研究 ${new Date().toLocaleDateString()}`;
-  modal.hidden = false;
-  requestAnimationFrame(() => form.elements.question.focus());
-}
-
-async function submitNewResearch(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const name = form.elements.name.value.trim();
-  const question = form.elements.question.value.trim();
-  if (!name || !question) return toast('请填写项目名称和核心研究问题', 'error');
-  const button = form.querySelector('button.primary-button');
-  button.disabled = true;
-  button.textContent = '正在创建…';
-  const response = await api.projects.create({ name, question });
-  button.disabled = false;
-  button.textContent = '创建项目并生成路径';
-  if (!response?.ok) return toast(response?.error?.message || '创建项目失败', 'error');
-  $('#project-modal').hidden = true;
-  state.projects = response.projects || [];
-  state.activeProjectId = response.activeId;
-  applyWorkspaceSnapshot(response.workspace);
-  if ($('#research-question-input')) $('#research-question-input').value = question;
-  if ($('#assistant-brief')) $('#assistant-brief').value = question;
-  await setView('question', true);
-  toast(`已创建「${name}」并生成离线研究路径`);
-}
-
-async function renameProject() {
-  const current = state.workspace?.meta?.name || state.projects.find((item) => item.id === state.activeProjectId)?.name || '未命名项目';
-  const next = (window.prompt('项目名称', current) || '').trim();
-  if (!next || next === current) return;
-  const response = await api.projects.rename({ id: state.activeProjectId, name: next });
-  if (!response?.ok) return toast(response?.error?.message || '重命名失败', 'error');
-  state.projects = response.projects || [];
-  if (response.workspace) state.workspace = response.workspace;
-  renderProjectList();
-  toast('项目名称已更新');
 }
 
 async function sendMessage() {
@@ -227,6 +109,7 @@ async function sendMessage() {
 function viewChanged(view) {
   renderRight();
   hydrateDrafts();
+  if (view === 'projects') renderProjectList();
   if (view === 'library') renderLibrary();
   if (view === 'reader') renderReader();
   if (view === 'evidence') renderEvidence();
@@ -271,15 +154,11 @@ async function boot() {
   setupSettings();
   setupAssistant();
   setupDrafts();
+  setupProjects({ applySnapshot: applyWorkspaceSnapshot });
   setupResizer($('#left-resizer'), 'left');
   setupResizer($('#right-resizer'), 'right');
   // Free navigation: every sidebar item just switches view. No gates.
   $$('[data-view]').forEach((button) => button.addEventListener('click', () => setView(button.dataset.view)));
-  $('#new-session').addEventListener('click', startNewResearch);
-  $('#project-form').addEventListener('submit', submitNewResearch);
-  $$('[data-close-modal="project-modal"]').forEach((button) => button.addEventListener('click', () => {
-    $('#project-modal').hidden = true;
-  }));
   $('#collapse-left').addEventListener('click', async () => {
     const collapsed = !$('#app').classList.contains('left-collapsed');
     $('#app').classList.toggle('left-collapsed', collapsed);
@@ -300,7 +179,7 @@ async function boot() {
   });
   $$('.segment-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.searchTab === state.searchTab));
 
-  const known = ['question', 'research', 'library', 'reader', 'browser', 'chat', 'evidence', 'skills', 'write', 'figure', 'experiment'];
+  const known = ['projects', 'question', 'research', 'library', 'reader', 'browser', 'chat', 'evidence', 'skills', 'write', 'figure', 'experiment'];
   let startView = state.workspace.ui.lastView || 'question';
   if (!known.includes(startView)) startView = 'question';
   await setView(startView, false);

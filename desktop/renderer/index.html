@@ -16,15 +16,10 @@
         <span class="brand-copy"><strong>Selenyx</strong><small>EVIDENCE-GATED LAB</small></span>
         <button id="collapse-left" class="icon-button" data-icon="panel-left" aria-label="折叠左栏"></button>
       </header>
-      <button id="new-session" class="new-session"><span data-icon="plus"></span><b>新建项目</b></button>
-
-      <section class="sessions" aria-label="项目列表">
-        <p class="nav-label">项目</p>
-        <div id="project-list" class="project-list"></div>
-      </section>
-
       <nav class="nav-list" aria-label="科研工作台">
-        <p class="nav-label">研究流水线 · 随时切换</p>
+        <p class="nav-label">项目 · 随时切换</p>
+        <button data-view="projects" class="nav-item"><span data-icon="library"></span><b>项目</b><em id="projects-count">0</em></button>
+        <p class="nav-label">研究流水线</p>
         <button data-view="question" class="nav-item active"><span data-icon="question"></span><b>01 研究问题</b></button>
         <button data-view="research" class="nav-item"><span data-icon="search"></span><b>02 发现文献</b></button>
         <button data-view="browser" class="nav-item"><span data-icon="globe"></span><b>03 获取全文</b></button>
@@ -54,6 +49,20 @@
           <button id="toggle-right" class="icon-button" data-icon="panel-right" aria-label="切换右栏"></button>
         </div>
       </header>
+
+      <!-- 0. Projects overview -->
+      <section id="projects-view" class="view">
+        <div class="content-column">
+          <header class="section-heading">
+            <div><p class="kicker">PROJECTS · OVERVIEW</p><h2>项目</h2></div>
+            <div class="heading-actions">
+              <button id="new-session" class="primary-button"><span data-icon="plus"></span>新建项目</button>
+            </div>
+          </header>
+          <p class="paper-hint">项目、PDF、批注与证据只保存在本机。点击卡片切换项目；卡片内操作按钮可重命名或删除（删除会级联清理该项目全部任务与证据）。</p>
+          <div id="project-list" class="project-list project-grid"></div>
+        </div>
+      </section>
 
       <!-- 1. Question -->
       <section id="question-view" class="view active">

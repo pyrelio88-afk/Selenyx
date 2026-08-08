@@ -394,3 +394,26 @@ button:disabled { opacity: .48; cursor: not-allowed; }
   .reader-find input { width: 88px; }
   .reader-toolbar { align-items: flex-start; }
 }
+
+/* R0.9.2 project overview grid — sidebar no longer hosts project list */
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 8px; }
+.project-empty { grid-column: 1 / -1; }
+.project-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-raised); transition: border-color .15s, box-shadow .15s; }
+.project-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); box-shadow: 0 2px 10px rgba(15, 23, 42, .06); }
+.project-card.active { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
+.project-card-head { display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 0; border: 0; background: transparent; cursor: pointer; color: inherit; }
+.project-card-head:hover { color: var(--accent-strong); }
+.project-dot { flex: 0 0 auto; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--ink-faint); }
+.project-card.active .project-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.project-card-meta { flex: 1; min-width: 0; }
+.project-card-meta b { display: block; font-size: 14px; font-weight: 640; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-card-meta small { display: block; margin-top: 3px; color: var(--ink-faint); font-size: 11px; }
+.project-card-actions { display: flex; gap: 6px; }
+.ghost-button { flex: 1; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: 12px; cursor: pointer; transition: background .12s, border-color .12s; }
+.ghost-button:hover { background: var(--paper-soft); border-color: var(--ink-faint); }
+.danger-button { flex: 1; height: 32px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 6px; background: transparent; color: var(--accent-strong); font-size: 12px; cursor: pointer; transition: background .12s; }
+.danger-button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.project-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; color: var(--ink-faint); text-align: center; }
+.project-empty .icon { width: 34px; height: 34px; }
+.project-empty h3 { font-size: 15px; color: var(--ink-soft); }
+.project-empty p { font-size: 12px; }
