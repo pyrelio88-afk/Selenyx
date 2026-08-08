@@ -1,4 +1,4 @@
-> **Current track: R0.9 evidence-gated workbench (PDF reader + research pipeline sidebar)**
+> **Current track: R0.9.2 sidebar-IA refactor (project overview + citation export + evidence/annotation delete)**
 
 # Selenyx
 
@@ -27,9 +27,9 @@ The local PDF reader supports page navigation, fit/zoom/rotation, in-document se
 
 ## Status
 
-The current stable release track is **`0.9.1`**. It promotes the validated research-question, real-search, local-PDF, annotation, and evidence workflow.
+The current development track is **`0.9.2`** (sidebar-IA refactor on top of the stable `0.9.1` release). It keeps the validated research-question, real-search, local-PDF, annotation, and evidence workflow, and adds a dedicated project overview, BibTeX/CSV citation export, and per-item evidence/annotation deletion.
 
-- **424 automated tests pass locally**, including research-question gating, PDF locator persistence, evidence relation review, retry/timeout policy, exact-title zero-result handling, and the Nature research workflow.
+- **427 automated tests pass locally**, including research-question gating, PDF locator persistence, evidence relation review, retry/timeout policy, exact-title zero-result handling, the Nature research workflow, sidebar-IA contract, and workspace delete semantics.
 - Critical usability fixes in this handoff:
   - every new project requires a research question and starts at Gate 0
   - exact-title auto detection rejects loose Crossref keyword matches for fabricated titles
@@ -143,9 +143,9 @@ If a query returns no records, the UI shows **“真实检索返回 0 条”**. 
 
 The desktop app uses a Hermes-inspired, research-specific three-column layout:
 
-- left — pinned actions, workbench, and sessions; collapsible to a rail
-- center — literature search, research chat, reader, and browser
-- right — task board, documents, and evidence review; fully collapsible
+- left — navigation and backend status only (the project list moved into a dedicated project overview); collapsible to a rail
+- center — project overview, literature search, research chat, reader, browser, evidence, and writing
+- right — research-plan progress, current document, annotations, evidence review gate, and per-view context; fully collapsible
 
 Both side widths are draggable and persisted locally. The message column and composer share one centered content width. Accent changes update CSS variables immediately and persist in `localStorage`.
 
@@ -166,6 +166,13 @@ The settings screen includes 13 explicit areas:
 13. archived conversations
 
 Unavailable capabilities are shown as unavailable; they are not represented by decorative controls.
+
+### Project management and export
+
+- The sidebar is navigation-only. Projects live in a dedicated **project overview** view: a card grid with search/filter, sort by last-updated, and inline rename/delete.
+- Creating a project opens the research-question dialog directly (pendingCreate), never an empty shell view.
+- Deleting a project cascades through the backend `projects:remove` handler: the entire project directory (workspace, tasks, evidence, PDF metadata) is moved to the OS trash.
+- The local library exports to **BibTeX** and **CSV** offline (Blob download, no network). Each evidence card and annotation card has its own delete button wired to `evidence:remove` / `annotation:remove`; removed items do not revive on normalize.
 
 ### Browser behavior
 
@@ -245,7 +252,7 @@ The suite covers the legacy evidence engine plus:
 - no-key and no-synthetic-fallback guarantees
 - desktop CSP, preload surface, security flags, layout contract, and settings contract
 
-The current local result is 424 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
+The current local result is 427 passing tests. This number is evidence for the checked-out revision only, not a permanent badge.
 
 ## Nature Skills adapter
 

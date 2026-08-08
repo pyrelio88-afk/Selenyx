@@ -679,6 +679,67 @@ function renderRight() {
       ]),
     ]));
   }
+
+  if (state.view === 'projects') {
+    const lib = state.workspace?.library?.length ?? 0;
+    const ev = state.workspace?.evidence?.length ?? 0;
+    const ann = state.workspace?.annotations?.length ?? 0;
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: '项目统计' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: `${state.projects?.length ?? 0} 个项目` }),
+        el('p', { text: `当前项目：文献 ${lib} · 批注 ${ann} · 证据 ${ev}` }),
+      ]),
+      el('p', { className: 'side-hint', text: '新建直接开研究问题对话框；删除级联清理整个项目目录。' }),
+    ]));
+  }
+
+  if (state.view === 'library') {
+    const lib = state.workspace?.library ?? [];
+    const withPdf = lib.filter((r) => r.localPdf).length;
+    const withDoi = lib.filter((r) => r.externalIds?.doi).length;
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: '文献库' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: `${lib.length} 条记录` }),
+        el('p', { text: `绑定 PDF ${withPdf} · 有 DOI ${withDoi}` }),
+      ]),
+      el('p', { className: 'side-hint', text: '可导出 BibTeX / CSV；离线下载，不上传。' }),
+    ]));
+  }
+
+  if (state.view === 'write') {
+    const accepted = (state.workspace?.evidence ?? []).filter((e) => e.review === 'accepted').length;
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: '写作边界' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: `${accepted} 条已审阅证据` }),
+        el('p', { text: accepted ? '仅可基于已审阅证据生成提纲。' : '先在证据链审阅至少一条证据。' }),
+      ]),
+    ]));
+  }
+
+  if (state.view === 'figure' || state.view === 'experiment') {
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: state.view === 'figure' ? '图表规划' : '实验日志' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: state.view === 'figure' ? '骨架先行' : '分栏记录' }),
+        el('p', { text: state.view === 'figure' ? '真正出图需本地 Python/R；此处不假装已生成。' : '假设/操作/观察/异常；缺失字段显式保留。' }),
+      ]),
+    ]));
+  }
+
+  if (state.view === 'browser') {
+    const favorites = state.workspace?.ui?.browserFavorites?.length ?? 0;
+    const sites = state.workspace?.ui?.browserSites?.length ?? 0;
+    host.append(el('section', { className: 'side-section' }, [
+      el('h3', { text: '浏览器' }),
+      el('div', { className: 'side-card' }, [
+        el('b', { text: `${sites} 个站点 · ${favorites} 个收藏` }),
+        el('p', { text: '登录墙自动走系统浏览器；下载后点「导入已下载 PDF」。' }),
+      ]),
+    ]));
+  }
 }
 
 function setupReader() {
