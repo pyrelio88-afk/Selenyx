@@ -15,6 +15,11 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Required for tauri-action to attach the completed installers to the draft
+# GitHub Release. Artifact uploads themselves do not grant release-write.
+permissions:
+  contents: write
+
 jobs:
   build-tauri:
     strategy:
