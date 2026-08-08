@@ -12,6 +12,7 @@ import {
   safeExternalUrl,
 } from '@utils/referenceIntegrity';
 import { fetchByDOI, searchCrossref, type FetchedReference } from '@services/metadataFetch';
+import { refApi } from '@services/api';
 import { ViewSwitcher, type ViewMode } from '@components/datagrid/ViewSwitcher';
 import { KanbanView, type GroupField } from '@components/datagrid/KanbanView';
 import { GalleryView } from '@components/datagrid/GalleryView';
@@ -458,6 +459,8 @@ export function ReferencesView() {
   /** Keep project associations and transient readers consistent with deletion. */
   const deleteReferenceWithCleanup = useCallback((referenceId: string) => {
     deleteReferenceAndRelations(referenceId);
+    // C2 修复：同步清理后端 RAG chunks + evidence（后端离线时静默降级，前端 store 仍清理）
+    void refApi.delete(referenceId).catch(() => {});
     if (pdfRefId === referenceId) {
       setPdfSource(null);
       setPdfRefId(null);
