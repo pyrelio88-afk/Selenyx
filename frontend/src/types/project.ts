@@ -16,14 +16,14 @@ export interface PipelineStage {
 }
 
 export const PIPELINE_STAGES: PipelineStage[] = [
-  { key: 'problem', label: '问题', description: '从临床场景提炼可研究的结构化问题', icon: '❓', order: 1, entryCriteria: '有明确临床场景观察', outputs: ['PICO 结构化问题', '研究假设'], qualityGate: 'PICO 四要素完整' },
-  { key: 'literature', label: '文献', description: '系统检索相关文献，建立文献库', icon: '📚', order: 2, entryCriteria: 'PICO 已确定', outputs: ['检索策略', '文献列表', 'PRISMA 流程图'], qualityGate: '检索策略可复现' },
-  { key: 'fulltext', label: '全文', description: '获取全文，PDF 入库与标注', icon: '📄', order: 3, entryCriteria: '文献列表已筛选', outputs: ['全文 PDF', 'PDF 标注', '结构化摘要'], qualityGate: '全文获取率 ≥ 80%' },
-  { key: 'screening', label: '筛选', description: '按纳排标准筛选文献', icon: '🔍', order: 4, entryCriteria: '全文已入库', outputs: ['纳入/排除列表', '筛选理由记录'], qualityGate: '双人筛选一致性 Kappa ≥ 0.8' },
-  { key: 'reading', label: '精读', description: '深度阅读，提取关键信息', icon: '📖', order: 5, entryCriteria: '文献已纳入', outputs: ['精读笔记', '质量评价', '数据提取表'], qualityGate: '关键数据提取完整' },
-  { key: 'evidence', label: '证据', description: '证据分级与综合', icon: '⚖️', order: 6, entryCriteria: '数据提取完成', outputs: ['证据摘要表', 'GRADE 分级', '效应量计算'], qualityGate: 'GRADE 分级完成' },
-  { key: 'synthesis', label: '综合', description: '证据综合与推理', icon: '🧩', order: 7, entryCriteria: '证据分级完成', outputs: ['证据综合报告', '推理链', '结论'], qualityGate: '推理链逻辑完整' },
-  { key: 'writing', label: '写作', description: '论文撰写与投稿', icon: '✍️', order: 8, entryCriteria: '综合报告完成', outputs: ['论文初稿', '参考文献格式化', '投稿材料'], qualityGate: '查重通过 + 格式合规' },
+  { key: 'problem', label: '立题', description: '从临床场景提炼可研究的结构化问题', icon: '❓', order: 1, entryCriteria: '有明确临床场景观察', outputs: ['PICO 结构化问题', '研究假设'], qualityGate: 'PICO 四要素完整' },
+  { key: 'literature', label: '检索', description: '系统检索相关文献，建立文献库', icon: '📚', order: 2, entryCriteria: 'PICO 已确定', outputs: ['检索策略', '文献列表', 'PRISMA 流程图'], qualityGate: '检索策略可复现' },
+  { key: 'fulltext', label: '评级', description: '文献质量评级与全文获取入库', icon: '📄', order: 3, entryCriteria: '文献列表已筛选', outputs: ['全文 PDF', '质量评级', '结构化摘要'], qualityGate: '全文获取率 ≥ 80%' },
+  { key: 'screening', label: '设计', description: '研究设计与纳排标准制定', icon: '🔍', order: 4, entryCriteria: '全文已入库', outputs: ['研究设计方案', '纳入/排除标准', '样本量估算'], qualityGate: '设计方案通过伦理审查' },
+  { key: 'reading', label: '数据', description: '数据提取与整理', icon: '📖', order: 5, entryCriteria: '设计方案已定', outputs: ['数据提取表', '数据清洗记录', '编码手册'], qualityGate: '关键数据提取完整' },
+  { key: 'evidence', label: '分析', description: '数据分析与证据分级', icon: '⚖️', order: 6, entryCriteria: '数据提取完成', outputs: ['统计分析结果', 'GRADE 分级', '效应量计算'], qualityGate: 'GRADE 分级完成' },
+  { key: 'synthesis', label: '写作', description: '论文撰写与证据综合', icon: '🧩', order: 7, entryCriteria: '分析完成', outputs: ['论文初稿', '推理链', '结论'], qualityGate: '查重通过 + 逻辑完整' },
+  { key: 'writing', label: '传播', description: '成果传播与投稿发表', icon: '✍️', order: 8, entryCriteria: '论文初稿完成', outputs: ['投稿材料', '参考文献格式化', '传播计划'], qualityGate: '格式合规 + 投稿就绪' },
 ];
 
 export interface ResearchProject {

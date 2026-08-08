@@ -13,22 +13,21 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: '科研闭环',
+    label: '科研探索',
     items: [
       { key: 'dashboard', label: '总览', hint: '进度与倒数日' },
-      { key: 'projects', label: '立题 · 项目', hint: '创建、切换与删除项目' },
-      { key: 'pipeline', label: '八段流水线', hint: '问题→证据→写作' },
-      { key: 'references', label: '文献库', hint: '检索 · 导入 · 全文' },
-      { key: 'notes', label: '阅读笔记', hint: '摘录与批注' },
+      { key: 'projects', label: '立项', hint: '创建、切换与删除项目' },
+      { key: 'pipeline', label: '八段流水线', hint: '立题→检索→评级→设计→数据→分析→写作→传播' },
     ],
   },
   {
-    label: '分析与资料',
+    label: '文献库',
     items: [
-      { key: 'tables', label: '数据表格', hint: '筛选与对照' },
-      { key: 'statTools', label: '统计计算', hint: '检验与效应量' },
+      { key: 'references', label: '文献库', hint: '检索 · 导入 · 全文' },
+      { key: 'notes', label: '阅读笔记', hint: '摘录与批注' },
+      { key: 'tables', label: '数据表', hint: '筛选与对照' },
+      { key: 'statTools', label: '计算工具', hint: '检验与效应量' },
       { key: 'clinicalData', label: '学科资料', hint: '名词 · 标准 · 公式' },
-      { key: 'tools', label: '工具箱', hint: 'DOI · 引用 · 设计' },
     ],
   },
   {
@@ -36,6 +35,12 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'aiChat', label: 'AI 对话', hint: '本地网关 / BYOK' },
       { key: 'skills', label: '科研能力', hint: 'Nature 级技能映射' },
+    ],
+  },
+  {
+    label: '',
+    items: [
+      { key: 'tools', label: '工具箱', hint: 'DOI · 引用 · 设计' },
       { key: 'settings', label: '设置', hint: '后端 · 主题 · 备份' },
     ],
   },
@@ -54,6 +59,7 @@ export function Sidebar() {
         </div>
         <div>
           <div className="workspace-brand-name">Selenyx</div>
+          <div className="workspace-brand-version">0.01</div>
         </div>
       </div>
 

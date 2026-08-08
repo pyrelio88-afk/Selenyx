@@ -3712,6 +3712,7 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .workspace-brand-name { font-size: 16px; font-weight: 720; letter-spacing: .2px; color: var(--text-primary); line-height: 1.15; }
+.workspace-brand-version { margin-top: 1px; font-size: 10px; font-weight: 500; color: var(--text-muted); letter-spacing: .3px; }
 .workspace-brand-subtitle { margin-top: 2px; font-size: 10.5px; color: var(--text-muted); letter-spacing: .2px; }
 .workspace-switcher {
   display: flex;

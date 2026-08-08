@@ -22,7 +22,7 @@ describe('Skills workbench helpers', () => {
   it('filters by category and searchable metadata', () => {
     const skills = [skill(), skill({ id: 'skill-2', name: '学术润色', nameEn: 'polish', category: 'writing', categoryLabel: '写作', tags: ['英语'] })];
     expect(filterResearchSkills(skills, 'writing', '英语').map((item) => item.id)).toEqual(['skill-2']);
-    expect(getSkillWorkflow(skills[1]).stages).toEqual(['综合', '写作']);
+    expect(getSkillWorkflow(skills[1]).stages).toEqual(['写作', '传播']);
   });
 
   it('only opens http and https source links', () => {

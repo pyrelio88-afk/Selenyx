@@ -20,11 +20,11 @@ const CATEGORY_ICONS: Record<ResearchSkill['category'], IconName> = {
 };
 
 const CATEGORY_STAGE_MAP: Record<ResearchSkill['category'], string[]> = {
-  research: ['问题', '文献', '全文', '精读'],
-  writing: ['综合', '写作'],
-  review: ['精读', '证据', '写作'],
-  analysis: ['精读', '证据', '综合'],
-  tool: ['文献', '综合', '写作'],
+  research: ['立题', '检索', '评级', '数据'],
+  writing: ['写作', '传播'],
+  review: ['数据', '分析', '传播'],
+  analysis: ['数据', '分析', '写作'],
+  tool: ['检索', '写作', '传播'],
 };
 
 const CATEGORY_IO_MAP: Record<ResearchSkill['category'], { input: string; output: string }> = {
