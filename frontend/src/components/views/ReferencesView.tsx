@@ -19,6 +19,8 @@ import { CalendarView } from '@components/datagrid/CalendarView';
 import type { Annotation } from '@apptypes/reference';
 import { useIsMobile } from '@lib/useIsMobile';
 import { BottomSheet } from '@components/layout/BottomSheet';
+import { searchApi, zoteroApi, type ScholarlyCandidate, type ZoteroReferenceCandidate } from '@services/api';
+import { referenceFromZotero } from '@utils/zoteroReference';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
 const PdfReader = lazy(() => import('@components/pdf/PdfReader').then(m => ({ default: m.PdfReader })));
@@ -54,10 +56,10 @@ function createReferenceFromFetched(ref: FetchedReference): Reference {
     accessionDate: '',
     isbn: '',
     issn: ref.issn,
-    pmid: '',
+    pmid: ref.pmid ?? '',
     pmcid: '',
-    arxivId: '',
-    url: doi ? `https://doi.org/${encodeURIComponent(doi)}` : '',
+    arxivId: ref.arxivId ?? '',
+    url: safeExternalUrl(ref.url) ?? (doi ? `https://doi.org/${encodeURIComponent(doi)}` : ''),
     uri: '',
     collections: [],
     language: '',
@@ -72,6 +74,29 @@ function createReferenceFromFetched(ref: FetchedReference): Reference {
     source: 'api',
     createdAt: timestamp,
     updatedAt: timestamp,
+  };
+}
+
+function scholarlyToFetched(candidate: ScholarlyCandidate): FetchedReference {
+  const sourceType = candidate.source === 'arxiv' ? 'preprint' : 'journalArticle';
+  return {
+    title: candidate.title,
+    creators: candidate.creators.map(({ firstName, lastName }) => ({ firstName, lastName })),
+    type: sourceType,
+    doi: candidate.doi,
+    publication: candidate.publication,
+    year: Number(candidate.year) || new Date().getFullYear(),
+    volume: candidate.volume ?? '',
+    issue: candidate.issue ?? '',
+    pages: candidate.pages ?? '',
+    abstract: candidate.abstract,
+    issn: '',
+    publisher: '',
+    openAccess: candidate.openAccess,
+    url: candidate.url,
+    pmid: candidate.pmid,
+    arxivId: candidate.arxivId,
+    source: candidate.source,
   };
 }
 
@@ -164,6 +189,7 @@ export function ReferencesView() {
   const {
     references, searchQuery, setSearchQuery,
     addReferences, updateReference, deleteReferenceAndRelations,
+    referenceSyncStatus, referenceSyncMessage,
   } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -184,6 +210,11 @@ export function ReferencesView() {
   const [literatureResults, setLiteratureResults] = useState<FetchedReference[]>([]);
   const [literatureSearching, setLiteratureSearching] = useState(false);
   const [literatureSearched, setLiteratureSearched] = useState(false);
+  const [zoteroOpen, setZoteroOpen] = useState(false);
+  const [zoteroLoading, setZoteroLoading] = useState(false);
+  const [zoteroCandidates, setZoteroCandidates] = useState<ZoteroReferenceCandidate[]>([]);
+  const [zoteroSelected, setZoteroSelected] = useState<Set<string>>(new Set());
+  const [zoteroMessage, setZoteroMessage] = useState('');
   // A1 导出预览弹窗（先在应用内展示，支持复制或另存）
   const [exportPreview, setExportPreview] = useState<{ format: string; content: string; referenceCount: number } | null>(null);
   // A2 删除二次确认（使用应用内确认弹窗）
@@ -202,6 +233,11 @@ export function ReferencesView() {
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
+
+  const flashToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   useEffect(() => {
     if (!confirmDeleteId || isMobile) return;
@@ -396,19 +432,25 @@ export function ReferencesView() {
     setLiteratureSearching(true);
     setLiteratureSearched(true);
     try {
-      setLiteratureResults(await searchCrossref(query));
+      const response = await searchApi.scholarly(query, ['openalex', 'crossref', 'pubmed', 'arxiv']);
+      setLiteratureResults(response.results.map(scholarlyToFetched));
+      const sourceSummary = response.diagnostics
+        .map((item) => `${item.source}:${item.error ?? item.count ?? item.status}`)
+        .join(' · ');
+      flashToast(response.count ? `多源检索命中 ${response.count} 条 · ${sourceSummary}` : `多源检索无结果 · ${sourceSummary}`);
+    } catch {
+      // Browser-only/offline-backend fallback remains useful, but is labelled
+      // honestly as a single-source Crossref query.
+      const fallback = await searchCrossref(query);
+      setLiteratureResults(fallback);
+      flashToast(`本地学术网关不可用，已降级为 Crossref 单源检索（${fallback.length} 条）`);
     } finally {
       setLiteratureSearching(false);
     }
-  }, [literatureQuery]);
+  }, [flashToast, literatureQuery]);
 
   const selected = useMemo(() => references.find((r) => r.id === selectedId) ?? null, [references, selectedId]);
   const closePanel = useCallback(() => setSelectedId(null), []);
-
-  const flashToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }, []);
 
   /** Keep project associations and transient readers consistent with deletion. */
   const deleteReferenceWithCleanup = useCallback((referenceId: string) => {
@@ -473,11 +515,46 @@ export function ReferencesView() {
     }
   }, [addReferences, flashToast, references]);
 
-  /** Imports an explicit Zotero export without connecting to a local API service. */
-  const handleZoteroFileImport = useCallback(() => {
-    flashToast('请先在 Zotero 中导出 BibTeX 或 RIS 文件，再选择文件导入；Selenyx 不会连接或读取 Zotero 本地服务。');
-    fileInputRef.current?.click();
-  }, [flashToast]);
+  /** Explicit, read-only Zotero Local API preview. Nothing is copied before confirmation. */
+  const openZoteroImport = useCallback(async () => {
+    setZoteroOpen(true);
+    setZoteroLoading(true);
+    setZoteroCandidates([]);
+    setZoteroSelected(new Set());
+    setZoteroMessage('正在检查本机 Zotero…');
+    try {
+      await zoteroApi.status();
+      const response = await zoteroApi.items(250);
+      setZoteroCandidates(response.items);
+      setZoteroSelected(new Set(response.items.map((item) => item.key)));
+      setZoteroMessage(
+        response.items.length
+          ? `已读取 ${response.items.length} 条候选（另跳过 ${response.skipped} 条附件/笔记）；请勾选后确认复制。`
+          : 'Zotero 可连接，但没有可导入的顶层文献条目。',
+      );
+    } catch (error) {
+      setZoteroMessage(
+        `${error instanceof Error ? error.message : '无法连接本机 Zotero'} `
+        + '请启动 Zotero，并在“设置 → 高级”启用“允许本机其他应用与 Zotero 通信”；也可改用 BibTeX/RIS 文件导入。',
+      );
+    } finally {
+      setZoteroLoading(false);
+    }
+  }, []);
+
+  const importSelectedZotero = useCallback(() => {
+    const chosen = zoteroCandidates
+      .filter((candidate) => zoteroSelected.has(candidate.key))
+      .map(referenceFromZotero);
+    const { accepted, skipped } = dedupeIncomingReferences(references, chosen);
+    if (accepted.length) addReferences(accepted);
+    setZoteroOpen(false);
+    flashToast(
+      accepted.length
+        ? `已从 Zotero 只读复制 ${accepted.length} 条文献${skipped ? `，跳过 ${skipped} 条重复` : ''}`
+        : `没有新文献可复制${skipped ? `；${skipped} 条均已存在` : ''}`,
+    );
+  }, [addReferences, flashToast, references, zoteroCandidates, zoteroSelected]);
 
   /** A1 导出修复：生成 BibTeX/RIS 文本 → 应用内弹窗展示 + 复制按钮。 */
   const handleExport = useCallback((format: 'bibtex' | 'ris') => {
@@ -603,7 +680,12 @@ export function ReferencesView() {
   return (
     <div>
       <div className="view-header">
-        <h1 className="view-title">文献库</h1>
+        <div>
+          <h1 className="view-title">文献库</h1>
+          <div role="status" title={referenceSyncMessage} style={{ marginTop: 3, fontSize: 11.5, color: referenceSyncStatus === 'synced' ? 'var(--success)' : 'var(--text-muted)' }}>
+            {referenceSyncStatus === 'synced' ? '● SQLite / RAG 已同步' : referenceSyncStatus === 'syncing' ? '◌ 正在同步 SQLite…' : '○ 离线缓存模式'}
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
             ref={fileInputRef}
@@ -613,8 +695,8 @@ export function ReferencesView() {
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
           />
           <button className="btn ref-desktop-only" aria-label="导入文献" onClick={() => fileInputRef.current?.click()}><Icon name="import" size={16} /> 导入</button>
-          <button className="btn ref-desktop-only" aria-label="从 Zotero 导出文件导入文献" onClick={handleZoteroFileImport} title="请先在 Zotero 中导出 BibTeX 或 RIS；Selenyx 不会连接本机 Zotero 服务">
-            <Icon name="references" size={16} /> 从 Zotero 文件导入
+          <button className="btn ref-desktop-only" aria-label="从本机 Zotero 只读导入" onClick={() => void openZoteroImport()} title="先预览并勾选；只读复制，不会修改 Zotero">
+            <Icon name="references" size={16} /> 从 Zotero 导入
           </button>
           <button className="btn ref-desktop-only" aria-label="文档转 Markdown" onClick={() => { setAnydocRefId(selectedId); setAnydocOpen(true); }} title="上传 PDF/Word/Excel 等文档，本地转为 Markdown 进入精读"><Icon name="download" size={16} /> 文档转MD</button>
           <button className="btn ref-desktop-only" onClick={() => {
@@ -908,10 +990,10 @@ export function ReferencesView() {
 
       {searchOpen && !isMobile && (
         <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setSearchOpen(false)}>
-          <div style={{ background: 'var(--bg-surface)', borderRadius: 12, width: 'min(760px, 100%)', maxHeight: '82vh', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(event) => event.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-labelledby="literature-search-title" style={{ background: 'var(--bg-surface)', borderRadius: 12, width: 'min(760px, 100%)', maxHeight: '82vh', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(event) => event.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>文献在线检索</h3>
+                <h3 id="literature-search-title" style={{ fontSize: 16, fontWeight: 600 }}>文献在线检索</h3>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>检索结果不会自动保存，需逐条确认加入本地库。</p>
               </div>
               <button className="icon-btn" onClick={() => setSearchOpen(false)} aria-label="关闭"><Icon name="close" size={18} /></button>
@@ -925,6 +1007,64 @@ export function ReferencesView() {
         <BottomSheet open onClose={() => setSearchOpen(false)} title="文献在线检索">
           <LiteratureSearchContent query={literatureQuery} onQueryChange={setLiteratureQuery} results={literatureResults} searching={literatureSearching} searched={literatureSearched} onSearch={handleLiteratureSearch} onAdd={handleAddSearchResult} savedDois={savedDois} />
         </BottomSheet>
+      )}
+
+      {zoteroOpen && !isMobile && (
+        <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setZoteroOpen(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="zotero-import-title" style={{ background: 'var(--bg-surface)', borderRadius: 12, width: 'min(780px, 100%)', maxHeight: '85vh', overflow: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(event) => event.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <h3 id="zotero-import-title" style={{ fontSize: 16, fontWeight: 600 }}>从本机 Zotero 只读复制</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>先预览、勾选、再复制到 Selenyx；不会写回或修改 Zotero 数据库。</p>
+              </div>
+              <button className="icon-btn" onClick={() => setZoteroOpen(false)} aria-label="关闭 Zotero 导入"><Icon name="close" size={18} /></button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <div role="status" style={{ fontSize: 12.5, color: zoteroCandidates.length ? 'var(--text-secondary)' : 'var(--text-muted)', marginBottom: 12 }}>{zoteroMessage}</div>
+              {zoteroLoading && <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>正在读取候选文献…</div>}
+              {!zoteroLoading && zoteroCandidates.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                    <button className="btn btn-sm" onClick={() => setZoteroSelected(new Set(zoteroCandidates.map((item) => item.key)))}>全选</button>
+                    <button className="btn btn-sm" onClick={() => setZoteroSelected(new Set())}>全不选</button>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>已选 {zoteroSelected.size} / {zoteroCandidates.length}</span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 6, maxHeight: 430, overflow: 'auto' }}>
+                    {zoteroCandidates.map((candidate) => (
+                      <label key={candidate.key} style={{ display: 'grid', gridTemplateColumns: '20px 1fr', gap: 10, padding: 10, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={zoteroSelected.has(candidate.key)}
+                          onChange={(event) => setZoteroSelected((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) next.add(candidate.key); else next.delete(candidate.key);
+                            return next;
+                          })}
+                        />
+                        <span>
+                          <strong style={{ display: 'block', fontSize: 13 }}>{candidate.title || '[无标题]'}</strong>
+                          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                            {[candidate.creators.map((creator) => creator.lastName || creator.firstName).filter(Boolean).join(', '), candidate.publication, candidate.year, candidate.doi].filter(Boolean).join(' · ')}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+                    <button className="btn" onClick={() => setZoteroOpen(false)}>取消</button>
+                    <button className="btn btn-primary" disabled={zoteroSelected.size === 0} onClick={importSelectedZotero}>复制所选文献</button>
+                  </div>
+                </>
+              )}
+              {!zoteroLoading && zoteroCandidates.length === 0 && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" onClick={() => { setZoteroOpen(false); fileInputRef.current?.click(); }}>改用 BibTeX/RIS 文件</button>
+                  <button className="btn" onClick={() => void openZoteroImport()}>重试</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* anydoc 文档转 Markdown 模态 */}
@@ -1085,7 +1225,7 @@ function LiteratureSearchContent({
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter') onSearch(); }}
           placeholder="输入题名、作者、期刊或关键词"
-          aria-label="Crossref 文献检索"
+          aria-label="多源文献检索"
           style={{ flex: 1 }}
         />
         <button className="btn btn-primary" onClick={onSearch} disabled={!query.trim() || searching}>
@@ -1093,7 +1233,7 @@ function LiteratureSearchContent({
         </button>
       </div>
       <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.55, margin: '10px 0 14px' }}>
-        数据来自 Crossref 元数据服务。结果仅用于发现与导入；题名、作者、DOI 与开放获取状态请以原始出版页面为准。
+        本机学术网关并行查询 OpenAlex、Crossref、PubMed 与 arXiv，并按 DOI/题名去重；后端不可用时才降级为 Crossref 单源。结果仅用于发现与导入，关键字段仍应回到出版页面核验。
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {results.map((result, index) => {
@@ -1109,6 +1249,7 @@ function LiteratureSearchContent({
                     {result.year ? ` · ${result.year}` : ''}{result.publication ? ` · ${result.publication}` : ''}
                   </div>
                   {result.doi && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>DOI: {result.doi}</div>}
+                  {result.source && <div style={{ fontSize: 10.5, color: 'var(--accent)', marginTop: 4 }}>来源：{result.source}</div>}
                 </div>
                 <button className="btn btn-sm" disabled={saved} onClick={() => onAdd(result)}>{saved ? '已在库中' : '加入本地库'}</button>
               </div>

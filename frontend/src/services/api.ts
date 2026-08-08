@@ -3,7 +3,7 @@
  * 所有 API 调用经 /api 代理到 FastAPI 后端
  */
 
-import type { Reference, ResearchProject, RetrievalResult, ChatMessage } from '@apptypes/index';
+import type { Reference, ResearchProject, KanbanTask, RetrievalResult, ChatMessage } from '@apptypes/index';
 import { isDesktopTauri, isMobileTauri } from './nativeRuntime';
 
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -36,6 +36,11 @@ export const refApi = {
   create: (ref: Partial<Reference>) => request<Reference>('/references', { method: 'POST', body: JSON.stringify(ref) }),
   update: (id: string, patch: Partial<Reference>) => request<Reference>(`/references/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   delete: (id: string) => request<void>(`/references/${id}`, { method: 'DELETE' }),
+  snapshot: () => request<{ references: Reference[]; count: number; payloadVersion: number }>('/references/snapshot'),
+  bulkUpsert: (references: Reference[]) => request<{ stored: number; created: number; updated: number; indexedChunks: number }>(
+    '/references/bulk-upsert',
+    { method: 'POST', body: JSON.stringify({ references }) },
+  ),
   import: (format: string, data: string) => request<{ imported: number }>('/references/import', { method: 'POST', body: JSON.stringify({ format, data }) }),
   export: (ids: string[], format: string) => request<{ data: string }>(`/references/export`, { method: 'POST', body: JSON.stringify({ ids, format }) }),
   deduplicate: () => request<{ merged: number }>('/references/deduplicate', { method: 'POST' }),
@@ -82,6 +87,24 @@ export const projectApi = {
   create: (p: Partial<ResearchProject>) => request<ResearchProject>('/projects', { method: 'POST', body: JSON.stringify(p) }),
   update: (id: string, patch: Partial<ResearchProject>) => request<ResearchProject>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   advanceStage: (id: string) => request<ResearchProject>(`/projects/${id}/advance`, { method: 'POST' }),
+  workspaceSnapshot: () => request<{
+    projects: ResearchProject[];
+    tasks: KanbanTask[];
+    projectCount: number;
+    taskCount: number;
+    payloadVersion: number;
+  }>('/projects/workspace/snapshot'),
+  bulkUpsertWorkspace: (projects: ResearchProject[], tasks: KanbanTask[]) => request<{
+    storedProjects: number;
+    storedTasks: number;
+    createdProjects: number;
+    updatedProjects: number;
+    createdTasks: number;
+    updatedTasks: number;
+  }>('/projects/workspace/bulk-upsert', {
+    method: 'POST',
+    body: JSON.stringify({ projects, tasks }),
+  }),
 };
 
 // === 检索 API (extractive retrieval + scholarly connectors) ===
@@ -91,6 +114,46 @@ export interface SemanticHit extends RetrievalResult {
   source?: string;
 }
 
+export interface ScholarlyCandidate {
+  title: string;
+  doi: string;
+  year: string;
+  publication: string;
+  abstract: string;
+  url: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+  openAccess: boolean;
+  source: 'openalex' | 'crossref' | 'pubmed' | 'arxiv' | string;
+  creators: { firstName: string; lastName: string; type?: string }[];
+  pmid: string;
+  arxivId: string;
+}
+
+export interface ScholarlyDiagnostic {
+  source: string;
+  status: number;
+  count?: number;
+  error?: string;
+}
+
+export interface EvidenceRecord {
+  id: string;
+  project_id: string;
+  reference_id: string;
+  claim: string;
+  excerpt: string;
+  relation: 'supports' | 'contradicts' | 'qualifies';
+  review: 'pending' | 'accepted' | 'rejected';
+  confidence: 'high' | 'medium' | 'low';
+  page: number | null;
+  chunk_id: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const searchApi = {
   semantic: (query: string, projectId?: string) =>
     request<{ results: SemanticHit[]; count: number; query: string }>('/search/semantic', {
@@ -98,7 +161,7 @@ export const searchApi = {
       body: JSON.stringify({ query, projectId, topK: 8 }),
     }),
   scholarly: (query: string, sources: string[]) =>
-    request<{ results: unknown[]; count: number; diagnostics: unknown[] }>('/search/scholarly', {
+    request<{ results: ScholarlyCandidate[]; count: number; diagnostics: ScholarlyDiagnostic[] }>('/search/scholarly', {
       method: 'POST',
       body: JSON.stringify({ query, sources }),
     }),
@@ -108,10 +171,11 @@ export const searchApi = {
 };
 
 export const evidenceApi = {
-  list: (projectId?: string) => request<unknown[]>(`/evidence${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+  list: (projectId?: string) => request<EvidenceRecord[]>(`/evidence${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
   summary: (projectId?: string) => request<Record<string, number>>(`/evidence/summary${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
-  create: (body: Record<string, unknown>) => request<unknown>('/evidence', { method: 'POST', body: JSON.stringify(body) }),
-  patch: (id: string, body: Record<string, unknown>) => request<unknown>(`/evidence/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  create: (body: Record<string, unknown>) => request<EvidenceRecord>('/evidence', { method: 'POST', body: JSON.stringify(body) }),
+  patch: (id: string, body: Record<string, unknown>) => request<EvidenceRecord>(`/evidence/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (id: string) => request<{ deleted: string }>(`/evidence/${id}`, { method: 'DELETE' }),
   outline: (projectId: string) => request<{ bullets: string[]; acceptedCount: number }>(`/evidence/writing-outline/${projectId}`),
 };
 

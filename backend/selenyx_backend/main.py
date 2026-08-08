@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from selenyx_backend.database import init_db
 from selenyx_backend.routers import ai, citations, clinical, evidence, projects, references, search, zotero
+from selenyx_backend.services.embeddings import embedding_runtime_summary
 from selenyx_backend.settings import get_settings
 
 
@@ -54,5 +55,8 @@ async def health():
         "storage": "local-sqlite",
         "llmConfigured": ai.llm_is_configured(settings),
         "rag": "hybrid-hash+optional-dense",
+        # This reports configuration, not reachability. Dense calls always
+        # retain a deterministic local fallback when the provider is offline.
+        "embedding": embedding_runtime_summary(settings),
         "features": ["references", "projects", "rag", "scholarly", "evidence", "zotero", "ai-gateway"],
     }

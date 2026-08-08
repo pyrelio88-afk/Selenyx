@@ -18,12 +18,12 @@
 
 | # | 需求 | 活树状态 | 本轮动作 |
 |---|---|---|---|
-| C1 | 文献导出不可用 | 已有导出预览+下载代码 | 加后端/单测回归；保证下载路径 |
-| C2 | 导入文献无法删除 | store 有 `deleteReferenceAndRelations` | 删时清 RAG chunk；UI 确认 |
-| C3 | 在线预览不可用 | Unpaywall + iframe | 保留外开 + 内嵌诚实失败 |
-| C4 | 工具箱图标 | CSS 已补 desktop grid | 桌面改为图标网格入口 |
-| C5 | 番茄钟旁时钟时区/高度 | 已用 Asia/Shanghai | 统一 minHeight 卡片 |
-| C6 | Agnes API | models 200；chat 超时 | 接入 provider + 后端网关；报告实测 |
+| C1 | 文献导出不可用 | **已实现** | 前端下载+可复制预览；后端 JSON/BibTeX/RIS 真实导出与往返测试 |
+| C2 | 导入文献无法删除 | **已实现** | 关系原子清理；SQLite、RAG chunk 与 evidence 同步删除 |
+| C3 | 在线预览不可用 | **已实现降级** | DOI/URL 仅 http(s)；内嵌失败可外开，不伪装可预览 |
+| C4 | 工具箱图标 | **已实现** | 桌面图标网格入口 |
+| C5 | 番茄钟旁时钟时区/高度 | **已实现** | Asia/Shanghai 北京时间 + 卡片高度对齐 |
+| C6 | Agnes API | **部分完成** | 密钥进本机后端网关；models 可用，chat 仍需用户网络/密钥实测 |
 
 ## 高优先级
 
@@ -36,6 +36,23 @@
 | H5 | nature-skills 级技能 | 真实仓库映射；禁止虚标 32k stars |
 | H6 | 标准规范内嵌原文 | fullText 展开 + 官方链接应用内预览 |
 | H7 | 学科名词/数值/公式/标准量 | 目标：名词≥500/大类，数值≥100，公式≥100，标准≥20（中 60% 外 40%）— 分批扩充 |
+
+## 0.01 当前闭环（本轮）
+
+- 文献完整对象：Zustand 离线缓存 ↔ SQLite 稳定 ID 对账，附件/批注/未来字段不丢失。
+- 项目与任务：同一事务 snapshot/bulk-upsert，悬空任务拒绝，启动时按 `updatedAt` 对账。
+- 文献交换：JSON/BibTeX/RIS 真实导入导出，重复导入幂等，坏数据整批回滚。
+- RAG：中文 hash-v2 + lexical 永久保底；可选 Ollama 原生或 OpenAI-compatible dense；不同模型向量不混算。
+- 证据门：本机片段进入 pending，人工 accept/reject；写作提纲只读取 accepted。
+- 学科数据诚信：历史 `核心概念NN` / `关键参数NN` / `SEL-*` 伪条目已从运行时隔离。数量目标当前**未完成**，只允许来源快照逐批补回。
+- 桌面 Ollama：普通构建不下载；`--with-ollama` 才校验并打包上游安装器，模型仍由用户明确拉取。
+
+## 已知下一轮风险
+
+- 项目/任务尚未实现 tombstone；未来新增删除或“覆盖式恢复”时必须先补删除语义，避免旧 SQLite 项目复活。
+- Ollama/EmbeddingGemma 在本机未安装，因此 dense 真实端到端尚未验收；当前验证的是协议、校验和 hash 回退。
+- 全学科数量目标远未达到可信质量；Wikimedia 拉取遇到 429，抓取器已改为缓存+节流，但不得回退到模板填充。
+- Android 当前仍不包含桌面 Python sidecar，只能作为前端离线核心能力，不能宣称完整 RAG 桌面等价物。
 
 ## 验收烟测（3 分钟）
 

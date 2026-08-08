@@ -49,10 +49,19 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
-    # Optional OpenAI-compatible embeddings (Ollama nomic-embed-text etc.)
+    # Optional dense embeddings.  The default provider speaks the
+    # OpenAI-compatible /embeddings protocol; ``ollama`` uses /api/embed.
+    # Empty base/model values deliberately keep the zero-download hash path.
+    embed_provider: str = "openai-compatible"
     embed_base_url: str = ""
     embed_api_key: str = ""
     embed_model: str = ""
+    # Some retrieval models (notably E5/BGE variants) expect asymmetric
+    # query/document instructions.  They are opt-in so generic models are not
+    # silently given the wrong prompt format.
+    embed_query_prefix: str = ""
+    embed_document_prefix: str = ""
+    embed_timeout_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     # OpenAlex polite pool
     openalex_mailto: str = "selenyx@research.local"
     openalex_api_key: str = ""

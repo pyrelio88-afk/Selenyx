@@ -22,8 +22,9 @@
 本地 RAG（hybrid）：
 
 - 默认 **hashing embedding**（无模型下载，永远可用）
-- 可选 **OpenAI 兼容 /embeddings**（Ollama `nomic-embed-text` 等）
+- 可选 **Ollama 原生 /api/embed** 或 **OpenAI 兼容 /embeddings**（推荐本机 `embeddinggemma`）
 - 检索结果带 `page` / `charOffset` / `excerpt`，禁止编造引用
+- 不同模型身份的向量绝不混算；模型切换或服务失败时回退 `hash-v2`
 
 学术连接器（抄 OpenScience/Runcell 的诚实性）：
 
@@ -44,7 +45,7 @@ selenyx/
 
 ## 数据与密钥边界
 
-1. SQLite 默认 `~/.selenyx/selenyx.sqlite3`
+1. SQLite 默认 `~/.selenyx/selenyx.sqlite3`；文献完整 payload 与项目/任务工作区分别通过显式仓库层对账
 2. 密钥只进 `backend/.env.local` 或 `~/.selenyx/.env.local`（`SELENYX_LLM_*`），**永不**进前端构建产物的长期分发
 3. 开发可用 Vite proxy：`/api` → `127.0.0.1:8770`
 4. 后端不可用时前端仍可读本地 Zustand/localStorage，功能降级而不是白屏

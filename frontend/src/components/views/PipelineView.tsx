@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/project';
 import type { PipelineStageKey } from '@apptypes/index';
@@ -6,6 +6,7 @@ import { Icon, STAGE_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { runPipelineStage } from '@services/pipeline';
 import { LLMError } from '@services/llm';
+import { evidenceApi, searchApi, type EvidenceRecord, type SemanticHit } from '@services/api';
 
 const STAGE_ORDER: PipelineStageKey[] = PIPELINE_STAGES.map((s) => s.key);
 
@@ -23,6 +24,30 @@ export function PipelineView() {
   const project = projects.find((p) => p.id === currentProjectId);
   const [runningStage, setRunningStage] = useState<PipelineStageKey | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [ragQuery, setRagQuery] = useState('');
+  const [ragHits, setRagHits] = useState<SemanticHit[]>([]);
+  const [ragStatus, setRagStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [ragMessage, setRagMessage] = useState('');
+  const [evidence, setEvidence] = useState<EvidenceRecord[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [outline, setOutline] = useState<{ bullets: string[]; acceptedCount: number } | null>(null);
+
+  const refreshEvidence = useCallback(async (projectId: string) => {
+    setEvidenceLoading(true);
+    try {
+      setEvidence(await evidenceApi.list(projectId));
+    } catch (error) {
+      setRagMessage(error instanceof Error ? error.message : '证据链读取失败');
+    } finally {
+      setEvidenceLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setRagHits([]);
+    setOutline(null);
+    if (project?.id) void refreshEvidence(project.id);
+  }, [project?.id, refreshEvidence]);
 
   if (!project) {
     return (
@@ -70,6 +95,64 @@ export function PipelineView() {
 
   function stopRun() { abortRef.current?.abort(); }
 
+  async function runLocalRag() {
+    const query = ragQuery.trim();
+    if (!query || !project) return;
+    setRagStatus('loading');
+    setRagMessage('');
+    try {
+      const response = await searchApi.semantic(query, project.id);
+      setRagHits(response.results);
+      setRagStatus('done');
+      setRagMessage(response.count
+        ? `命中 ${response.count} 个本机原文片段；分数只用于排序，不代表证据质量。`
+        : '本机索引没有命中。请先向文献库导入带摘要/笔记的文献，或检查后端是否在线。');
+    } catch (error) {
+      setRagStatus('error');
+      setRagMessage(error instanceof Error ? error.message : '本机 RAG 检索失败');
+    }
+  }
+
+  async function addHitToEvidence(hit: SemanticHit) {
+    if (!project || !hit.excerpt?.trim()) return;
+    try {
+      await evidenceApi.create({
+        projectId: project.id,
+        referenceId: hit.referenceId,
+        excerpt: hit.excerpt,
+        claim: '',
+        relation: 'supports',
+        confidence: 'medium',
+        page: hit.page ?? null,
+        chunkId: hit.chunkId ?? null,
+      });
+      await refreshEvidence(project.id);
+      setRagMessage('片段已进入待审证据链；必须人工“接受”后才能进入写作提纲。');
+    } catch (error) {
+      setRagMessage(error instanceof Error ? error.message : '加入证据链失败');
+    }
+  }
+
+  async function reviewEvidence(item: EvidenceRecord, review: 'accepted' | 'rejected') {
+    if (!project) return;
+    try {
+      await evidenceApi.patch(item.id, { review });
+      await refreshEvidence(project.id);
+      setOutline(null);
+    } catch (error) {
+      setRagMessage(error instanceof Error ? error.message : '证据审核失败');
+    }
+  }
+
+  async function buildAcceptedOutline() {
+    if (!project) return;
+    try {
+      setOutline(await evidenceApi.outline(project.id));
+    } catch (error) {
+      setRagMessage(error instanceof Error ? error.message : '写作提纲读取失败');
+    }
+  }
+
   /** 标记该段通过门控并推进到下一段 */
   function passAndAdvance(stage: PipelineStageKey) {
     const key = rk(stage);
@@ -93,15 +176,96 @@ export function PipelineView() {
 
   return (
     <div>
-      <div className="view-header">
+      <div className="view-header pipeline-view-header">
         <h1 className="view-title">科研流水线</h1>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="pipeline-project-context" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>当前项目:</span>
           <span style={{ fontWeight: 600, fontSize: 13 }}>{project.name}</span>
           <ProjectStatusChip status={project.status} />
           {!llmConfig && <span style={{ fontSize: 12, color: 'var(--danger)' }}>未配置 LLM，去「设置」配置后才能执行</span>}
         </span>
       </div>
+
+      <section className="card" aria-label="本机 RAG 与证据门" style={{ marginBottom: 16, padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', marginBottom: 12 }}>
+          <div>
+            <h2 style={{ fontSize: 16, margin: 0 }}>本机 RAG · 原文片段 → 人工证据门</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: 12, margin: '4px 0 0' }}>
+              只检索你已导入并同步到 SQLite 的摘要、笔记或全文片段；不会把模型生成内容伪装成引文。
+            </p>
+          </div>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+            待审 {evidence.filter((item) => item.review === 'pending').length} · 已接受 {evidence.filter((item) => item.review === 'accepted').length}
+          </span>
+        </div>
+        <div className="pipeline-rag-toolbar">
+          <input
+            className="input"
+            value={ragQuery}
+            onChange={(event) => setRagQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') void runLocalRag(); }}
+            placeholder="检索本机证据，例如：SBAR 交接培训对错误率的影响"
+            aria-label="本机 RAG 查询"
+          />
+          <button className="btn btn-primary" onClick={() => void runLocalRag()} disabled={!ragQuery.trim() || ragStatus === 'loading'}>
+            <Icon name="search" size={15} /> {ragStatus === 'loading' ? '检索中…' : '检索本机证据'}
+          </button>
+          <button className="btn" onClick={() => void buildAcceptedOutline()} disabled={evidenceLoading}>
+            生成已接受证据提纲
+          </button>
+        </div>
+        {ragMessage && (
+          <div role="status" style={{ marginTop: 8, fontSize: 12, color: ragStatus === 'error' ? 'var(--danger)' : 'var(--text-secondary)' }}>
+            {ragMessage}
+          </div>
+        )}
+        {ragHits.length > 0 && (
+          <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+            {ragHits.map((hit) => (
+              <article key={hit.chunkId ?? `${hit.referenceId}-${hit.charOffset?.start ?? 0}`} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <strong style={{ fontSize: 13 }}>{hit.title || references.find((item) => item.id === hit.referenceId)?.title || '本机文献'}</strong>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                    {hit.page ? `p.${hit.page} · ` : ''}score {Number(hit.score ?? 0).toFixed(3)}
+                  </span>
+                </div>
+                <p style={{ margin: '6px 0 8px', fontSize: 12.5, lineHeight: 1.55 }}>{hit.excerpt}</p>
+                <button className="btn btn-sm" onClick={() => void addHitToEvidence(hit)}>加入待审证据链</button>
+              </article>
+            ))}
+          </div>
+        )}
+        {evidence.length > 0 && (
+          <details style={{ marginTop: 12 }} open>
+            <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>证据链（{evidence.length}）</summary>
+            <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+              {evidence.map((item) => (
+                <article key={item.id} style={{ background: 'var(--bg-surface)', borderRadius: 8, padding: 10, fontSize: 12.5 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span>{item.review === 'accepted' ? '✓ 已接受' : item.review === 'rejected' ? '× 已拒绝' : '○ 待审'} · {item.relation}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{item.page ? `p.${item.page}` : '无页码'} · {item.confidence}</span>
+                  </div>
+                  <p style={{ margin: '6px 0', lineHeight: 1.5 }}>{item.excerpt}</p>
+                  {item.review === 'pending' && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm" onClick={() => void reviewEvidence(item, 'accepted')}>人工接受</button>
+                      <button className="btn btn-sm" onClick={() => void reviewEvidence(item, 'rejected')}>拒绝</button>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
+        {outline && (
+          <div style={{ marginTop: 12, borderLeft: '3px solid var(--accent)', paddingLeft: 12 }}>
+            <strong style={{ fontSize: 13 }}>写作提纲 · 仅来自 {outline.acceptedCount} 条已接受证据</strong>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12.5, lineHeight: 1.6 }}>
+              {outline.bullets.map((bullet, index) => <li key={`${index}-${bullet}`}>{bullet}</li>)}
+            </ul>
+          </div>
+        )}
+      </section>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {PIPELINE_STAGES.map((stage) => {
@@ -116,8 +280,8 @@ export function PipelineView() {
               flexDirection: 'column', alignItems: 'stretch', gap: 10,
               opacity: isActive ? 1 : 0.92,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div className="pipeline-stage-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div className="pipeline-stage-summary" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <span className="stage-icon" style={{ display: 'flex', color: isActive ? 'var(--accent)' : run.passed ? 'var(--success)' : 'var(--text-secondary)' }}>
                     <Icon name={STAGE_ICONS[stage.key]} size={26} strokeWidth={1.4} />
                   </span>
@@ -130,7 +294,7 @@ export function PipelineView() {
                     <div className="stage-desc" style={{ fontSize: 12.5 }}>{stage.description}</div>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right', fontSize: 11.5, display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+                <div className="pipeline-stage-meta" style={{ textAlign: 'right', fontSize: 11.5, display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
                   <div style={{ color: 'var(--text-muted)' }}>关联文献: {stageRefs.length}</div>
                   <div style={{ color: 'var(--warning)' }}>门控: {stage.qualityGate}</div>
                   <div style={{ color: 'var(--text-muted)' }}>产出: {stage.outputs.join('、')}</div>
@@ -153,7 +317,7 @@ export function PipelineView() {
               </details>
 
               {/* 操作行 */}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="pipeline-stage-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {isRunning ? (
                   <button className="btn" onClick={stopRun}>停止</button>
                 ) : (

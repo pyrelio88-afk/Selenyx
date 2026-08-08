@@ -12,6 +12,13 @@ import type {
 } from '@apptypes/index';
 import { createEmptyNote } from '@apptypes/index';
 import { migratePersistedAppState } from './migrations';
+import {
+  mirrorReference,
+  mirrorReferences,
+  removeMirroredReference,
+  type ReferenceSyncStatus,
+} from '@services/referenceRepository';
+import { mirrorWorkspace, type WorkspaceSyncStatus } from '@services/workspaceRepository';
 
 export type ViewKey =
   | 'dashboard' | 'projects' | 'references' | 'pipeline'
@@ -46,6 +53,10 @@ interface AppState {
 
   // === 文献 ===
   references: Reference[];
+  referenceSyncStatus: ReferenceSyncStatus;
+  referenceSyncMessage: string;
+  setReferenceSync: (status: ReferenceSyncStatus, message: string) => void;
+  replaceReferences: (refs: Reference[]) => void;
   collections: RefCollection[];
   tags: RefTag[];
   addReference: (ref: Reference) => void;
@@ -57,6 +68,10 @@ interface AppState {
 
   // === 项目 ===
   projects: ResearchProject[];
+  workspaceSyncStatus: WorkspaceSyncStatus;
+  workspaceSyncMessage: string;
+  setWorkspaceSync: (status: WorkspaceSyncStatus, message: string) => void;
+  replaceWorkspace: (projects: ResearchProject[], tasks: KanbanTask[]) => void;
   currentProjectId: string | null;
   setCurrentProject: (id: string | null) => void;
   addProject: (p: ResearchProject) => void;
@@ -125,28 +140,51 @@ export const useAppStore = create<AppState>()(
       setDensity: (d) => set({ density: d }),
 
       references: [],
+      referenceSyncStatus: 'idle',
+      referenceSyncMessage: '等待本地后端同步',
+      setReferenceSync: (status, message) => set({ referenceSyncStatus: status, referenceSyncMessage: message }),
+      replaceReferences: (refs) => set({ references: refs }),
       collections: [],
       tags: [],
-      addReference: (ref) => set((s) => ({ references: [...s.references, ref] })),
-      addReferences: (refs) => set((s) => ({ references: [...s.references, ...refs] })),
-      updateReference: (id, patch) => set((s) => ({
-        references: s.references.map((r) => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r)),
-      })),
-      deleteReference: (id) => set((s) => ({
-        references: s.references.filter((r) => r.id !== id),
-      })),
-      deleteReferenceAndRelations: (id) => set((s) => {
+      addReference: (ref) => set((s) => {
+        mirrorReference(ref);
+        return { references: [...s.references, ref] };
+      }),
+      addReferences: (refs) => set((s) => {
+        mirrorReferences(refs);
+        return { references: [...s.references, ...refs] };
+      }),
+      updateReference: (id, patch) => set((s) => {
         const updatedAt = new Date().toISOString();
+        const references = s.references.map((reference) => {
+          if (reference.id !== id) return reference;
+          const updated = { ...reference, ...patch, updatedAt };
+          mirrorReference(updated);
+          return updated;
+        });
+        return { references };
+      }),
+      deleteReference: (id) => set((s) => {
+        removeMirroredReference(id);
+        return { references: s.references.filter((r) => r.id !== id) };
+      }),
+      deleteReferenceAndRelations: (id) => set((s) => {
+        removeMirroredReference(id);
+        const updatedAt = new Date().toISOString();
+        const projects = s.projects.map((project) => {
+          if (!Array.isArray(project.referenceIds) || !project.referenceIds.includes(id)) return project;
+          return {
+            ...project,
+            referenceIds: project.referenceIds.filter((referenceId) => referenceId !== id),
+            updatedAt,
+          };
+        });
+        void mirrorWorkspace(projects, s.tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
         return {
           references: s.references.filter((reference) => reference.id !== id),
-          projects: s.projects.map((project) => {
-            if (!Array.isArray(project.referenceIds) || !project.referenceIds.includes(id)) return project;
-            return {
-              ...project,
-              referenceIds: project.referenceIds.filter((referenceId) => referenceId !== id),
-              updatedAt,
-            };
-          }),
+          projects,
+          workspaceSyncStatus: 'syncing',
+          workspaceSyncMessage: '正在同步本机 SQLite 项目与任务…',
           notes: s.notes.map((note) => {
             if (!Array.isArray(note.linkedReferenceIds) || !note.linkedReferenceIds.includes(id)) return note;
             return {
@@ -159,21 +197,45 @@ export const useAppStore = create<AppState>()(
       }),
 
       projects: [],
+      workspaceSyncStatus: 'idle',
+      workspaceSyncMessage: '等待本地后端同步项目与任务',
+      setWorkspaceSync: (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }),
+      replaceWorkspace: (projects, tasks) => set((s) => ({
+        projects,
+        tasks,
+        currentProjectId: s.currentProjectId && projects.some((project) => project.id === s.currentProjectId)
+          ? s.currentProjectId
+          : projects[0]?.id ?? null,
+      })),
       currentProjectId: null,
       setCurrentProject: (id) => set({ currentProjectId: id }),
-      addProject: (p) => set((s) => ({ projects: [...s.projects, p] })),
-      updateProject: (id, patch) => set((s) => ({
-        projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p)),
-      })),
+      addProject: (p) => set((s) => {
+        const projects = [...s.projects, p];
+        void mirrorWorkspace(projects, s.tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
+        return { projects, workspaceSyncStatus: 'syncing', workspaceSyncMessage: '正在同步本机 SQLite 项目与任务…' };
+      }),
+      updateProject: (id, patch) => set((s) => {
+        const projects = s.projects.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p));
+        void mirrorWorkspace(projects, s.tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
+        return { projects, workspaceSyncStatus: 'syncing', workspaceSyncMessage: '正在同步本机 SQLite 项目与任务…' };
+      }),
 
       tasks: [],
-      addTask: (t) => set((s) => ({ tasks: [...s.tasks, t] })),
-      updateTask: (id, patch) => set((s) => ({
-        tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t)),
-      })),
-      moveTask: (id, column) => set((s) => ({
-        tasks: s.tasks.map((t) => (t.id === id ? { ...t, column, updatedAt: new Date().toISOString() } : t)),
-      })),
+      addTask: (t) => set((s) => {
+        const tasks = [...s.tasks, t];
+        void mirrorWorkspace(s.projects, tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
+        return { tasks, workspaceSyncStatus: 'syncing', workspaceSyncMessage: '正在同步本机 SQLite 项目与任务…' };
+      }),
+      updateTask: (id, patch) => set((s) => {
+        const tasks = s.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t));
+        void mirrorWorkspace(s.projects, tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
+        return { tasks, workspaceSyncStatus: 'syncing', workspaceSyncMessage: '正在同步本机 SQLite 项目与任务…' };
+      }),
+      moveTask: (id, column) => set((s) => {
+        const tasks = s.tasks.map((t) => (t.id === id ? { ...t, column, updatedAt: new Date().toISOString() } : t));
+        void mirrorWorkspace(s.projects, tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
+        return { tasks, workspaceSyncStatus: 'syncing', workspaceSyncMessage: '正在同步本机 SQLite 项目与任务…' };
+      }),
 
       tables: [],
       addTable: (t) => set((s) => ({ tables: [...s.tables, t] })),

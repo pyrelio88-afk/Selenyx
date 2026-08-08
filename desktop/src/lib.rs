@@ -32,6 +32,8 @@ const HEALTH_PROBE_TIMEOUT: Duration = Duration::from_millis(350);
 const MAX_HEALTH_RESPONSE_BYTES: usize = 8 * 1024;
 
 const MAX_STATE_BACKUP_BYTES: u64 = 50 * 1024 * 1024;
+#[cfg(not(mobile))]
+const BUNDLED_OLLAMA_INSTALLER_BYTES: u64 = 1_563_278_432;
 
 #[cfg(all(not(mobile), any(not(debug_assertions), test)))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -285,6 +287,66 @@ fn app_data_dir(app: tauri::AppHandle) -> String {
     data_dir(&app).to_string_lossy().into_owned()
 }
 
+#[cfg(not(mobile))]
+fn bundled_ollama_installer_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    if !cfg!(target_os = "windows") {
+        return None;
+    }
+    let resource_dir = app.path().resource_dir().ok()?;
+    [
+        resource_dir.join("resources/ollama/OllamaSetup.exe"),
+        resource_dir.join("ollama/OllamaSetup.exe"),
+    ]
+    .into_iter()
+    .find(|path| {
+        path.is_file()
+            && fs::metadata(path)
+                .map(|metadata| metadata.len() == BUNDLED_OLLAMA_INSTALLER_BYTES)
+                .unwrap_or(false)
+    })
+}
+
+/// Lets the Settings screen distinguish an ordinary small bundle from the
+/// explicit Windows --with-ollama flavor without attempting to open anything.
+#[tauri::command]
+fn has_bundled_ollama_installer(app: tauri::AppHandle) -> bool {
+    #[cfg(mobile)]
+    {
+        let _ = app;
+        false
+    }
+
+    #[cfg(not(mobile))]
+    {
+        bundled_ollama_installer_path(&app).is_some()
+    }
+}
+
+/// Reveal the opt-in upstream installer in Explorer. Selenyx deliberately does
+/// not execute it: installation requires a separate, explicit user action.
+#[tauri::command]
+fn reveal_bundled_ollama_installer(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(any(mobile, not(target_os = "windows")))]
+    {
+        let _ = app;
+        Err("The bundled Ollama installer is available only on Windows desktop builds.".to_string())
+    }
+
+    #[cfg(all(not(mobile), target_os = "windows"))]
+    {
+        let installer = bundled_ollama_installer_path(&app).ok_or_else(|| {
+            "This Selenyx build does not include a verified optional Ollama installer.".to_string()
+        })?;
+        let mut explorer_selection = std::ffi::OsString::from("/select,");
+        explorer_selection.push(installer.as_os_str());
+        std::process::Command::new("explorer.exe")
+            .arg(explorer_selection)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("Unable to reveal the bundled Ollama installer: {error}"))
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LocalLlmConfig {
@@ -381,6 +443,8 @@ pub fn run() {
             import_state,
             delete_state_backup,
             app_data_dir,
+            has_bundled_ollama_installer,
+            reveal_bundled_ollama_installer,
             save_llm_config
         ])
         .setup(|app| {

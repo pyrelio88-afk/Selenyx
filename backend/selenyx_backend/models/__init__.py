@@ -49,6 +49,11 @@ class Reference(SQLModel, table=True):
     read_status: str = "unread"
     importance: int = 3
     source: str = "manual"
+    # Lossless copy of the frontend Reference object.  Indexed columns above
+    # keep search/RAG efficient while this payload preserves annotations,
+    # attachments and newer UI fields across backend version changes.
+    payload_json: str = "{}"
+    payload_version: int = 1
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
@@ -68,6 +73,10 @@ class ResearchProject(SQLModel, table=True):
     status: str = "planning"
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    # Lossless frontend object. Indexed columns above remain queryable while
+    # optional framework and future fields survive backend upgrades.
+    payload_json: str = "{}"
+    payload_version: int = 1
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
@@ -87,6 +96,10 @@ class KanbanTask(SQLModel, table=True):
     due_date: Optional[str] = None
     tags_json: str = "[]"
     sort_order: int = 0
+    # Keep the exact frontend task shape (including stable local ids) so a
+    # backend with an older schema never silently discards newer fields.
+    payload_json: str = "{}"
+    payload_version: int = 1
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 

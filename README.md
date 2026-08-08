@@ -42,7 +42,7 @@ Copy-Item backend\.env.example backend\.env.local
 
 - 八段流水线：问题 → 检索 → 全文 → 筛选 → 精读 → 证据 → 综合 → 写作（仅 accepted 证据）
 - 文献库：导入/导出 BibTeX·RIS、去重、DOI/PMID、Zotero 本地 API 只读导入
-- 本地 RAG：hybrid hashing + 可选 dense；结果带 excerpt/页码/字符偏移
+- 本地 RAG：零下载 hash-v2 + 词法保底，可选 Ollama/OpenAI-compatible dense；结果带 excerpt/页码/字符偏移
 - 学术连接器：OpenAlex / Crossref / PubMed / arXiv（限流 + 诚实空结果）
 - PDF/OCR、统计与图表、学科资料、AI 助手（BYOK / 后端网关）
 
@@ -53,7 +53,11 @@ npm run backend:test
 npm run verify:local
 ```
 
-架构见 [ARCHITECTURE.md](ARCHITECTURE.md)，需求账本见 [docs/REQUIREMENTS-LEDGER.md](docs/REQUIREMENTS-LEDGER.md)。
+完整桌面构建会先打包本机 FastAPI sidecar。Windows 若明确需要把经固定版本、大小与 SHA-256 校验的 Ollama 安装器作为可选资源附带，可运行 `npm run desktop:build:with-ollama`；普通构建不会下载它，应用只会定位资源文件、不会运行安装程序。详见 [BUILD.md](BUILD.md)。
+
+架构见 [ARCHITECTURE.md](ARCHITECTURE.md)，本地向量模型与降级策略见
+[docs/LOCAL-RAG-EMBEDDINGS.md](docs/LOCAL-RAG-EMBEDDINGS.md)，需求账本见
+[docs/REQUIREMENTS-LEDGER.md](docs/REQUIREMENTS-LEDGER.md)。
 
 ## License
 

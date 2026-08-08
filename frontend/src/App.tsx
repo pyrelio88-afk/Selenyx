@@ -17,6 +17,8 @@ import { useAppStore, type ViewKey } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
 import { clearSelenyxBrowserStorage } from '@services/workspaceBackup';
 import { readEnvironmentLLM } from '@services/envLLM';
+import { bootstrapReferenceRepository } from '@services/referenceRepository';
+import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
 import './styles/tokens.css';
 
 export type { ViewKey } from '@stores/appStore';
@@ -73,7 +75,10 @@ const VIEWS: Record<ViewKey, () => ReactNode> = {
 };
 
 export default function App() {
-  const { currentView, theme, mode, density, setLLMConfig } = useAppStore();
+  const {
+    currentView, theme, mode, density, setLLMConfig,
+    replaceReferences, setReferenceSync, replaceWorkspace, setWorkspaceSync,
+  } = useAppStore();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -88,6 +93,28 @@ export default function App() {
     const environmentLLM = readEnvironmentLLM();
     setLLMConfig(environmentLLM.config);
   }, [setLLMConfig]);
+
+  // Reconcile the offline cache with the lossless SQLite mirror once per app
+  // launch.  Failure is non-fatal: the user can continue locally and the next
+  // successful launch will upload those mutations.
+  useEffect(() => {
+    setReferenceSync('syncing', '正在连接本机 SQLite 与 RAG 索引…');
+    void bootstrapReferenceRepository(useAppStore.getState().references).then((result) => {
+      replaceReferences(result.references);
+      setReferenceSync(result.status, result.message);
+    });
+  }, [replaceReferences, setReferenceSync]);
+
+  // Projects and tasks form one referential unit. Reconcile them together so
+  // an offline task can never reach SQLite without its stable parent id.
+  useEffect(() => {
+    setWorkspaceSync('syncing', '正在同步本机项目与任务…');
+    const state = useAppStore.getState();
+    void bootstrapWorkspaceRepository(state.projects, state.tasks).then((result) => {
+      replaceWorkspace(result.projects, result.tasks);
+      setWorkspaceSync(result.status, result.message);
+    });
+  }, [replaceWorkspace, setWorkspaceSync]);
 
   useEffect(() => {
     if (currentView === 'pipeline') {

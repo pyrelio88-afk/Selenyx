@@ -30,7 +30,10 @@ function genId() {
 }
 
 export function ProjectsView() {
-  const { projects, tasks, setCurrentProject, addProject, setView } = useAppStore();
+  const {
+    projects, tasks, setCurrentProject, addProject, setView,
+    workspaceSyncStatus, workspaceSyncMessage,
+  } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
   const [showFrameworks, setShowFrameworks] = useState(false);
   const [selectedFramework, setSelectedFramework] = useState<ResearchFramework | null>(null);
@@ -101,6 +104,10 @@ export function ProjectsView() {
       proj.description = `${form.description.trim()}\n\n【${selectedFramework.name}框架】\n${fwText}`.trim();
     }
     addProject(proj);
+    // A freshly created project is immediately the active research context.
+    // Without this, the sidebar could display the first project while the
+    // pipeline still saw currentProjectId=null and refused to run.
+    setCurrentProject(proj.id);
     setShowCreate(false);
     setForm({ name: '', description: '', frameworkId: '' });
     setFieldValues({});
@@ -110,7 +117,20 @@ export function ProjectsView() {
   return (
     <div>
       <div className="view-header">
-        <h1 className="view-title">项目管理</h1>
+        <div>
+          <h1 className="view-title">项目管理</h1>
+          <div
+            role="status"
+            title={workspaceSyncMessage}
+            style={{ marginTop: 3, fontSize: 11.5, color: workspaceSyncStatus === 'synced' ? 'var(--success)' : 'var(--text-muted)' }}
+          >
+            {workspaceSyncStatus === 'synced'
+              ? '● SQLite 已同步'
+              : workspaceSyncStatus === 'syncing'
+                ? '◌ 正在同步 SQLite…'
+                : '○ 离线缓存模式'}
+          </div>
+        </div>
         <button className="btn btn-primary" onClick={startCreate}>
           <Icon name="plus" size={16} /> 新建项目
         </button>

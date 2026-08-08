@@ -7,6 +7,11 @@ import { testConnection, type TestResult } from '@services/llm';
 import { readEnvironmentLLM } from '@services/envLLM';
 import { aiApi, localApi } from '@services/api';
 import {
+  hasBundledOllamaInstaller,
+  isDesktopTauri,
+  revealBundledOllamaInstaller,
+} from '@services/nativeRuntime';
+import {
   clearSelenyxBrowserStorage,
   createWorkspaceBackupJson,
   restoreWorkspaceBackup,
@@ -51,6 +56,9 @@ export function SettingsView() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [backendHealth, setBackendHealth] = useState<string>('检测中…');
   const [backendDetail, setBackendDetail] = useState('');
+  const [hasOllamaInstaller, setHasOllamaInstaller] = useState(false);
+  const [checkingOllamaInstaller, setCheckingOllamaInstaller] = useState(isDesktopTauri());
+  const [ollamaInstallerStatus, setOllamaInstallerStatus] = useState('');
   const appState = useAppStore();
   const {
     theme, setTheme, mode, setMode, density, setDensity, llmConfig,
@@ -73,6 +81,22 @@ export function SettingsView() {
         setBackendDetail(error instanceof Error ? error.message : '无法连接 127.0.0.1:8770');
       }
     })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktopTauri()) return;
+    let cancelled = false;
+    void hasBundledOllamaInstaller()
+      .then((available) => {
+        if (!cancelled) setHasOllamaInstaller(available);
+      })
+      .catch(() => {
+        if (!cancelled) setHasOllamaInstaller(false);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingOllamaInstaller(false);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -122,6 +146,17 @@ export function SettingsView() {
     if (!window.confirm('确定要清除当前浏览器中的全部 Selenyx 数据吗？此操作不可恢复，请先导出 JSON 备份。')) return;
     clearSelenyxBrowserStorage();
     window.location.reload();
+  }
+
+  async function revealOllamaInstaller() {
+    if (!window.confirm('即将在 Windows 文件夹中定位随此版本附带的上游 Ollama 安装程序。Selenyx 不会运行或静默安装它；是否继续？')) return;
+    setOllamaInstallerStatus('正在检查内置安装器…');
+    try {
+      await revealBundledOllamaInstaller();
+      setOllamaInstallerStatus('已在 Windows 文件夹中定位；如需安装，请由您手动打开并确认。');
+    } catch (error) {
+      setOllamaInstallerStatus(error instanceof Error ? error.message : '此版本未附带 Ollama 安装器。');
+    }
   }
 
   return (
@@ -254,6 +289,25 @@ export function SettingsView() {
                   </div>
                 ))}
               </div>
+              {isDesktopTauri() && (
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={checkingOllamaInstaller || !hasOllamaInstaller}
+                    onClick={() => { void revealOllamaInstaller(); }}
+                  >
+                    {hasOllamaInstaller ? '在文件夹中显示 Ollama 安装器' : '此版本未附带 Ollama 安装器'}
+                  </button>
+                  <p role="status" style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {ollamaInstallerStatus || (checkingOllamaInstaller
+                      ? '正在检查此桌面版本的资源…'
+                      : hasOllamaInstaller
+                        ? '已发现且大小符合清单；打包前 SHA-256 已校验。Selenyx 只定位文件，不会运行安装程序。'
+                        : '普通小体积版本不会包含或下载该资源；仅 --with-ollama Windows 构建会附带。')}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="card" style={{ borderColor: 'var(--warning, #b7791f)' }}>
@@ -319,13 +373,14 @@ export function SettingsView() {
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ marginBottom: 12, fontSize: 16 }}>Selenyx 科研工作台</h3>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                0.01 · 纯静态、local-first 的科研工作区。项目、文献、笔记和表格保存在本设备的浏览器/WebView 存储中；联网功能只在您主动发起检索或 AI 请求时运行。
+                0.01 · 本地优先的前后端一体科研工作区。前端缓存保证离线可用；本机 FastAPI/SQLite 服务负责文献持久镜像、RAG、证据链、学术连接器与 AI 密钥网关。
               </p>
             </div>
             <div className="card">
               <h3 style={{ marginBottom: 8, fontSize: 16 }}>隐私边界</h3>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                <li>不启动或依赖 Selenyx 后端服务。</li>
+                <li>后端仅监听 127.0.0.1，不接受局域网连接。</li>
+                <li>文献完整对象在前端缓存与本机 SQLite 间对账；后端离线时仍可继续编辑。</li>
                 <li>不自动上传工作区内容。</li>
                 <li>JSON 备份由您明确导出和保存。</li>
                 <li>第三方服务请求仅由您主动触发。</li>

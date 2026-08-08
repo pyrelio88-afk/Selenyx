@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlmodel import Session, col, select
 
 from selenyx_backend.models import DocumentChunk, Reference
-from selenyx_backend.services.embeddings import cosine, embed_texts, hash_embed, lexical_score
+from selenyx_backend.services.embeddings import HASH_BACKEND, cosine, embed_texts, hash_embed, lexical_score
 from selenyx_backend.settings import Settings, get_settings
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[。！？.!?；;])\s+|\n+")
@@ -96,39 +96,45 @@ async def index_reference_text(
 ) -> int:
     """Chunk + embed text and store DocumentChunk rows. Returns chunk count."""
     settings = settings or get_settings()
-    if replace_source:
-        existing = session.exec(
-            select(DocumentChunk).where(
-                DocumentChunk.reference_id == reference_id,
-                DocumentChunk.source == source,
-            )
-        ).all()
-        for row in existing:
-            session.delete(row)
-        session.commit()
-
     pieces = chunk_text(text)
     if not pieces:
         return 0
 
-    vectors, backend = await embed_texts([p[2] for p in pieces], settings)
-    now = datetime.now().isoformat()
-    for (start, end, body), vector in zip(pieces, vectors):
-        session.add(
-            DocumentChunk(
-                reference_id=reference_id,
-                source=source,
-                page=page,
-                section=section or source,
-                char_start=start,
-                char_end=end,
-                text=body,
-                embedding_json=_dump_embedding(vector),
-                embedding_backend=backend,
-                created_at=now,
+    # Build vectors before touching the durable index. If a local model is
+    # unavailable or returns an invalid response, the last known-good chunks
+    # must remain searchable instead of being deleted first.
+    vectors, backend = await embed_texts([p[2] for p in pieces], settings, role="document")
+    try:
+        if replace_source:
+            existing = session.exec(
+                select(DocumentChunk).where(
+                    DocumentChunk.reference_id == reference_id,
+                    DocumentChunk.source == source,
+                )
+            ).all()
+            for row in existing:
+                session.delete(row)
+
+        now = datetime.now().isoformat()
+        for (start, end, body), vector in zip(pieces, vectors):
+            session.add(
+                DocumentChunk(
+                    reference_id=reference_id,
+                    source=source,
+                    page=page,
+                    section=section or source,
+                    char_start=start,
+                    char_end=end,
+                    text=body,
+                    embedding_json=_dump_embedding(vector),
+                    embedding_backend=backend,
+                    created_at=now,
+                )
             )
-        )
-    session.commit()
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
     return len(pieces)
 
 
@@ -180,28 +186,37 @@ async def semantic_search(
         from selenyx_backend.models import ResearchProject
 
         project = session.get(ResearchProject, project_id)
+        # A project-scoped query must never silently widen to the whole
+        # library. A missing project or a project with zero linked references
+        # therefore has an empty allow-list.
+        allowed_ref_ids = set()
         if project and project.reference_ids_json:
             try:
                 ids = json.loads(project.reference_ids_json)
-                if isinstance(ids, list) and ids:
+                if isinstance(ids, list):
                     allowed_ref_ids = {str(x) for x in ids}
             except json.JSONDecodeError:
-                allowed_ref_ids = None
+                allowed_ref_ids = set()
 
-    q_vecs, _backend = await embed_texts([q], settings)
+    q_vecs, query_backend = await embed_texts([q], settings, role="query")
     q_vec = q_vecs[0]
+    q_hash = hash_embed(q)
 
     scored: list[tuple[float, DocumentChunk]] = []
     for chunk in chunks:
         if allowed_ref_ids is not None and chunk.reference_id not in allowed_ref_ids:
             continue
         emb = _load_embedding(chunk.embedding_json)
-        if not emb:
-            emb = hash_embed(chunk.text)
-        dense = cosine(q_vec, emb)
+        if chunk.embedding_backend == query_backend and emb and len(emb) == len(q_vec):
+            semantic = cosine(q_vec, emb)
+        else:
+            # Dense vectors from another model (or a legacy hash tokenizer)
+            # are not comparable. Recompute the cheap hash representation so
+            # retrieval remains useful after config changes or endpoint failure.
+            semantic = cosine(q_hash, hash_embed(chunk.text))
         lex = lexical_score(q, chunk.text)
         # Hybrid: dense primary, lexical rescue for rare terms / Chinese tokens
-        score = 0.72 * dense + 0.28 * min(lex / 8.0, 1.0)
+        score = 0.72 * semantic + 0.28 * min(lex / 8.0, 1.0)
         if score > 0.02:
             scored.append((score, chunk))
 
@@ -248,7 +263,7 @@ def reindex_all_sync_hash(session: Session) -> int:
                     char_end=end,
                     text=body,
                     embedding_json=_dump_embedding(hash_embed(body)),
-                    embedding_backend="hash",
+                    embedding_backend=HASH_BACKEND,
                     created_at=now,
                 )
             )

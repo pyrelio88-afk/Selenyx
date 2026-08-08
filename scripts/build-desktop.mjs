@@ -5,10 +5,23 @@ import { join, resolve, delimiter } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const environment = { ...process.env };
+const argv = process.argv.slice(2);
 
-if (process.argv.length > 2) {
-  throw new Error('Desktop build accepts no sidecar or bundled-model options. Run `npm run desktop:build`.');
+function printUsage() {
+  console.log(`Usage: node scripts/build-desktop.mjs [--with-ollama]\n\n  --with-ollama  Download and verify the pinned Windows Ollama installer, then\n                 include it as a Windows-only Tauri resource. This downloads\n                 about 1.46 GiB and is never the default.`);
 }
+
+if (argv.includes('--help') || argv.includes('-h')) {
+  printUsage();
+  process.exit(0);
+}
+
+const unknownArguments = argv.filter((argument) => argument !== '--with-ollama');
+if (unknownArguments.length > 0) {
+  throw new Error(`Unknown desktop build option(s): ${unknownArguments.join(', ')}. Use --help for usage.`);
+}
+
+const withOllama = argv.includes('--with-ollama');
 
 // A terminal opened before Rustup installation can miss ~/.cargo/bin until the
 // next sign-in. Add it only when the executable is present.
@@ -36,4 +49,20 @@ const npmCommand = platform() === 'win32' ? 'npm.cmd' : 'npm';
 const npxCommand = platform() === 'win32' ? 'npx.cmd' : 'npx';
 
 run(npmCommand, ['run', 'desktop:doctor']);
-run(npxCommand, ['tauri', 'build'], join(root, 'desktop'));
+run(npmCommand, ['run', 'backend:bundle']);
+
+if (withOllama) {
+  if (platform() !== 'win32') {
+    throw new Error('--with-ollama is only supported for a Windows installer build.');
+  }
+  run(process.execPath, [join(root, 'scripts', 'prepare-ollama-installer.mjs'), '--with-ollama']);
+}
+
+const tauriArguments = ['tauri', 'build'];
+if (withOllama) {
+  // This overlay is deliberately not named tauri.windows.conf.json. Tauri
+  // auto-merges that conventional name, which would make a later ordinary
+  // build silently reuse a cached 1.46 GiB installer.
+  tauriArguments.push('--config', join(root, 'desktop', 'tauri.with-ollama.conf.json'));
+}
+run(npxCommand, tauriArguments, join(root, 'desktop'));

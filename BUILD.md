@@ -1,8 +1,8 @@
-# Selenyx 静态构建与平台边界
+# Selenyx 本地前后端构建与平台边界
 
-Selenyx 的默认交付物是纯前端静态单页应用：React/Vite 生成浏览器可直接托管的文件，业务数据仅保留在设备本地的 \`localStorage\` 和 \`IndexedDB\` 范围内。它不依赖托管协作平台，也不需要常驻服务或本机数据库进程。
+Selenyx 的完整交付物是 Tauri 桌面应用：React/Vite 提供交互层，本机 FastAPI sidecar 提供 SQLite、RAG、学术连接器、证据链与密钥网关。浏览器存储是离线缓存和降级路径，不是完整版本的唯一数据源。
 
-\`frontend/\` 是应用界面和静态资源；\`desktop/\` 是可选的 Tauri 原生壳，复用同一份前端构建产物。
+\`frontend/\` 是应用界面，\`backend/\` 是只监听 loopback 的本机服务，\`desktop/\` 负责把两者组成桌面应用。
 
 ## 1. 本地开发
 
@@ -10,12 +10,12 @@ Selenyx 的默认交付物是纯前端静态单页应用：React/Vite 生成浏�
 
 \`\`\`powershell
 npm install
-npm run dev
+npm run dev:local
 \`\`\`
 
-\`npm run dev\` 只启动 Vite 本地开发服务器。它是正常的开发和功能验证入口，不要求额外运行时。
+\`npm run dev:local\` 同时启动 FastAPI 与 Vite，是完整功能的开发入口。\`npm run dev\` 只启动前端，适合验证后端离线时的降级行为，不包含 RAG、证据链或学术连接器。
 
-## 2. 构建与静态预览
+## 2. 前端构建与降级预览
 
 \`\`\`powershell
 npm run build
@@ -28,18 +28,26 @@ npx serve frontend/dist
 frontend/dist/
 \`\`\`
 
-\`npx serve frontend/dist\` 用 HTTP 提供构建产物，适合验证正式静态运行方式。不要用 \`file://\` 直接打开页面：PDF、OCR 等 Web Worker 资源需要同源 HTTP 环境。静态站点可部署到任何普通文件托管或静态站点服务中；应用数据仍保存在访问该站点的设备与浏览器配置文件内。
+\`npx serve frontend/dist\` 只验证前端降级产物。不要用 \`file://\` 直接打开页面：PDF、OCR 等 Web Worker 资源需要同源 HTTP 环境。它不能替代完整桌面/RAG 验收。
 
-## 3. 可选原生壳
+## 3. 完整桌面应用
 
-Windows、macOS 和 Linux 的原生壳复用 \`frontend/dist/\`，不改变前端的数据归属。若要修改或构建原生壳，需要对应平台的 Rust 工具链；先检查环境再构建：
+桌面构建会先生成 Python sidecar，再由 Tauri 打包前端与本机后端。需要对应平台的 Rust 与 Python/uv 工具链：
 
 \`\`\`powershell
 npm run desktop:doctor
 npm run desktop:build
 \`\`\`
 
-安装包输出通常位于 \`desktop/target/release/bundle/\`。Windows 打包使用当前用户安装模式；实际发布前应在目标平台验证首次启动、浏览器/WebView 本地数据持久化、导入导出和离线 OCR。
+安装包输出通常位于 \`desktop/target/release/bundle/\`。Windows 打包使用当前用户安装模式；实际发布前必须在目标平台验证 sidecar 健康、SQLite 重启持久化、RAG、导入导出与离线 OCR。
+
+Windows 可显式制作“附带 Ollama 安装器资源”的大体积版本：
+
+\`\`\`powershell
+npm run desktop:build:with-ollama
+\`\`\`
+
+该命令才会下载约 1.46 GiB 的固定版本安装器，并校验精确大小与 SHA-256。普通 \`desktop:build\` 不下载、不打包；Selenyx 只会在 Windows 文件夹中定位该资源，不会代替用户运行安装器。对外分发前需复核上游许可条款。
 
 ## 4. 离线 OCR 资源
 
@@ -63,21 +71,23 @@ Android 使用同一份前端能力，但当前只承诺设备本地、离线核
 
 ## 6. 本地数据与环境变量
 
-- 工作区状态、JSON 备份和聊天缓存都应由用户在本机管理；定期导出 JSON 以获得可移植备份。
+- SQLite 默认位于 \`~/.selenyx/selenyx.sqlite3\`；前端 localStorage 是离线缓存，两者需要通过仓库层显式对账。
+- JSON 备份、聊天缓存和数据库都由用户在本机管理；定期做可验证的版本化导出。
 - \`.env\` 和 \`.env.local\` 不应提交。前端开发变量使用 \`frontend/.env.local\`，样例见 \`frontend/.env.example\`。
 - 源码通过 \`import.meta.env\` 读取公开构建配置。Vite 会把所有 \`VITE_*\` 值写入最终的浏览器文件，因此这些变量不能保存长期生产密钥。
 - \`desktop/Cargo.lock\` 是原生壳依赖锁定文件；修改原生壳依赖时必须一并提交，以保证构建可复现。
 
 ## 7. CI 与发布前验证
 
-静态版本的基础验证：
+基础验证：
 
 \`\`\`powershell
 npm run typecheck
 npm run test
+npm run backend:test
 npm run build
 npm run offline:check
 npm run verify:local
 \`\`\`
 
-发布原生壳时，再在目标平台运行 \`npm run desktop:doctor\` 和 \`npm run desktop:build\`。工作流产物不等于已验收发布；发布前仍应实际检查数据持久化、导入导出、离线 OCR 和主流程可用性。
+发布桌面应用时，再在目标平台运行 \`npm run desktop:doctor\` 和 \`npm run desktop:build\`。工作流产物不等于已验收发布；发布前仍应实际安装并检查 sidecar、数据持久化、导入导出、RAG、离线 OCR 和主流程。

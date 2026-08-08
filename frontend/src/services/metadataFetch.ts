@@ -18,6 +18,10 @@ export interface FetchedReference {
   issn: string;
   publisher: string;
   openAccess: boolean;
+  url?: string;
+  pmid?: string;
+  arxivId?: string;
+  source?: string;
 }
 
 /** 从 Crossref API 通过 DOI 获取文献元数据 */

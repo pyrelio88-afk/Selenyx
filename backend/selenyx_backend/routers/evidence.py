@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from selenyx_backend.database import get_session
-from selenyx_backend.models import EvidenceItem
+from selenyx_backend.models import DocumentChunk, EvidenceItem, Reference, ResearchProject
 
 router = APIRouter()
 
@@ -74,6 +74,16 @@ def create_evidence(body: EvidenceCreate, session: Session = Depends(get_session
         raise HTTPException(400, f"relation must be one of {sorted(ALLOWED_RELATIONS)}")
     if body.confidence not in ALLOWED_CONFIDENCE:
         raise HTTPException(400, f"confidence must be one of {sorted(ALLOWED_CONFIDENCE)}")
+    if not session.get(ResearchProject, body.projectId):
+        raise HTTPException(409, f"Evidence references missing project: {body.projectId}")
+    if body.referenceId and not session.get(Reference, body.referenceId):
+        raise HTTPException(409, f"Evidence references missing reference: {body.referenceId}")
+    if body.chunkId:
+        chunk = session.get(DocumentChunk, body.chunkId)
+        if not chunk:
+            raise HTTPException(409, f"Evidence references missing chunk: {body.chunkId}")
+        if not body.referenceId or chunk.reference_id != body.referenceId:
+            raise HTTPException(409, "Evidence chunk does not belong to the supplied reference")
     item = EvidenceItem(
         project_id=body.projectId,
         reference_id=body.referenceId,

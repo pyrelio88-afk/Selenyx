@@ -65,3 +65,13 @@ export function importNativeState(): Promise<string | null> {
 export function deleteNativeStateBackup(): Promise<void> {
   return invoke<void>('delete_state_backup');
 }
+
+/** Reveals the installer in Explorer; the app never executes it. */
+export function revealBundledOllamaInstaller(): Promise<void> {
+  return invoke<void>('reveal_bundled_ollama_installer');
+}
+
+/** Read-only capability probe; it never downloads, launches, or installs. */
+export function hasBundledOllamaInstaller(): Promise<boolean> {
+  return invoke<boolean>('has_bundled_ollama_installer');
+}

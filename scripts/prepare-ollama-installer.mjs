@@ -10,7 +10,7 @@ import {
   statSync,
 } from 'node:fs';
 import { platform } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
@@ -20,6 +20,8 @@ const manifestPath = join(resourcesDirectory, 'manifest.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 if (
   typeof manifest.fileName !== 'string'
+  || basename(manifest.fileName) !== manifest.fileName
+  || !/^OllamaSetup\.exe$/i.test(manifest.fileName)
   || typeof manifest.version !== 'string'
   || typeof manifest.sourceUrl !== 'string'
   || !Number.isSafeInteger(manifest.expectedSizeBytes)
@@ -27,6 +29,14 @@ if (
   || !/^[a-f0-9]{64}$/i.test(manifest.sha256 ?? '')
 ) {
   throw new Error(`Invalid optional Ollama manifest: ${manifestPath}`);
+}
+const source = new URL(manifest.sourceUrl);
+if (
+  source.protocol !== 'https:'
+  || source.hostname !== 'github.com'
+  || !source.pathname.startsWith('/ollama/ollama/releases/download/')
+) {
+  throw new Error('The optional Ollama manifest must pin an HTTPS release asset from github.com/ollama/ollama.');
 }
 const installer = {
   fileName: manifest.fileName,
