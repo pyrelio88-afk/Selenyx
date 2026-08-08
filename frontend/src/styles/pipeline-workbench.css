@@ -216,3 +216,16 @@
 @media (prefers-reduced-motion: reduce) {
   .pipeline-rail-item { scroll-behavior: auto; }
 }
+
+/* Soft paper shell closer to evidence-stage mock */
+.pipeline-workbench {
+  background: transparent;
+}
+.pipeline-stage-rail,
+.pipeline-stage-main,
+.pipeline-evidence-inspector {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+

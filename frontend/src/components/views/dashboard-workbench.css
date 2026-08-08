@@ -152,3 +152,158 @@
   .research-command-titleline h2 { font-size: 20px; }
   .research-evidence-health dl { grid-template-columns: 1fr; gap: 0; }
 }
+
+
+/* —— Command-center layout (reference-aligned) —— */
+.research-dashboard.is-command {
+  width: min(100%, 1520px);
+}
+
+.research-dashboard-header {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.research-header-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.research-global-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: min(320px, 48vw);
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+}
+
+.research-global-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.research-search-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.research-search-panel h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.research-search-panel p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.research-search-panel button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.research-search-panel button:hover {
+  background: var(--bg-hover);
+}
+
+.research-search-panel strong {
+  font-size: 13px;
+}
+
+.research-search-panel small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.research-dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.research-dashboard-main {
+  min-width: 0;
+}
+
+.research-dashboard-rail {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.research-dashboard-rail .dashboard-time-card,
+.research-dashboard-rail .dashboard-focus-card {
+  min-height: 0 !important;
+  height: auto !important;
+  border-radius: 14px !important;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+/* Enlarge Beijing clock in rail */
+.research-dashboard-rail .dashboard-time-card {
+  padding: 16px 16px 14px !important;
+}
+
+@media (max-width: 1100px) {
+  .research-dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+  .research-dashboard-rail {
+    position: static;
+    grid-template-columns: 1fr 1fr;
+  }
+  .research-search-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .research-dashboard-rail {
+    grid-template-columns: 1fr;
+  }
+  .research-global-search {
+    min-width: 0;
+    width: 100%;
+  }
+  .research-header-tools {
+    width: 100%;
+  }
+}
+

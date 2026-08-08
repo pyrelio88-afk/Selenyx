@@ -2,7 +2,6 @@
  * Selenyx 总览 —— R84: 增强版 Dashboard
  * 新增：番茄钟、实时时钟、倒数日、横向时间线
  */
-
 import { useState, useEffect } from 'react';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/index';
@@ -16,6 +15,7 @@ import { projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
 import './dashboard-workbench.css';
 
 // === 番茄钟组件（R86: 自定义事件） ===
+
 interface PomodoroEvent {
   id: string;
   name: string;
@@ -50,9 +50,7 @@ function PomodoroTimer() {
   const [newMinutes, setNewMinutes] = useState('30');
   const [newKind, setNewKind] = useState<'focus' | 'rest'>('focus');
   const isMobile = useIsMobile();
-
   const active = events.find((e) => e.id === activeId) || events[0];
-
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => {
@@ -67,13 +65,11 @@ function PomodoroTimer() {
     }, 1000);
     return () => clearInterval(timer);
   }, [running, active.kind]);
-
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   const totalSeconds = active.minutes * 60;
   const progress = totalSeconds > 0 ? ((totalSeconds - seconds) / totalSeconds) * 100 : 0;
   const isFocus = active.kind === 'focus';
-
   function selectEvent(id: string) {
     const ev = events.find((e) => e.id === id);
     if (!ev) return;
@@ -81,7 +77,6 @@ function PomodoroTimer() {
     setActiveId(id);
     setSeconds(ev.minutes * 60);
   }
-
   function addEvent() {
     const m = parseInt(newMinutes, 10);
     if (!newName.trim() || !m || m <= 0 || m > 480) return;
@@ -98,14 +93,12 @@ function PomodoroTimer() {
     setShowAdd(false);
     selectEvent(ev.id);
   }
-
   function removeEvent(id: string) {
     const next = events.filter((e) => e.id !== id);
     setEvents(next);
     versionedSave(POMODORO_KEY, { items: next.filter((e) => !e.builtin) });
     if (activeId === id) selectEvent('focus-25');
   }
-
   return (
     <div className="card dashboard-focus-card" style={{ padding: 16, height: '100%', minHeight: 370, boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -114,7 +107,6 @@ function PomodoroTimer() {
         </h3>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>已完成 {sessions} 轮专注</span>
       </div>
-
       {/* 事件选择（预设 + 自定义）— D4: 按时长降序排列（深度专注→专注→长休息→短休息） */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         {[...events].sort((a, b) => b.minutes - a.minutes).map((ev) => (
@@ -144,7 +136,6 @@ function PomodoroTimer() {
           <Icon name="plus" size={12} /> 自定义
         </button>
       </div>
-
       {/* 添加自定义事件：桌面内联 / 移动端 BottomSheet 大输入框 48px（R90 P1） */}
       {showAdd && (isMobile ? (
         <BottomSheet open onClose={() => setShowAdd(false)} title="自定义番茄钟">
@@ -184,7 +175,6 @@ function PomodoroTimer() {
           <button className="btn btn-sm btn-primary" onClick={addEvent}>添加</button>
         </div>
       ))}
-
       {/* 计时显示 */}
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
         <div style={{
@@ -198,7 +188,6 @@ function PomodoroTimer() {
           {active.name} · {seconds === 0 ? '时间到！' : running ? (isFocus ? '专注中…' : '休息中…') : '已暂停'}
         </div>
       </div>
-
       {/* 进度条 */}
       <div style={{ height: 4, background: 'var(--bg-surface)', borderRadius: 2, marginBottom: 12, overflow: 'hidden' }}>
         <div style={{
@@ -209,7 +198,6 @@ function PomodoroTimer() {
           borderRadius: 2,
         }} />
       </div>
-
       {/* 控制按钮 */}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
         <button className="btn btn-primary" onClick={() => { if (seconds === 0) setSeconds(active.minutes * 60); setRunning(!running); }} style={{ minWidth: 80 }}>
@@ -222,6 +210,7 @@ function PomodoroTimer() {
 }
 
 // === 实时时钟 + 倒数日 ===
+
 interface BeijingDateParts {
   year: number;
   month: number;
@@ -233,6 +222,7 @@ interface BeijingDateParts {
  * 不能把 toLocaleString 再喂给 Date：后者会按设备时区重新解释字符串，
  * 在非东八区设备上会让倒数日跨天。这里显式读取北京时间的日历字段。
  */
+
 function getBeijingDateParts(date: Date): BeijingDateParts {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
@@ -250,17 +240,14 @@ function parseDateOnly(value: string): { year: number; month: number; day: numbe
 
 function ClockWidget() {
   const [now, setNow] = useState(new Date());
-
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-
   const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = now.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   // 锁定北京时间（UTC+8），不跟随系统时区——倒数日按北京日历计算。
   const nowBJ = getBeijingDateParts(now);
-
   // 倒数日 — 从 store 读取用户自定义，空态显示引导
   const countdowns = useAppStore((s) => s.customCountdowns);
   const addCountdown = useAppStore((s) => s.addCountdown);
@@ -268,7 +255,6 @@ function ClockWidget() {
   const [showAddCountdown, setShowAddCountdown] = useState(false);
   const [newCountdownLabel, setNewCountdownLabel] = useState('');
   const [newCountdownDate, setNewCountdownDate] = useState('');
-
   function daysLeft(dateStr: string): number {
     const target = parseDateOnly(dateStr);
     if (!target) return 0;
@@ -276,7 +262,6 @@ function ClockWidget() {
     const targetCalendarDay = Date.UTC(target.year, target.month - 1, target.day);
     return Math.round((targetCalendarDay - currentCalendarDay) / (24 * 60 * 60 * 1000));
   }
-
   function hoursLeft(dateStr: string): number {
     const target = parseDateOnly(dateStr);
     if (!target) return 0;
@@ -285,7 +270,6 @@ function ClockWidget() {
     const remaining = targetTimestamp - now.getTime();
     return remaining > 0 ? Math.floor((remaining / (60 * 60 * 1000)) % 24) : 0;
   }
-
   function getUrgencyColor(days: number, baseColor: string): string {
     if (days < 0) return '#9e9e9e'; // 已过期
     if (days <= 7) return '#c62828'; // 紧急
@@ -293,7 +277,6 @@ function ClockWidget() {
     if (days <= 90) return '#1565c0'; // 中期
     return baseColor; // 远期
   }
-
   // 快速预设
   const QUICK_PRESETS = [
     { label: '考研初试', date: '2027-12-25', color: '#c62828' },
@@ -301,16 +284,14 @@ function ClockWidget() {
     { label: '期末考试', date: '', color: '#2e7d32' },
     { label: '论文提交', date: '', color: '#f57f17' },
   ];
-
   return (
-    <div className="card dashboard-time-card" style={{ padding: 16, height: '100%', minHeight: 370, boxSizing: 'border-box' }}>
+    <div className="card dashboard-time-card research-rail-card" style={{ padding: 16, height: '100%', minHeight: 370, boxSizing: 'border-box' }}>
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'monospace', color: 'var(--text-primary)', lineHeight: 1.2 }}>
           {timeStr}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{dateStr} · 北京时间</div>
       </div>
-
       {/* 倒数日 */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {countdowns.length === 0 && !showAddCountdown && (
@@ -430,9 +411,7 @@ function ClockWidget() {
 function OnboardingChecklist() {
   const { projects, references, llmConfig, setView, requestCreateProject } = useAppStore();
   const [dismissed, setDismissed] = useState(() => !!getOnboardingState());
-
   const visitedPipeline = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('visited-pipeline') === 'true';
-
   const steps: { label: string; done: boolean; view: ViewKey; tip: string }[] = [
     { label: '创建项目', done: projects.length > 0, view: 'projects', tip: '选择适合你研究类型的设计框架（如 PICO 适合临床试验、PRISMA 适合系统综述），系统会自动生成对应项目字段' },
     { label: '导入文献', done: references.length > 0, view: 'references', tip: '输入论文 DOI 自动抓取标题、作者、期刊等元数据，也可上传 PDF' },
@@ -440,21 +419,17 @@ function OnboardingChecklist() {
     { label: '进入流水线', done: visitedPipeline, view: 'pipeline', tip: '八段流水线（问题→文献→全文→筛选→精读→证据→综合→写作）帮你管理从选题到成稿的全流程' },
   ];
   const completed = steps.filter((s) => s.done).length;
-
   useEffect(() => {
     if (completed === 4 && !dismissed) {
       setOnboardingState('true');
       setDismissed(true);
     }
   }, [completed, dismissed]);
-
   if (dismissed) return null;
-
   function skip() {
     setOnboardingState('skipped');
     setDismissed(true);
   }
-
   return (
     <div className="card" style={{ marginBottom: 24, padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -498,6 +473,7 @@ function OnboardingChecklist() {
 }
 
 /** R108 R7: 区块标题——强化信息层级（用户反馈"排版看不懂"） */
+
 function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, margin: '34px 0 14px' }}>
@@ -509,32 +485,39 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 }
 
 export function DashboardView() {
-  const { references, projects, tasks, tables, setView, setCurrentProject, workspaceSyncStatus, requestCreateProject } = useAppStore();
+  const {
+    references, projects, tasks, tables, setView, setCurrentProject, currentProjectId,
+    setPrimaryProject, workspaceSyncStatus, requestCreateProject,
+  } = useAppStore();
   const primaryProject = selectPrimaryProject(projects);
+  const focusedProject = projects.find((project) => project.id === currentProjectId)
+    ?? primaryProject
+    ?? projects[0]
+    ?? null;
   const [evidenceSummary, setEvidenceSummary] = useState<{ total: number; accepted: number; pending: number } | null>(null);
   const [evidenceAvailable, setEvidenceAvailable] = useState(false);
-
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [dashSearch, setDashSearch] = useState('');
   const unread = references.filter((r) => r.readStatus === 'unread').length;
   const reading = references.filter((r) => r.readStatus === 'reading').length;
   const todoTasks = tasks.filter((t) => t.column === 'todo').length;
   const doingTasks = tasks.filter((t) => t.column === 'doing').length;
-  const participantProjects = projects.filter((project) => project.ownerRole === 'participant');
-  const primaryTasks = primaryProject ? tasks.filter((task) => task.projectId === primaryProject.id) : [];
-  const nextTask = primaryTasks.find((task) => task.column === 'doing')
-    ?? primaryTasks.find((task) => task.column === 'todo')
+  const otherProjects = projects.filter((project) => project.id !== focusedProject?.id);
+  const focusedTasks = focusedProject ? tasks.filter((task) => task.projectId === focusedProject.id) : [];
+  const nextTask = focusedTasks.find((task) => task.column === 'doing')
+    ?? focusedTasks.find((task) => task.column === 'todo')
     ?? null;
-  const stageIndex = primaryProject
-    ? PIPELINE_STAGES.findIndex((stage) => stage.key === primaryProject.currentStage)
+  const stageIndex = focusedProject
+    ? PIPELINE_STAGES.findIndex((stage) => stage.key === focusedProject.currentStage)
     : -1;
   const stage = stageIndex >= 0 ? PIPELINE_STAGES[stageIndex] : null;
-  const primaryProjectId = primaryProject?.id ?? null;
-
+  const focusedProjectId = focusedProject?.id ?? null;
   useEffect(() => {
     let active = true;
     setEvidenceSummary(null);
     setEvidenceAvailable(false);
-    if (!primaryProjectId) return () => { active = false; };
-    void evidenceApi.summary(primaryProjectId).then((summary) => {
+    if (!focusedProjectId) return () => { active = false; };
+    void evidenceApi.summary(focusedProjectId).then((summary) => {
       if (!active) return;
       setEvidenceSummary({
         total: Number(summary.total ?? 0),
@@ -546,51 +529,150 @@ export function DashboardView() {
       if (active) setEvidenceAvailable(false);
     });
     return () => { active = false; };
-  }, [primaryProjectId]);
-
-  function continuePrimaryProject() {
-    if (!primaryProject) return;
-    setCurrentProject(primaryProject.id);
+  }, [focusedProjectId]);
+  function switchProject(projectId: string) {
+    setCurrentProject(projectId);
+    setSwitcherOpen(false);
+  }
+  function continueFocusedProject() {
+    if (!focusedProject) return;
+    setCurrentProject(focusedProject.id);
     setView('pipeline');
   }
-
+  const q = dashSearch.trim().toLowerCase();
+  const searchHits = q ? {
+    projects: projects.filter((project) => project.name.toLowerCase().includes(q) || project.description.toLowerCase().includes(q)).slice(0, 5),
+    references: references.filter((reference) =>
+      reference.title.toLowerCase().includes(q)
+      || (reference.creators || []).map((c) => `${c.firstName || ''} ${c.lastName || ''}`).join(' ').toLowerCase().includes(q)
+      || (reference.publication || '').toLowerCase().includes(q)
+    ).slice(0, 5),
+  } : null;
   return (
-    <div className="research-dashboard">
+    <div className="research-dashboard is-command">
       <header className="research-dashboard-header">
         <div>
-          <h1>科研总览</h1>
-          <p>以主线课题为中心，先过证据门，再进入写作。</p>
+          <p className="research-eyebrow">总览 · 科研指挥台</p>
+          <h1>我的项目</h1>
+          <p>点击课题标题可切换当前项目；右侧为北京时间、阶段倒数与专注计时。</p>
         </div>
-        <div className={`research-local-pill is-${workspaceSyncStatus}`} role="status">
-          <span aria-hidden="true" />
-          {workspaceSyncStatus === 'synced' ? '本机数据已同步' : workspaceSyncStatus === 'syncing' ? '正在同步本机数据' : '离线缓存可用'}
+        <div className="research-header-tools">
+          <label className="research-global-search">
+            <Icon name="search" size={15} />
+            <input
+              value={dashSearch}
+              onChange={(event) => setDashSearch(event.target.value)}
+              placeholder="搜索项目、文献、笔记…"
+              aria-label="搜索项目与文献"
+            />
+          </label>
+          <div className={`research-local-pill is-${workspaceSyncStatus}`} role="status">
+            <span aria-hidden="true" />
+            {workspaceSyncStatus === 'synced' ? '本机数据已同步' : workspaceSyncStatus === 'syncing' ? '正在同步本机数据' : '离线缓存可用'}
+          </div>
         </div>
       </header>
-
-      {primaryProject ? (
+      {searchHits && (
+        <section className="research-search-panel" aria-label="搜索结果">
+          <div>
+            <h3>项目</h3>
+            {searchHits.projects.length === 0 ? <p>无匹配项目</p> : searchHits.projects.map((project) => (
+              <button key={project.id} type="button" onClick={() => { switchProject(project.id); setDashSearch(''); }}>
+                <strong>{project.name}</strong>
+                <small>{projectRoleLabel(project)}</small>
+              </button>
+            ))}
+          </div>
+          <div>
+            <h3>文献</h3>
+            {searchHits.references.length === 0 ? <p>无匹配文献</p> : searchHits.references.map((reference) => (
+              <button key={reference.id} type="button" onClick={() => { setDashSearch(''); setView('references'); }}>
+                <strong>{reference.title}</strong>
+                <small>{reference.year || '年份未知'}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      <div className="research-dashboard-layout">
+        <div className="research-dashboard-main">
+      {focusedProject ? (
         <section className="research-command" aria-labelledby="mainline-title">
           <div className="research-command-main">
             <div className="research-command-titleline">
               <div>
-                <span className="research-section-kicker">主线课题</span>
-                <h2 id="mainline-title">{primaryProject.name}</h2>
+                <span className="research-section-kicker">当前课题</span>
+                <div className="research-project-switcher">
+                  <button
+                    type="button"
+                    className="research-project-switcher-trigger"
+                    onClick={() => setSwitcherOpen((open) => !open)}
+                    aria-expanded={switcherOpen}
+                    aria-haspopup="listbox"
+                    title="切换总览中的当前项目"
+                  >
+                    <h2 id="mainline-title">{focusedProject.name}</h2>
+                    <Icon name="chevronDown" size={16} />
+                  </button>
+                  {switcherOpen && projects.length > 0 && (
+                    <div className="research-project-switcher-menu" role="listbox" aria-label="选择项目">
+                      {projects.map((project) => (
+                        <button
+                          key={project.id}
+                          type="button"
+                          role="option"
+                          aria-selected={project.id === focusedProject.id}
+                          className={project.id === focusedProject.id ? 'is-active' : ''}
+                          onClick={() => switchProject(project.id)}
+                        >
+                          <span>
+                            <strong>{project.name}</strong>
+                            <small>
+                              {projectRoleLabel(project)}
+                              {project.isPrimary ? ' · 主线' : ''}
+                              {' · '}
+                              {PIPELINE_STAGES.find((item) => item.key === project.currentStage)?.label || '未开始'}
+                            </small>
+                          </span>
+                          {project.id === focusedProject.id && <Icon name="check" size={14} />}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="research-project-switcher-manage"
+                        onClick={() => { setSwitcherOpen(false); setView('projects'); }}
+                      >
+                        管理全部项目
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="research-project-meta">
-                  <span className="project-role-badge is-lead">{projectRoleLabel(primaryProject)}</span>
-                  <span className="project-primary-badge">首页主线</span>
-                  {primaryProject.frameworkId && <span>{primaryProject.frameworkId.toUpperCase()}</span>}
+                  <span className={`project-role-badge is-${focusedProject.ownerRole === 'participant' ? 'participant' : 'lead'}`}>
+                    {projectRoleLabel(focusedProject)}
+                  </span>
+                  {focusedProject.isPrimary && <span className="project-primary-badge">首页主线</span>}
+                  {focusedProject.id === currentProjectId && <span className="project-active-badge">当前</span>}
+                  {focusedProject.frameworkId && <span>{focusedProject.frameworkId.toUpperCase()}</span>}
                 </div>
               </div>
-              <button className="btn btn-primary research-continue" onClick={continuePrimaryProject}>
-                继续流水线 <Icon name="chevronRight" size={16} />
-              </button>
+              <div className="research-command-actions">
+                {!focusedProject.isPrimary && focusedProject.ownerRole !== 'participant' && (
+                  <button type="button" className="btn" onClick={() => setPrimaryProject(focusedProject.id)}>
+                    设为主线
+                  </button>
+                )}
+                <button type="button" className="btn btn-primary research-continue" onClick={continueFocusedProject}>
+                  继续流水线 <Icon name="chevronRight" size={16} />
+                </button>
+              </div>
             </div>
-
             <div className="research-stage-rail" aria-label="八段科研流水线进度">
               {PIPELINE_STAGES.map((item, index) => (
                 <button
                   key={item.key}
                   className={index < stageIndex ? 'is-done' : index === stageIndex ? 'is-current' : ''}
-                  onClick={continuePrimaryProject}
+                  onClick={continueFocusedProject}
                   aria-label={`${item.order}. ${item.label}${index === stageIndex ? '，当前阶段' : ''}`}
                 >
                   <span>{index < stageIndex ? <Icon name="check" size={13} /> : item.order}</span>
@@ -598,7 +680,6 @@ export function DashboardView() {
                 </button>
               ))}
             </div>
-
             <div className="research-gate-grid">
               <article>
                 <span>当前阶段</span>
@@ -617,7 +698,6 @@ export function DashboardView() {
               </article>
             </div>
           </div>
-
           <aside className="research-evidence-health" aria-label="主线证据健康">
             <div className="research-evidence-heading">
               <div>
@@ -632,7 +712,7 @@ export function DashboardView() {
               <div><dt><span className="evidence-dot is-total" /> 证据条目</dt><dd>{evidenceSummary?.total ?? '—'}</dd></div>
             </dl>
             <p>{evidenceAvailable ? '本机索引可用；AI 检索命中仍需你接受后才能写入提纲。' : '当前使用离线缓存；连接本地后端后显示证据审核统计。'}</p>
-            <button className="btn" onClick={() => { setCurrentProject(primaryProject.id); setView('references'); }}>
+            <button className="btn" onClick={() => { setCurrentProject(focusedProject.id); setView('references'); }}>
               检查文献与证据
             </button>
           </aside>
@@ -645,22 +725,52 @@ export function DashboardView() {
           <button className="btn btn-primary" onClick={() => requestCreateProject()}><Icon name="plus" size={16} /> 新建项目</button>
         </section>
       )}
-
       <section className="research-metrics" aria-label="工作区概况">
         <button onClick={() => setView('references')}><span>文献</span><strong>{references.length}</strong><small>未读 {unread} · 阅读中 {reading}</small></button>
         <button onClick={() => setView('pipeline')}><span>任务</span><strong>{todoTasks + doingTasks}</strong><small>进行中 {doingTasks} · 待办 {todoTasks}</small></button>
-        <button onClick={() => setView('projects')}><span>参与项目</span><strong>{participantProjects.length}</strong><small>不会覆盖主线课题</small></button>
+        <button onClick={() => setView('projects')}><span>全部项目</span><strong>{projects.length}</strong><small>可在总览切换当前课题</small></button>
         <button onClick={() => setView('tables')}><span>研究表格</span><strong>{tables.length}</strong><small>结构化数据与分析</small></button>
       </section>
-
       <OnboardingChecklist />
-
-      <div className="research-today-grid">
-        <ClockWidget />
-        <PomodoroTimer />
-      </div>
-
-      <SectionTitle title="最近工作" subtitle="文献与参与项目" />
+      {otherProjects.length > 0 && (
+        <>
+          <SectionTitle title="其他项目" subtitle="点击即可切换总览当前课题" />
+          <div className="research-project-cards">
+            {otherProjects.map((project) => {
+              const projectStage = PIPELINE_STAGES.find((item) => item.key === project.currentStage);
+              const projectStageIndex = PIPELINE_STAGES.findIndex((item) => item.key === project.currentStage);
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  className="research-project-card"
+                  onClick={() => switchProject(project.id)}
+                >
+                  <div className="research-project-card-head">
+                    <strong>{project.isPrimary ? '★ ' : ''}{project.name}</strong>
+                    <span className={`project-role-badge is-${project.ownerRole === 'participant' ? 'participant' : 'lead'}`}>
+                      {projectRoleLabel(project)}
+                    </span>
+                  </div>
+                  <div className="research-mini-rail" aria-hidden="true">
+                    {PIPELINE_STAGES.map((item, index) => (
+                      <i
+                        key={item.key}
+                        className={index < projectStageIndex ? 'is-done' : index === projectStageIndex ? 'is-current' : ''}
+                      />
+                    ))}
+                  </div>
+                  <small>
+                    {projectStage ? `当前阶段 ${projectStage.order}. ${projectStage.label}` : '尚未开始'}
+                    {' · '}文献 {project.referenceIds.length}
+                  </small>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <SectionTitle title="最近工作" subtitle="文献与项目入口" />
       <div className="research-recent-grid">
         <section className="research-list-panel">
           <header><h2><Icon name={NAV_ICONS.references} size={18} /> 最近文献</h2><button onClick={() => setView('references')}>查看全部</button></header>
@@ -672,14 +782,33 @@ export function DashboardView() {
           ))}
         </section>
         <section className="research-list-panel">
-          <header><h2><Icon name={NAV_ICONS.projects} size={18} /> 参与项目</h2><button onClick={() => setView('projects')}>查看全部</button></header>
-          {participantProjects.length === 0 ? <p className="research-list-empty">暂无参与项目；协作课题不会占用首页主线。</p> : participantProjects.slice(0, 5).map((project) => (
-            <button key={project.id} className="research-list-row" onClick={() => { setCurrentProject(project.id); setView('projects'); }}>
-              <span><strong>{project.name}</strong><small>{PIPELINE_STAGES.find((item) => item.key === project.currentStage)?.label} · 文献 {project.referenceIds.length}</small></span>
-              <span className="project-role-badge is-participant">我参与</span>
+          <header><h2><Icon name={NAV_ICONS.projects} size={18} /> 全部项目</h2><button onClick={() => setView('projects')}>管理</button></header>
+          {projects.length === 0 ? <p className="research-list-empty">暂无项目。</p> : projects.slice(0, 5).map((project) => (
+            <button
+              key={project.id}
+              className={`research-list-row ${project.id === focusedProject?.id ? 'is-active' : ''}`}
+              onClick={() => switchProject(project.id)}
+            >
+              <span>
+                <strong>{project.name}</strong>
+                <small>
+                  {PIPELINE_STAGES.find((item) => item.key === project.currentStage)?.label}
+                  {' · '}文献 {project.referenceIds.length}
+                  {project.isPrimary ? ' · 主线' : ''}
+                </small>
+              </span>
+              <span className={`project-role-badge is-${project.ownerRole === 'participant' ? 'participant' : 'lead'}`}>
+                {projectRoleLabel(project)}
+              </span>
             </button>
           ))}
         </section>
+      </div>
+        </div>
+        <aside className="research-dashboard-rail" aria-label="时间与专注">
+          <ClockWidget />
+          <PomodoroTimer />
+        </aside>
       </div>
     </div>
   );

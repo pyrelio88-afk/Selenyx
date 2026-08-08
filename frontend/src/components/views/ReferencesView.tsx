@@ -682,12 +682,12 @@ export function ReferencesView() {
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
 
   return (
-    <div className="references-workspace">
+    <div className={`references-workspace ${selected ? "is-reading" : ""}`}>
       <div className="view-header">
         <div className="reference-view-heading">
           <div>
-            <h1 className="view-title">文献库</h1>
-            <p className="reference-view-description">围绕当前项目收集、核验并回到原文，而不是只保存题录。</p>
+            <h1 className="view-title">文献库 / 证据检索与 RAG</h1>
+            <p className="reference-view-description">左栏筛选文献，中栏读摘要与原文，右栏做本机证据检索；模型不会把空结果编成证据。</p>
             <div role="status" title={referenceSyncMessage} className={`reference-header-status is-${referenceSyncStatus}`}>
               {referenceSyncStatus === 'synced' ? 'SQLite 文献库已同步' : referenceSyncStatus === 'syncing' ? '正在同步 SQLite' : referenceSyncStatus === 'offline' ? '本机后端离线，仅使用缓存' : referenceSyncStatus === 'error' ? '同步异常，仅使用缓存' : '等待本机后端同步'}
             </div>
@@ -909,7 +909,7 @@ export function ReferencesView() {
       )}
 
       {/* 详情面板: 桌面侧滑 / 移动端 BottomSheet */}
-      {!isMobile && <div className={`ref-detail-overlay ${selected ? 'open' : ''}`} onClick={closePanel} />}
+      {!isMobile && !selected && <div className={`ref-detail-overlay`} onClick={closePanel} />}
       {selected && (
         <RefDetailPanel
           ref={selected}
