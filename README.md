@@ -53,7 +53,7 @@ npm run backend:test
 npm run verify:local
 ```
 
-完整桌面构建会先打包本机 FastAPI sidecar。Windows 若明确需要把经固定版本、大小与 SHA-256 校验的 Ollama 安装器作为可选资源附带，可运行 `npm run desktop:build:with-ollama`；普通构建不会下载它，应用只会定位资源文件、不会运行安装程序。详见 [BUILD.md](BUILD.md)。
+完整桌面构建会先打包本机 FastAPI sidecar。普通 Windows 包不含 AI 模型或大型离线安装器。若明确需要经固定版本、大小与 SHA-256 校验的离线能力包，可运行 `npm run desktop:build:offline-pack`；其中仍不含模型权重，应用也只会定位 Ollama 安装器、不会运行它。详见 [BUILD.md](BUILD.md)。
 
 架构见 [ARCHITECTURE.md](ARCHITECTURE.md)，本地向量模型与降级策略见
 [docs/LOCAL-RAG-EMBEDDINGS.md](docs/LOCAL-RAG-EMBEDDINGS.md)，需求账本见

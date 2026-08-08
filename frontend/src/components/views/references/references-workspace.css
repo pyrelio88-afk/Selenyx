@@ -1,7 +1,7 @@
 .references-workspace {
-  --reference-ink: #17231f;
-  --reference-subtle: #63706a;
-  --reference-line: color-mix(in srgb, var(--border) 82%, #60756a);
+  --reference-ink: var(--text-primary);
+  --reference-subtle: var(--text-secondary);
+  --reference-line: var(--border);
   --reference-tint: color-mix(in srgb, var(--accent) 7%, var(--bg-surface));
 }
 
@@ -408,20 +408,20 @@
 
 /* Reading layout closer to 3-column evidence workbench */
 .references-workspace.is-reading {
-  --ref-list-w: minmax(280px, 0.9fr);
-  --ref-detail-w: minmax(360px, 1.2fr);
-  --ref-rag-w: minmax(300px, 0.95fr);
+  --ref-list-w: var(--reference-list-width, 292px);
+  --ref-detail-w: minmax(360px, 1fr);
+  --ref-rag-w: var(--reference-rag-width, 320px);
 }
 
 @media (min-width: 1180px) {
   .references-workspace.is-reading {
+    position: relative;
     display: grid;
     grid-template-columns: var(--ref-list-w) var(--ref-detail-w) var(--ref-rag-w);
     grid-template-areas:
       "head head head"
-      "rag rag rag"
       "tools tools tools"
-      "list detail detail";
+      "list detail rag";
     gap: 12px 14px;
     align-items: start;
   }
@@ -438,7 +438,7 @@
   .references-workspace.is-reading .ref-detail-panel {
     position: sticky;
     top: 10px;
-    grid-column: 2 / 4;
+    grid-area: detail;
     width: auto;
     max-width: none;
     height: calc(100vh - 120px);
@@ -448,9 +448,50 @@
     background: var(--bg-elevated);
   }
 
+  .references-workspace.is-reading > .reference-evidence-workspace,
+  .references-workspace.is-reading > section.reference-evidence-workspace {
+    position: sticky;
+    top: 10px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+  }
+
   .references-workspace.is-reading .ref-detail-overlay {
     display: none !important;
   }
+
+  .reference-column-resizer {
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .reference-column-resizer::after {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 5px;
+    width: 2px;
+    border-radius: 999px;
+    background: transparent;
+    content: '';
+    transition: background 120ms ease;
+  }
+
+  .reference-column-resizer:hover::after,
+  .reference-column-resizer:focus-visible::after,
+  .references-workspace.is-resizing .reference-column-resizer::after { background: var(--accent); }
+  .reference-column-resizer:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: -1px; }
+  .reference-column-resizer.is-left { left: calc(var(--reference-list-width, 292px) - 6px); }
+  .reference-column-resizer.is-right { right: calc(var(--reference-rag-width, 320px) - 6px); }
 }
 
 .references-workspace .view-title {

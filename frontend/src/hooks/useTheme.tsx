@@ -31,7 +31,19 @@ export function useTheme() {
 }
 
 export const THEME_OPTIONS: { key: ThemeName; name: string; description: string }[] = [
-  { key: 'paper-green', name: '纸间豆绿', description: '纸质极简 + 新粗野融合，暖纸白底 + 豆绿强调 + 朱砂点缀' },
-  { key: 'minimal-white', name: '瑞士杂志', description: '瑞士杂志风，白底蓝辅 + 网格系统 + 功能主义 + 高对比无装饰' },
-  { key: 'ink-classic', name: '墨岩', description: '新粗野主义 × 东方墨韵，粗边框 + 块面阴影 + 宣纸底色' },
+  {
+    key: 'paper-green',
+    name: '纸间豆绿',
+    description: '暖纸白、豆绿强调、克制的 1.5px 边线与硬影',
+  },
+  {
+    key: 'minimal-white',
+    name: '瑞士蓝',
+    description: '白底蓝辅、严格网格、小圆角与无装饰阴影',
+  },
+  {
+    key: 'ink-classic',
+    name: '墨岩·新粗野',
+    description: '东方墨色、朱砂状态、粗边框与块面硬影',
+  },
 ];

@@ -132,9 +132,6 @@ export default function App() {
           <MobileShell />
           <div className="app-view-region">
             <ErrorBoundary>{renderView()}</ErrorBoundary>
-            <div className="app-version-footer">
-              Selenyx
-            </div>
           </div>
         </main>
       </div>

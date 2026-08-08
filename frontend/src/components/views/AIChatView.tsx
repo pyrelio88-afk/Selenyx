@@ -15,9 +15,10 @@
  * 持久化：localStorage，按项目 scope 隔离；自动迁移旧版单会话历史。
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { useIsMobile } from '@lib/useIsMobile';
+import { usePersistentWorkbenchColumns } from '@lib/usePersistentWorkbenchColumns';
 import { streamChat, LLMError, type LLMMessage } from '@services/llm';
 import { evidenceApi, type EvidenceRecord } from '@services/api';
 import { Icon } from '@components/ui/Icon';
@@ -49,7 +50,7 @@ interface Session {
 /* ============ 系统提示 ============ */
 
 const SYSTEM_PROMPT = [
-  '你是 Selenyx 的 AI 研究助手，服务于护理学/医学科研场景。',
+  '你是 Selenyx 的跨学科 AI 研究助手，服务于由用户项目定义的研究语境。',
   '能力：文献综述梳理、论文批评、研究想法生成、数据提取建议、八段科研流水线各阶段的辅助。',
   '原则：① 不编造文献、作者、年份、DOI 或数据；用户没提供的材料不要假装读过。② 涉及具体文献结论时明确区分「你说的材料」与「你的推断」。③ 回答用中文，结构清晰、直给结论。',
   '当用户在科研流水线某一阶段提问时，优先贴合该阶段的产出物（PICO、检索策略、精读笔记、证据分级、论文初稿等）。',
@@ -174,6 +175,11 @@ export function AIChatView() {
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [evidenceRailOpen, setEvidenceRailOpen] = useState(true);
+  const panes = usePersistentWorkbenchColumns({
+    storageKey: 'selenyx.ai-workbench.columns',
+    initial: { left: 248, right: 286 },
+    limits: { left: [208, 340], right: [246, 420] },
+  });
   const [acceptedOnly, setAcceptedOnly] = useState(false);
   const [constraintNotice, setConstraintNotice] = useState('');
   const [evidenceState, setEvidenceState] = useState<{
@@ -642,7 +648,13 @@ export function AIChatView() {
   /* ============ 渲染 ============ */
 
   return (
-    <div className={`aichat-root aichat-workbench ${sidebarOpen ? 'is-sidebar-open' : ''} ${evidenceRailOpen ? 'is-evidence-open' : ''}`}>
+    <div
+      className={`aichat-root aichat-workbench ${sidebarOpen ? 'is-sidebar-open' : ''} ${evidenceRailOpen ? 'is-evidence-open' : ''}${panes.dragging ? ' is-resizing' : ''}`}
+      style={{
+        '--aichat-session-width': `${panes.left}px`,
+        '--aichat-evidence-width': `${panes.right}px`,
+      } as CSSProperties}
+    >
       {isMobile && sidebarOpen && (
         <button
           type="button"
@@ -703,6 +715,10 @@ export function AIChatView() {
           )}
         </div>
       </aside>
+
+      {!isMobile && sidebarOpen && (
+        <button className="aichat-column-resizer is-left" aria-label="调整会话列表宽度" {...panes.leftHandleProps} />
+      )}
 
       {/* 主对话区 */}
       <section className="aichat-main">
@@ -898,7 +914,11 @@ export function AIChatView() {
       </section>
 
       {!isMobile && (
-        <aside className={`aichat-evidence-rail ${evidenceRailOpen ? 'open' : 'collapsed'}`} aria-label="项目证据轨">
+        <>
+          {evidenceRailOpen && (
+            <button className="aichat-column-resizer is-right" aria-label="调整证据轨宽度" {...panes.rightHandleProps} />
+          )}
+          <aside className={`aichat-evidence-rail ${evidenceRailOpen ? 'open' : 'collapsed'}`} aria-label="项目证据轨">
           <div className="aichat-evidence-head">
             {evidenceRailOpen && (
               <div>
@@ -936,7 +956,23 @@ export function AIChatView() {
                       <div><span>[E{index + 1}]</span><small>{item.relation === 'supports' ? '支持' : item.relation === 'contradicts' ? '反驳' : '限定'}</small></div>
                       <strong>{item.claim || reference?.title || '未填写证据主张'}</strong>
                       <p>{item.excerpt || '无可用原文片段'}</p>
-                      <footer>{reference?.title || item.reference_id}{item.page != null ? ` · 第 ${item.page} 页` : ''}</footer>
+                      <footer>
+                        <span>{reference?.title || item.reference_id}{item.page != null ? ` · 第 ${item.page} 页` : ''}</span>
+                        {reference && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                sessionStorage.setItem('selenyx:open-evidence-source', JSON.stringify({ referenceId: item.reference_id, page: item.page ?? null }));
+                              } catch { /* routing remains available when storage is unavailable */ }
+                              setView('references');
+                            }}
+                            aria-label={`打开证据来源：${reference.title}`}
+                          >
+                            查看原文
+                          </button>
+                        )}
+                      </footer>
                     </article>
                   );
                 })}
@@ -949,7 +985,8 @@ export function AIChatView() {
               </button>
             </>
           )}
-        </aside>
+          </aside>
+        </>
       )}
     </div>
   );

@@ -3,8 +3,8 @@ import { Icon, NAV_ICONS } from '@components/ui/Icon';
 import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 
 /**
- * 主导航按「证据门科研流水线」编排。
- * 侧栏只做导航 + 后端状态，不展示项目切换（项目在「立题 · 项目」页管理）。
+ * Keep primary objects discoverable at the shell level. Evidence review stays
+ * inside the relevant project, library, and writing workspaces.
  */
 export interface NavGroup {
   label: string;
@@ -13,33 +13,33 @@ export interface NavGroup {
 
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: '科研探索',
+    label: '',
     items: [
       { key: 'dashboard', label: '总览', hint: '进度与倒数日' },
-      { key: 'projects', label: '立项', hint: '创建、切换与删除项目' },
-      { key: 'pipeline', label: '八段流水线', hint: '立题→检索→评级→设计→数据→分析→写作→传播' },
+      { key: 'aiChat', label: 'AI 助手', hint: '项目会话与证据问答' },
     ],
   },
   {
-    label: '文献库',
+    label: '项目',
     items: [
+      { key: 'projects', label: '项目管理', hint: '创建、切换与删除项目' },
       { key: 'references', label: '文献库', hint: '检索 · 导入 · 全文' },
       { key: 'notes', label: '阅读笔记', hint: '摘录与批注' },
+      { key: 'pipeline', label: '科研流水线', hint: '立题→检索→评级→设计→数据→分析→写作→传播' },
+    ],
+  },
+  {
+    label: '数据',
+    items: [
       { key: 'tables', label: '数据表', hint: '筛选与对照' },
-      { key: 'statTools', label: '计算工具', hint: '检验与效应量' },
+      { key: 'statTools', label: '统计工具', hint: '检验与效应量' },
       { key: 'clinicalData', label: '学科资料', hint: '名词 · 标准 · 公式' },
     ],
   },
   {
-    label: '助手',
+    label: '工具',
     items: [
-      { key: 'aiChat', label: 'AI 对话', hint: '本地网关 / BYOK' },
-      { key: 'skills', label: '科研能力', hint: 'Nature 级技能映射' },
-    ],
-  },
-  {
-    label: '',
-    items: [
+      { key: 'skills', label: '科研能力', hint: '能力来源与验证状态' },
       { key: 'tools', label: '工具箱', hint: 'DOI · 引用 · 设计' },
       { key: 'settings', label: '设置', hint: '后端 · 主题 · 备份' },
     ],
@@ -57,10 +57,7 @@ export function Sidebar() {
         <div className="workspace-brand-mark" aria-hidden="true">
           <img src="/brand/selenyx-crane.png" alt="" />
         </div>
-        <div>
-          <div className="workspace-brand-name">Selenyx</div>
-          <div className="workspace-brand-version">0.01</div>
-        </div>
+        <div className="workspace-brand-name">Selenyx</div>
       </div>
 
       <nav className="sidebar-nav" aria-label="科研工作台导航">

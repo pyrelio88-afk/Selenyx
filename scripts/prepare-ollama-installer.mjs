@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  realpathSync,
   rmSync,
   statSync,
 } from 'node:fs';
@@ -14,7 +15,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-const root = resolve(import.meta.dirname, '..');
+const root = realpathSync.native(resolve(import.meta.dirname, '..'));
 const resourcesDirectory = join(root, 'desktop', 'resources', 'ollama');
 const manifestPath = join(resourcesDirectory, 'manifest.json');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -23,6 +24,7 @@ if (
   || basename(manifest.fileName) !== manifest.fileName
   || !/^OllamaSetup\.exe$/i.test(manifest.fileName)
   || typeof manifest.version !== 'string'
+  || !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(manifest.version)
   || typeof manifest.sourceUrl !== 'string'
   || !Number.isSafeInteger(manifest.expectedSizeBytes)
   || manifest.expectedSizeBytes <= 0
@@ -31,10 +33,12 @@ if (
   throw new Error(`Invalid optional Ollama manifest: ${manifestPath}`);
 }
 const source = new URL(manifest.sourceUrl);
+const expectedReleaseSuffix = `/v${manifest.version}/${manifest.fileName}`;
 if (
   source.protocol !== 'https:'
   || source.hostname !== 'github.com'
   || !source.pathname.startsWith('/ollama/ollama/releases/download/')
+  || !source.pathname.endsWith(expectedReleaseSuffix)
 ) {
   throw new Error('The optional Ollama manifest must pin an HTTPS release asset from github.com/ollama/ollama.');
 }

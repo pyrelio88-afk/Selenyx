@@ -41,13 +41,17 @@ npm run desktop:build
 
 安装包输出通常位于 \`desktop/target/release/bundle/\`。Windows 打包使用当前用户安装模式；实际发布前必须在目标平台验证 sidecar 健康、SQLite 重启持久化、RAG、导入导出与离线 OCR。
 
-Windows 可显式制作“附带 Ollama 安装器资源”的大体积版本：
+默认 Windows 包使用 Tauri 的小型 WebView2 下载引导模式，不附带 AI 模型、WebView2 离线安装器或 Ollama 安装器。目标机器尚无 WebView2 时，首次安装需要联网完成该系统前置依赖。
+
+Windows 可显式制作离线能力包：
 
 \`\`\`powershell
-npm run desktop:build:with-ollama
+npm run desktop:build:offline-pack
 \`\`\`
 
-该命令才会下载约 1.46 GiB 的固定版本安装器，并校验精确大小与 SHA-256。普通 \`desktop:build\` 不下载、不打包；Selenyx 只会在 Windows 文件夹中定位该资源，不会代替用户运行安装器。对外分发前需复核上游许可条款。
+该命令才会准备约 1.46 GiB 的固定版本 Ollama 安装器并校验精确大小与 SHA-256，同时选择 Tauri 的 WebView2 离线前置包。能力包仍不包含任何 Ollama 模型权重；模型需由用户明确拉取。普通 \`desktop:build\` 不下载、不打包这些大资源。Selenyx 只会在 Windows 文件夹中定位 Ollama 安装器，绝不代替用户运行。旧命令 \`desktop:build:with-ollama\` 仅作为兼容别名保留。对外分发前需复核上游许可条款。
+
+通过桌面 Junction 启动脚本时，发布脚本会先解析到真实物理目录，再将同一条规范路径交给 Node、Cargo 和 Tauri，避免同一仓库因 Desktop/OneDrive 两种路径产生重复缓存或 sidecar 资源错位。
 
 ## 4. 离线 OCR 资源
 

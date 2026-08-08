@@ -45,7 +45,7 @@
 - RAG：中文 hash-v2 + lexical 永久保底；可选 Ollama 原生或 OpenAI-compatible dense；不同模型向量不混算。
 - 证据门：本机片段进入 pending，人工 accept/reject；写作提纲只读取 accepted。
 - 学科数据诚信：禁止 `核心概念NN` / `关键参数NN` / 伪造 `SEL-*`；释义采用多源中性表述，避免单方「金标准」口号。数量目标运行时审计 **GAPS 为空**（名词≥500 / 数值≥100 / 公式≥100 / 标准≥20）。
-- 桌面 Ollama：普通构建不下载；`--with-ollama` 才校验并打包上游安装器，模型仍由用户明确拉取。
+- 桌面离线能力包：普通构建不含 AI 模型或大型离线安装器；仅显式 `--offline-pack` 校验并打包上游 Ollama 安装器与 WebView2 离线前置包，模型仍由用户明确拉取。应用只能定位 Ollama 安装器，不能执行它。
 
 ## 已知下一轮风险
 

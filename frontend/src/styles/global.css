@@ -35,7 +35,7 @@
   --success: #5a8a4a;
   --border: #d8d4ca;
   --border-strong: #2c2a26;
-  --shadow: 4px 4px 0 #d8d4ca;
+  --shadow: 3px 3px 0 #d8d4ca;
   --sidebar-bg: #f5f2eb;
 }
 [data-theme="paper-green"][data-mode="dark"] {
@@ -55,7 +55,7 @@
   --success: #7ab068;
   --border: #3f3c36;
   --border-strong: #e8e4dc;
-  --shadow: 4px 4px 0 rgba(0,0,0,0.3);
+  --shadow: 3px 3px 0 rgba(0,0,0,0.32);
   --sidebar-bg: #1f1e1a;
 }
 
@@ -3691,8 +3691,7 @@ tr:hover .row-delete-btn { opacity: 0.6; }
 .workspace-sidebar {
   padding: 14px 10px 10px;
   gap: 0;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--sidebar-bg) 88%, var(--bg-surface)), var(--sidebar-bg) 42%);
+  background: var(--sidebar-bg);
 }
 .workspace-brand {
   display: flex;
@@ -3707,12 +3706,11 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  color: #fff;
-  background: linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 66%, #102a43));
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: none;
 }
 .workspace-brand-name { font-size: 16px; font-weight: 720; letter-spacing: .2px; color: var(--text-primary); line-height: 1.15; }
-.workspace-brand-version { margin-top: 1px; font-size: 10px; font-weight: 500; color: var(--text-muted); letter-spacing: .3px; }
 .workspace-brand-subtitle { margin-top: 2px; font-size: 10.5px; color: var(--text-muted); letter-spacing: .2px; }
 .workspace-switcher {
   display: flex;

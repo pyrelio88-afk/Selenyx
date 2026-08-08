@@ -1,12 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, readdirSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
 import { basename, delimiter, join, resolve } from 'node:path';
 
 // Read-only preflight for the complete local desktop build. It never installs
 // software, resolves dependencies, or downloads optional resources.
 const environment = { ...process.env };
-const root = resolve(import.meta.dirname, '..');
+const requestedRoot = resolve(import.meta.dirname, '..');
+const root = realpathSync.native(requestedRoot);
 const desktopDirectory = join(root, 'desktop');
 if (platform() === 'win32') {
   const cargoBin = join(homedir(), '.cargo', 'bin');
@@ -63,24 +64,46 @@ function referencesOllama(config) {
   return flattenedResources(config).some((resource) => /(^|[\\/])ollama([\\/]|$)|OllamaSetup\.exe$/i.test(resource));
 }
 
+function referencesAiModelOrInstaller(config) {
+  return flattenedResources(config).some((resource) => (
+    /(^|[\\/])models?([\\/]|$)/i.test(resource)
+    || /\.(exe|msi|msix|gguf|safetensors|onnx)$/i.test(resource)
+  ));
+}
+
 function verifyOptionalOllamaPackagingBoundary() {
   const baseConfigPath = join(desktopDirectory, 'tauri.conf.json');
-  const overlayPath = join(desktopDirectory, 'tauri.with-ollama.conf.json');
+  const overlayPath = join(desktopDirectory, 'tauri.offline-pack.conf.json');
   const manifestPath = join(desktopDirectory, 'resources', 'ollama', 'manifest.json');
+  const capabilityPath = join(desktopDirectory, 'capabilities', 'default.json');
   const baseConfig = readJson(baseConfigPath, 'base Tauri config');
   const overlay = readJson(overlayPath, 'opt-in Ollama Tauri overlay');
   const manifest = readJson(manifestPath, 'optional Ollama manifest');
+  const capability = readJson(capabilityPath, 'default desktop capability');
 
-  if (referencesOllama(baseConfig)) {
-    throw new Error('The base Tauri config must never include the optional Ollama installer.');
+  if (referencesOllama(baseConfig) || referencesAiModelOrInstaller(baseConfig)) {
+    throw new Error('The base Tauri config must never include optional AI models or installer resources.');
+  }
+  const defaultWebViewMode = baseConfig?.bundle?.windows?.webviewInstallMode?.type;
+  if (defaultWebViewMode === 'offlineInstaller' || defaultWebViewMode === 'fixedRuntime') {
+    throw new Error('The default Tauri bundle must not embed a large WebView2 installer or runtime.');
+  }
+  if (baseConfig?.plugins?.shell?.open || capability?.permissions?.includes('shell:allow-open')) {
+    throw new Error('The WebView must not receive shell-open permission; installers are reveal-only native resources.');
   }
 
   const automaticallyMergedConfigs = readdirSync(desktopDirectory, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /^tauri\.(windows|linux|macos)\.conf\.(json|json5|toml)$/i.test(entry.name));
   for (const entry of automaticallyMergedConfigs) {
     const filePath = join(desktopDirectory, entry.name);
-    if (entry.name.toLowerCase().endsWith('.json') && referencesOllama(readJson(filePath, entry.name))) {
-      throw new Error(`Automatically merged ${entry.name} must not include the optional Ollama installer.`);
+    if (
+      entry.name.toLowerCase().endsWith('.json')
+      && (() => {
+        const config = readJson(filePath, entry.name);
+        return referencesOllama(config) || referencesAiModelOrInstaller(config);
+      })()
+    ) {
+      throw new Error(`Automatically merged ${entry.name} must not include AI models or optional installers.`);
     }
     if (!entry.name.toLowerCase().endsWith('.json') && /ollama/i.test(readFileSync(filePath, 'utf8'))) {
       throw new Error(`Automatically merged ${entry.name} must not include the optional Ollama installer.`);
@@ -88,7 +111,10 @@ function verifyOptionalOllamaPackagingBoundary() {
   }
 
   if (!referencesOllama(overlay)) {
-    throw new Error('The explicit --with-ollama overlay does not include its Ollama resource directory.');
+    throw new Error('The explicit --offline-pack overlay does not include its Ollama resource directory.');
+  }
+  if (overlay?.bundle?.windows?.webviewInstallMode?.type !== 'offlineInstaller') {
+    throw new Error('The explicit --offline-pack overlay must carry the WebView2 offline prerequisite.');
   }
   if (
     manifest.schemaVersion !== 1
@@ -101,7 +127,13 @@ function verifyOptionalOllamaPackagingBoundary() {
     throw new Error(`Invalid optional Ollama manifest: ${manifestPath}`);
   }
   const source = new URL(manifest.sourceUrl);
-  if (source.protocol !== 'https:' || source.hostname !== 'github.com' || !source.pathname.startsWith('/ollama/ollama/releases/download/')) {
+  const expectedReleaseSuffix = `/v${manifest.version}/${manifest.fileName}`;
+  if (
+    source.protocol !== 'https:'
+    || source.hostname !== 'github.com'
+    || !source.pathname.startsWith('/ollama/ollama/releases/download/')
+    || !source.pathname.endsWith(expectedReleaseSuffix)
+  ) {
     throw new Error('The optional Ollama manifest must pin an HTTPS release asset from github.com/ollama/ollama.');
   }
 
@@ -126,6 +158,9 @@ const msvcLinkerAvailable = process.platform !== 'win32' || (() => {
 if (!msvcLinkerAvailable) missing.push('Visual Studio C++ Build Tools (MSVC linker: link.exe)');
 
 if (missing.length === 0) {
+  if (requestedRoot.toLowerCase() !== root.toLowerCase()) {
+    console.log(`Desktop junction resolved to ${root}`);
+  }
   console.log('Desktop prerequisites and optional-resource boundaries passed.');
   process.exit(0);
 }

@@ -12,7 +12,7 @@ import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
 import { CORE_RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
-import { projectRoleLabel } from '@lib/projectPriority';
+import { orderProjectsForWorkspace, projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
 
 const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
   { label: '全部', match: [] },
@@ -236,6 +236,16 @@ export function ProjectsView() {
   const visibleFrameworks = disciplineFilter.match.length === 0
     ? CORE_RESEARCH_FRAMEWORKS
     : CORE_RESEARCH_FRAMEWORKS.filter((fw) => fw.disciplines.some((d) => disciplineFilter.match.includes(d)));
+  const orderedProjects = orderProjectsForWorkspace(projects);
+  const mainlineProject = selectPrimaryProject(projects);
+  const visibleMainline = mainlineProject?.status === 'archived' ? null : mainlineProject;
+  const leadProjects = orderedProjects.filter((project) => (
+    project.status !== 'archived'
+    && project.ownerRole !== 'participant'
+    && project.id !== visibleMainline?.id
+  ));
+  const participantProjects = orderedProjects.filter((project) => project.status !== 'archived' && project.ownerRole === 'participant');
+  const archivedProjects = orderedProjects.filter((project) => project.status === 'archived');
 
   function startCreate() {
     setShowFrameworks(false);
@@ -398,8 +408,32 @@ export function ProjectsView() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-2 projects-grid">
-          {projects.map((project) => {
+        <div className="project-groups">
+          {!visibleMainline && projects.some((project) => project.status !== 'archived') && (
+            <section className="project-mainline-guidance" aria-label="选择首页主线课题">
+              <Icon name="target" size={18} />
+              <div>
+                <strong>请选择首页主线课题</strong>
+                <p>旧项目没有主线标记。请在你主导的课题上选择“设为主线”，首页不会按项目存储顺序猜测。</p>
+              </div>
+            </section>
+          )}
+          {[
+            visibleMainline ? { key: 'mainline', title: '主线课题', detail: '首页与每日推进优先显示这一项', projects: [visibleMainline] } : null,
+            leadProjects.length > 0 ? { key: 'lead', title: '我主导的项目', detail: '由你负责研究决策与推进', projects: leadProjects } : null,
+            participantProjects.length > 0 ? { key: 'participant', title: '我参与的项目', detail: '保留分工、待办与可迁移方法', projects: participantProjects } : null,
+            archivedProjects.length > 0 ? { key: 'archived', title: '已归档', detail: '已结束或暂停，不会干扰日常推进', projects: archivedProjects } : null,
+          ].filter((group): group is { key: string; title: string; detail: string; projects: ResearchProject[] } => Boolean(group)).map((group) => (
+          <section className={`project-group is-${group.key}`} key={group.key} aria-labelledby={`project-group-${group.key}`}>
+            <header className="project-group-header">
+              <div>
+                <h2 id={`project-group-${group.key}`}>{group.title}</h2>
+                <p>{group.detail}</p>
+              </div>
+              <span>{group.projects.length}</span>
+            </header>
+            <div className="grid grid-2 projects-grid">
+          {group.projects.map((project) => {
             const stage = PIPELINE_STAGES.find((item) => item.key === project.currentStage);
             const projectTasks = tasks.filter((task) => task.projectId === project.id);
             const stageIdx = PIPELINE_STAGES.findIndex((item) => item.key === project.currentStage);
@@ -407,7 +441,7 @@ export function ProjectsView() {
             return (
               <div
                 key={project.id}
-                className={`card project-card ${isActive ? 'is-active' : ''}`}
+                className={`card project-card ${isActive ? 'is-active' : ''} ${project.isPrimary ? 'is-mainline' : ''} ${project.status === 'archived' ? 'is-archived' : ''}`}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
                   <h3 style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: 0 }}>
@@ -495,6 +529,9 @@ export function ProjectsView() {
               </div>
             );
           })}
+            </div>
+          </section>
+          ))}
         </div>
       )}
 

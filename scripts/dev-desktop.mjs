@@ -1,9 +1,9 @@
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir, platform } from 'node:os';
 import { join, resolve, delimiter } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..');
+const root = realpathSync.native(resolve(import.meta.dirname, '..'));
 const environment = { ...process.env };
 
 // Keep `desktop:dev` consistent with `desktop:build`: a terminal opened before

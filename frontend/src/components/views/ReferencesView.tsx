@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense, type CSSProperties } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { FIELD_LABELS } from '@apptypes/index';
 import type { Reference } from '@apptypes/reference';
@@ -19,6 +19,7 @@ import { GalleryView } from '@components/datagrid/GalleryView';
 import { CalendarView } from '@components/datagrid/CalendarView';
 import type { Annotation } from '@apptypes/reference';
 import { useIsMobile } from '@lib/useIsMobile';
+import { usePersistentWorkbenchColumns } from '@lib/usePersistentWorkbenchColumns';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { searchApi, zoteroApi, type ScholarlyCandidate, type ZoteroReferenceCandidate } from '@services/api';
 import { referenceFromZotero } from '@utils/zoteroReference';
@@ -232,6 +233,11 @@ export function ReferencesView() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const isMobile = useIsMobile();
+  const panes = usePersistentWorkbenchColumns({
+    storageKey: 'selenyx.references-workbench.columns',
+    initial: { left: 292, right: 320 },
+    limits: { left: [240, 420], right: [280, 440] },
+  });
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
@@ -454,6 +460,21 @@ export function ReferencesView() {
   }, [flashToast, literatureQuery]);
 
   const selected = useMemo(() => references.find((r) => r.id === selectedId) ?? null, [references, selectedId]);
+
+  // A strict-AI citation is only useful if it leads back to its real source.
+  // Keep the route payload ephemeral so normal reference selection remains local
+  // to this view and no research data is duplicated in browser storage.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('selenyx:open-evidence-source');
+      if (!raw) return;
+      const payload = JSON.parse(raw) as { referenceId?: unknown };
+      if (typeof payload.referenceId === 'string' && references.some((reference) => reference.id === payload.referenceId)) {
+        setSelectedId(payload.referenceId);
+      }
+      sessionStorage.removeItem('selenyx:open-evidence-source');
+    } catch { /* an unavailable or malformed route hint must never break the library */ }
+  }, [references]);
   const closePanel = useCallback(() => setSelectedId(null), []);
 
   /** Keep project associations and transient readers consistent with deletion. */
@@ -685,7 +706,19 @@ export function ReferencesView() {
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
 
   return (
-    <div className={`references-workspace ${selected ? "is-reading" : ""}`}>
+    <div
+      className={`references-workspace ${selected ? "is-reading" : ""}${panes.dragging ? " is-resizing" : ""}`}
+      style={{
+        '--reference-list-width': `${panes.left}px`,
+        '--reference-rag-width': `${panes.right}px`,
+      } as CSSProperties}
+    >
+      {selected && !isMobile && (
+        <>
+          <button className="reference-column-resizer is-left" aria-label="调整文献列表宽度" {...panes.leftHandleProps} />
+          <button className="reference-column-resizer is-right" aria-label="调整证据检查器宽度" {...panes.rightHandleProps} />
+        </>
+      )}
       <div className="view-header">
         <div className="reference-view-heading">
           <div>

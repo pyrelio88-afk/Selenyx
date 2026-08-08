@@ -17,6 +17,41 @@ def reset_backend(tmp_path, monkeypatch) -> None:
     init_db()
 
 
+def test_init_db_adds_provenance_columns_without_rebuilding_a_legacy_library(tmp_path, monkeypatch):
+    """The additive migration preserves the old accepted-review decision."""
+    monkeypatch.setenv("SELENYX_DATA_DIR", str(tmp_path))
+    get_engine.cache_clear()
+    engine = get_engine()
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE document_chunks ("
+            "id TEXT PRIMARY KEY, reference_id TEXT, source TEXT, page INTEGER, section TEXT, "
+            "char_start INTEGER, char_end INTEGER, text TEXT, embedding_json TEXT, "
+            "embedding_backend TEXT, created_at TEXT)"
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE evidence_items ("
+            "id TEXT PRIMARY KEY, project_id TEXT, reference_id TEXT, claim TEXT, excerpt TEXT, "
+            "relation TEXT, review TEXT, confidence TEXT, page INTEGER, chunk_id TEXT, notes TEXT, "
+            "created_at TEXT, updated_at TEXT)"
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO evidence_items VALUES "
+            "('legacy-evidence', 'legacy-project', 'legacy-reference', '', 'verbatim', "
+            "'supports', 'accepted', 'high', NULL, NULL, '', 'now', 'now')"
+        )
+    init_db()
+    with engine.connect() as connection:
+        chunk_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info('document_chunks')")}
+        evidence_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info('evidence_items')")}
+        migrated_status = connection.exec_driver_sql(
+            "SELECT status FROM evidence_items WHERE id = 'legacy-evidence'"
+        ).scalar_one()
+    assert {"bbox_json", "heading_path_json", "parser_version"}.issubset(chunk_columns)
+    assert {"status", "anchor_id"}.issubset(evidence_columns)
+    assert migrated_status == "accepted"
+
+
 @pytest.mark.asyncio
 async def test_health_and_persistent_reference_crud(tmp_path, monkeypatch):
     reset_backend(tmp_path, monkeypatch)
@@ -375,3 +410,210 @@ async def test_external_json_without_id_gets_a_repeatable_local_identity(tmp_pat
         snapshot = (await client.get("/api/references/snapshot")).json()
         assert snapshot["count"] == 1
         assert snapshot["references"][0]["id"].startswith("import-json-")
+
+
+@pytest.mark.asyncio
+async def test_evidence_provenance_status_and_domain_contracts(tmp_path, monkeypatch):
+    """Provenance and new domain records are persisted, constrained, and usable."""
+    reset_backend(tmp_path, monkeypatch)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        project = await client.post("/api/projects", json={"id": "domain-project", "name": "Domain contracts"})
+        assert project.status_code == 200
+        reference = await client.post(
+            "/api/references",
+            json={"id": "domain-reference", "title": "Traceable local evidence", "abstract": "A source with a real locator."},
+        )
+        assert reference.status_code == 200
+
+        indexed = await client.post(
+            "/api/search/index",
+            json={"referenceId": "domain-reference", "text": "Methods: We enrolled 24 participants and measured the primary outcome."},
+        )
+        assert indexed.status_code == 200
+        semantic = await client.post("/api/search/semantic", json={"query": "participants outcome", "topK": 1})
+        assert semantic.status_code == 200
+        chunk_id = semantic.json()["results"][0]["chunkId"]
+
+        anchor = await client.post(
+            "/api/evidence/provenance-anchors",
+            json={
+                "referenceId": "domain-reference",
+                "chunkId": chunk_id,
+                "page": 4,
+                "bbox": [12.5, 40, 320, 92],
+                "charStart": 0,
+                "charEnd": 67,
+                "headingPath": ["Methods", "Participants"],
+                "parserVersion": "docling-2.1",
+                "sourceUri": "attachment://domain-reference/source.pdf",
+                "contentHash": "sha256:source-hash",
+            },
+        )
+        assert anchor.status_code == 200
+        locator = anchor.json()
+        assert locator["bbox"] == [12.5, 40.0, 320.0, 92.0]
+        assert locator["headingPath"] == ["Methods", "Participants"]
+
+        evidence = await client.post(
+            "/api/evidence",
+            json={
+                "projectId": "domain-project",
+                "referenceId": "domain-reference",
+                "chunkId": chunk_id,
+                "anchorId": locator["id"],
+                "excerpt": "We enrolled 24 participants.",
+                "claim": "The pilot enrolled 24 participants.",
+                "status": "retrieved",
+            },
+        )
+        assert evidence.status_code == 200
+        evidence_item = evidence.json()
+        assert evidence_item["status"] == "retrieved"
+        assert evidence_item["review"] == "pending"
+        assert evidence_item["page"] == 4
+        accepted = await client.patch(f"/api/evidence/{evidence_item['id']}", json={"status": "accepted"})
+        assert accepted.status_code == 200
+        assert accepted.json()["review"] == "accepted"
+        conflict = await client.patch(
+            f"/api/evidence/{evidence_item['id']}",
+            json={"status": "unresolved", "review": "accepted"},
+        )
+        assert conflict.status_code == 422
+
+        claim = await client.post(
+            "/api/evidence/claims",
+            json={
+                "projectId": "domain-project",
+                "text": "The intervention remains feasible for a pilot.",
+                "claimType": "finding",
+                "evidenceIds": [evidence_item["id"]],
+            },
+        )
+        assert claim.status_code == 200
+        assert claim.json()["evidenceIds"] == [evidence_item["id"]]
+
+        contradiction = await client.post(
+            "/api/evidence/contradictions",
+            json={
+                "projectId": "domain-project",
+                "claimId": claim.json()["id"],
+                "title": "Small sample limits generalisability",
+                "evidenceIds": [evidence_item["id"]],
+            },
+        )
+        assert contradiction.status_code == 200
+        resolved = await client.patch(
+            f"/api/evidence/contradictions/{contradiction.json()['id']}",
+            json={"status": "resolved", "resolution": "Record the limitation in the discussion."},
+        )
+        assert resolved.status_code == 200
+        assert resolved.json()["status"] == "resolved"
+
+        first_artifact = await client.post(
+            "/api/evidence/stage-artifacts",
+            json={
+                "projectId": "domain-project",
+                "stage": "design",
+                "title": "Pilot protocol",
+                "artifactType": "protocol",
+                "content": {"sampleSize": 24, "outcome": "handover quality"},
+                "qualityGate": "Supervisor review required",
+            },
+        )
+        second_artifact = await client.post(
+            "/api/evidence/stage-artifacts",
+            json={
+                "projectId": "domain-project",
+                "stage": "design",
+                "title": "Pilot protocol",
+                "artifactType": "protocol",
+                "content": {"sampleSize": 28, "outcome": "handover quality"},
+                "qualityGate": "Supervisor review required",
+            },
+        )
+        assert first_artifact.status_code == second_artifact.status_code == 200
+        assert first_artifact.json()["version"] == 1
+        assert second_artifact.json()["version"] == 2
+        assert first_artifact.json()["contentHash"] != second_artifact.json()["contentHash"]
+        approved = await client.patch(
+            f"/api/evidence/stage-artifacts/{second_artifact.json()['id']}",
+            json={"status": "approved"},
+        )
+        assert approved.status_code == 200
+        assert approved.json()["status"] == "approved"
+
+        summary = await client.get("/api/evidence/summary?projectId=domain-project")
+        assert summary.status_code == 200
+        assert summary.json()["accepted"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reference_delete_repairs_provenance_claim_and_contradiction_graph(tmp_path, monkeypatch):
+    reset_backend(tmp_path, monkeypatch)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        assert (await client.post("/api/projects", json={"id": "cleanup-project", "name": "Cleanup"})).status_code == 200
+        for reference_id, title in (("source-to-delete", "Discarded source"), ("source-to-keep", "Retained source")):
+            created = await client.post(
+                "/api/references",
+                json={"id": reference_id, "title": title, "abstract": f"Evidence from {title}."},
+            )
+            assert created.status_code == 200
+        indexed = await client.post(
+            "/api/search/index",
+            json={"referenceId": "source-to-delete", "text": "A precisely located source statement."},
+        )
+        assert indexed.status_code == 200
+        hit = (await client.post("/api/search/semantic", json={"query": "precisely located", "topK": 1})).json()["results"][0]
+        anchor = await client.post(
+            "/api/evidence/provenance-anchors",
+            json={"referenceId": "source-to-delete", "chunkId": hit["chunkId"], "page": 2, "bbox": [1, 2, 3, 4]},
+        )
+        assert anchor.status_code == 200
+        first = await client.post(
+            "/api/evidence",
+            json={
+                "projectId": "cleanup-project", "referenceId": "source-to-delete", "chunkId": hit["chunkId"],
+                "anchorId": anchor.json()["id"], "excerpt": "A precisely located source statement.", "status": "accepted",
+            },
+        )
+        second = await client.post(
+            "/api/evidence",
+            json={
+                "projectId": "cleanup-project", "referenceId": "source-to-keep", "excerpt": "A retained source statement.", "status": "accepted",
+            },
+        )
+        assert first.status_code == second.status_code == 200
+        first_id, second_id = first.json()["id"], second.json()["id"]
+        claim = await client.post(
+            "/api/evidence/claims",
+            json={
+                "projectId": "cleanup-project", "text": "A claim with two sources.", "status": "active",
+                "evidenceIds": [first_id, second_id],
+            },
+        )
+        assert claim.status_code == 200
+        case = await client.post(
+            "/api/evidence/contradictions",
+            json={
+                "projectId": "cleanup-project", "claimId": claim.json()["id"], "title": "A documented disagreement",
+                "status": "resolved", "resolution": "Original resolution", "evidenceIds": [first_id, second_id],
+            },
+        )
+        assert case.status_code == 200
+
+        deleted = await client.delete("/api/references/source-to-delete")
+        assert deleted.status_code == 200
+        remaining_evidence = (await client.get("/api/evidence?projectId=cleanup-project")).json()
+        assert [item["id"] for item in remaining_evidence] == [second_id]
+        assert (await client.get("/api/evidence/provenance-anchors?referenceId=source-to-delete")).json() == []
+        repaired_claim = (await client.get("/api/evidence/claims?projectId=cleanup-project")).json()[0]
+        assert repaired_claim["evidenceIds"] == [second_id]
+        assert repaired_claim["status"] == "draft"
+        repaired_case = (await client.get("/api/evidence/contradictions?projectId=cleanup-project")).json()[0]
+        assert repaired_case["evidenceIds"] == [second_id]
+        assert repaired_case["status"] == "open"
+        assert "linked source was removed" in repaired_case["resolution"]

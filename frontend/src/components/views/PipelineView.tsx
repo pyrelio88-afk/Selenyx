@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/project';
 import type { PipelineStageKey } from '@apptypes/index';
@@ -6,6 +6,7 @@ import { Icon, STAGE_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
+import { usePersistentWorkbenchColumns } from '@lib/usePersistentWorkbenchColumns';
 import { runPipelineStage } from '@services/pipeline';
 import { LLMError } from '@services/llm';
 import { evidenceApi, searchApi, type EvidenceRecord, type SemanticHit } from '@services/api';
@@ -181,6 +182,11 @@ export function PipelineView() {
   const [evidence, setEvidence] = useState<EvidenceRecord[]>([]);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [outline, setOutline] = useState<{ bullets: string[]; acceptedCount: number } | null>(null);
+  const panes = usePersistentWorkbenchColumns({
+    storageKey: 'selenyx.pipeline-workbench.columns',
+    initial: { left: 184, right: 328 },
+    limits: { left: [152, 280], right: [260, 420] },
+  });
 
   const referenceTitles = useMemo(
     () => new Map(references.map((reference) => [reference.id, reference.title])),
@@ -370,7 +376,14 @@ export function PipelineView() {
         </div>
       </header>
 
-      <div className="pipeline-workbench-grid">
+      <div
+        className={`pipeline-workbench-grid${panes.dragging ? ' is-resizing' : ''}`}
+        style={{
+          '--pipeline-stage-width': `${panes.left}px`,
+          '--pipeline-evidence-width': `${panes.right}px`,
+        } as CSSProperties}
+      >
+        <button className="workbench-column-resizer is-left" aria-label="调整阶段轨宽度" {...panes.leftHandleProps} />
         <nav className="pipeline-stage-rail" aria-label="八段流水线阶段">
           <div className="pipeline-stage-rail-title">研究阶段</div>
           {PIPELINE_STAGES.map((item) => {
@@ -467,7 +480,12 @@ export function PipelineView() {
           </section>
         </main>
 
-        {!isMobile && <aside className="pipeline-evidence-column" aria-label="证据检查器">{inspector}</aside>}
+        {!isMobile && (
+          <>
+            <button className="workbench-column-resizer is-right" aria-label="调整证据检查器宽度" {...panes.rightHandleProps} />
+            <aside className="pipeline-evidence-column" aria-label="证据检查器">{inspector}</aside>
+          </>
+        )}
       </div>
 
       {isMobile && (

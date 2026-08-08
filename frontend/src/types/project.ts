@@ -32,7 +32,7 @@ export interface ResearchProject {
   description: string;
   /** 用户在课题中的真实职责；用于区分主导课题与协作课题。 */
   ownerRole?: 'lead' | 'participant';
-  /** 首页唯一主线。旧数据缺失时由选择器按职责安全回退。 */
+  /** 首页唯一主线。旧数据缺失时由用户确认；仅已知的旧 AI-SBAR 主线会兼容迁移。 */
   isPrimary?: boolean;
   currentStage: PipelineStageKey;
   frameworkId?: string;   // 研究框架 ID（对齐 RESEARCH_FRAMEWORKS），驱动 AI 助手技能推荐

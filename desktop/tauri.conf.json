@@ -47,7 +47,7 @@
     "publisher": "Selenyx",
     "category": "Education",
     "shortDescription": "Selenyx 科研工作台 — 本地优先、BYOK、八段科研流水线",
-    "longDescription": "Selenyx 是面向护理与医学科研的本地优先工作台：问题→文献→全文→筛选→精读→证据→综合→写作 八段流水线，多主题设计系统，文献管理 / BibTeX-RIS / PDF 全文阅读 / OCR / AI 助手 / 全学科参数库。数据本地存储，BYOK。桌面 (Windows/macOS/Linux) + Android 跨平台。",
+    "longDescription": "Selenyx 是面向跨学科研究的本地优先工作台：问题→文献→全文→筛选→精读→证据→综合→写作 八段流程，多主题设计系统，文献管理 / BibTeX-RIS / PDF 全文阅读 / OCR / AI 助手 / 学科资料库。数据本地存储，BYOK。桌面 (Windows/macOS/Linux) + Android 跨平台。",
     "copyright": "MIT © Selenyx Contributors",
     "icon": [
       "icons/32x32.png",
@@ -72,7 +72,7 @@
         "languages": ["SimpChinese", "English"]
       },
       "webviewInstallMode": {
-        "type": "offlineInstaller",
+        "type": "downloadBootstrapper",
         "silent": true
       }
     },
@@ -82,7 +82,6 @@
     }
   },
   "plugins": {
-    "shell": { "open": true },
     "fs": {}
   }
 }

@@ -14,7 +14,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from selenyx_backend.database import get_session
-from selenyx_backend.models import EvidenceItem, KanbanTask, ResearchProject
+from selenyx_backend.models import (
+    AgentRun,
+    ChatHistory,
+    ContradictionCase,
+    EvidenceItem,
+    KanbanTask,
+    ResearchClaim,
+    ResearchProject,
+    StageArtifact,
+)
 
 router = APIRouter()
 PIPELINE_ORDER = ["problem", "literature", "fulltext", "screening", "reading", "evidence", "synthesis", "writing"]
@@ -251,25 +260,44 @@ def update_project(project_id: str, patch: dict, session: Session = Depends(get_
 
 @router.delete("/{project_id}")
 def delete_project(project_id: str, session: Session = Depends(get_session)):
-    """Hard-delete a project and its local child rows (tasks + evidence)."""
+    """Hard-delete a project and every project-scoped local child row.
+
+    Source records and provenance anchors deliberately remain: they may be
+    cited by another project. Evidence, claims, contradictions, stage
+    artifacts, chat history and agent runs are scoped to one project and must
+    never outlive it.
+    """
     project = session.get(ResearchProject, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
 
     tasks = session.exec(select(KanbanTask).where(KanbanTask.project_id == project_id)).all()
-    for task in tasks:
-        session.delete(task)
-
     evidence_items = session.exec(select(EvidenceItem).where(EvidenceItem.project_id == project_id)).all()
-    for item in evidence_items:
-        session.delete(item)
+    contradictions = session.exec(select(ContradictionCase).where(ContradictionCase.project_id == project_id)).all()
+    claims = session.exec(select(ResearchClaim).where(ResearchClaim.project_id == project_id)).all()
+    artifacts = session.exec(select(StageArtifact).where(StageArtifact.project_id == project_id)).all()
+    chats = session.exec(select(ChatHistory).where(ChatHistory.project_id == project_id)).all()
+    runs = session.exec(select(AgentRun).where(AgentRun.project_id == project_id)).all()
 
-    session.delete(project)
-    session.commit()
+    try:
+        # Clear dependent records first so no claim or contradiction can retain
+        # an evidence id that was just deleted.
+        for row in [*contradictions, *claims, *artifacts, *chats, *runs, *evidence_items, *tasks]:
+            session.delete(row)
+        session.delete(project)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
     return {
         "deleted": project_id,
         "deletedTasks": len(tasks),
         "deletedEvidence": len(evidence_items),
+        "deletedClaims": len(claims),
+        "deletedContradictions": len(contradictions),
+        "deletedArtifacts": len(artifacts),
+        "deletedChats": len(chats),
+        "deletedRuns": len(runs),
     }
 
 @router.post("/{project_id}/advance")

@@ -40,12 +40,46 @@
 .pipeline-evidence-toggle > span { color: var(--warning); font-size: 11px; }
 
 .pipeline-workbench-grid {
+  position: relative;
   display: grid;
-  grid-template-columns: 184px minmax(420px, 1fr) minmax(300px, 350px);
+  grid-template-columns: var(--pipeline-stage-width, 184px) minmax(420px, 1fr) minmax(260px, var(--pipeline-evidence-width, 328px));
   gap: 16px;
   min-width: 0;
   align-items: start;
 }
+
+.workbench-column-resizer {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.workbench-column-resizer::after {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 5px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: '';
+  transition: background 120ms ease;
+}
+
+.workbench-column-resizer:hover::after,
+.workbench-column-resizer:focus-visible::after,
+.pipeline-workbench-grid.is-resizing .workbench-column-resizer::after { background: var(--accent); }
+.workbench-column-resizer:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: -1px; }
+.workbench-column-resizer.is-left { left: calc(var(--pipeline-stage-width, 184px) - 6px); }
+.workbench-column-resizer.is-right { right: calc(var(--pipeline-evidence-width, 328px) - 6px); }
 
 .pipeline-stage-rail,
 .pipeline-stage-workspace,
@@ -173,7 +207,7 @@
 .pipeline-workbench-empty .empty-state .btn { margin-top: 14px; min-height: 44px; }
 
 @media (max-width: 1180px) {
-  .pipeline-workbench-grid { grid-template-columns: 168px minmax(400px, 1fr) minmax(280px, 320px); gap: 12px; }
+  .pipeline-workbench-grid { grid-template-columns: minmax(152px, var(--pipeline-stage-width, 168px)) minmax(400px, 1fr) minmax(260px, var(--pipeline-evidence-width, 300px)); gap: 12px; }
   .pipeline-stage-workspace { padding: 16px; }
 }
 
@@ -183,6 +217,7 @@
   .pipeline-header-actions { flex-direction: column; align-items: flex-end; }
   .pipeline-evidence-toggle { display: inline-flex; }
   .pipeline-workbench-grid { display: block; }
+  .workbench-column-resizer { display: none; }
   .pipeline-stage-rail { position: static; display: flex; gap: 6px; margin-bottom: 10px; padding: 7px; overflow-x: auto; scroll-snap-type: x mandatory; }
   .pipeline-stage-rail-title { display: none; }
   .pipeline-rail-item { grid-template-columns: 25px auto; flex: 0 0 116px; min-height: 54px; border: 1px solid var(--border); border-left-width: 1px; scroll-snap-align: start; }

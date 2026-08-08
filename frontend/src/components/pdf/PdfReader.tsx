@@ -305,6 +305,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
   }, [numPages]);
   const zoomIn = useCallback(() => setScale((s) => Math.min(3, s + 0.25)), []);
   const zoomOut = useCallback(() => setScale((s) => Math.max(0.5, s - 0.25)), []);
+  const selectionCreationRef = useRef<(type: AnnotationType) => void>(() => undefined);
 
   // ===== 键盘快捷键 =====
   useEffect(() => {
@@ -313,7 +314,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
       // R76：选区弹层打开时，1-5 一键创建对应类型批注
       if (selectionPopup && /^[1-5]$/.test(e.key)) {
         e.preventDefault();
-        createFromSelection(ANNOTATION_TYPES[Number(e.key) - 1]);
+        selectionCreationRef.current(ANNOTATION_TYPES[Number(e.key) - 1]);
         return;
       }
       if (e.key === 'ArrowLeft') goPrev();
@@ -473,6 +474,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
     setSelectionPopup(null);
     window.getSelection()?.removeAllRanges();
   }, [selectionPopup, pageNum, annotations, onAnnotationsChange]);
+  selectionCreationRef.current = createFromSelection;
 
   /** 点击页面空白 → 若当前选了批注工具则在该位置新增批注 */
   const handlePageClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {

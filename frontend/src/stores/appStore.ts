@@ -246,7 +246,7 @@ export const useAppStore = create<AppState>()(
         const projects = s.projects.filter((project) => project.id !== id);
         const tasks = s.tasks.filter((task) => task.projectId !== id);
         const currentProjectId = s.currentProjectId === id
-          ? (selectPrimaryProject(projects)?.id ?? projects[0]?.id ?? null)
+          ? (selectPrimaryProject(projects)?.id ?? null)
           : s.currentProjectId;
         void removeMirroredProject(id).then(() => {
           void mirrorWorkspace(projects, tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));

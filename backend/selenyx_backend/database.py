@@ -53,6 +53,36 @@ def init_db() -> None:
                 connection.exec_driver_sql(
                     f"ALTER TABLE '{table}' ADD COLUMN payload_version INTEGER NOT NULL DEFAULT 1"
                 )
+        # Evidence and RAG locators are additive: an existing local library
+        # remains readable while new imports can retain parser provenance.
+        additive_columns = {
+            "document_chunks": {
+                "bbox_json": "TEXT NOT NULL DEFAULT '[]'",
+                "heading_path_json": "TEXT NOT NULL DEFAULT '[]'",
+                "parser_version": "TEXT NOT NULL DEFAULT 'legacy'",
+            },
+            "evidence_items": {
+                "status": "TEXT NOT NULL DEFAULT 'pending'",
+                "anchor_id": "TEXT",
+            },
+        }
+        evidence_status_was_added = False
+        for table, expected in additive_columns.items():
+            table_columns = {
+                row[1]
+                for row in connection.exec_driver_sql(f"PRAGMA table_info('{table}')").fetchall()
+            }
+            for column, definition in expected.items():
+                if table_columns and column not in table_columns:
+                    connection.exec_driver_sql(
+                        f"ALTER TABLE '{table}' ADD COLUMN {column} {definition}"
+                    )
+                    if table == "evidence_items" and column == "status":
+                        evidence_status_was_added = True
+        # Old evidence rows predate the canonical status column.  Their legacy
+        # review value is the only trustworthy history, so use it once here.
+        if evidence_status_was_added:
+            connection.exec_driver_sql("UPDATE evidence_items SET status = review")
 
 
 def get_session() -> Generator[Session, None, None]:

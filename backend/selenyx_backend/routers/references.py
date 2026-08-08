@@ -227,23 +227,70 @@ def _replace_project_reference(session: Session, old_id: str, replacement_id: st
         session.add(project)
 
 
+def _repair_evidence_domain_after_source_delete(session: Session, removed_evidence_ids: set[str]) -> None:
+    """Prune deleted evidence IDs from claims/cases without inventing support.
+
+    Claims are user-authored research objects, so deleting one source does not
+    delete the claim text.  It does, however, return an active claim to draft
+    and reopen a contradiction case whenever its evidence graph changed.
+    """
+    if not removed_evidence_ids:
+        return
+    from selenyx_backend.models import ContradictionCase, ResearchClaim
+
+    now = datetime.now().isoformat()
+    for claim in session.exec(select(ResearchClaim)).all():
+        evidence_ids = _json_list(claim.evidence_ids_json)
+        retained = [item_id for item_id in evidence_ids if item_id not in removed_evidence_ids]
+        if retained == evidence_ids:
+            continue
+        claim.evidence_ids_json = json.dumps(retained, ensure_ascii=False, separators=(",", ":"))
+        if claim.status == "active":
+            claim.status = "draft"
+        claim.updated_at = now
+        session.add(claim)
+
+    for case in session.exec(select(ContradictionCase)).all():
+        evidence_ids = _json_list(case.evidence_ids_json)
+        retained = [item_id for item_id in evidence_ids if item_id not in removed_evidence_ids]
+        if retained == evidence_ids:
+            continue
+        case.evidence_ids_json = json.dumps(retained, ensure_ascii=False, separators=(",", ":"))
+        # A resolved conflict cannot remain resolved after one of the inputs
+        # vanished.  Do not synthesize a replacement or silently keep a claim.
+        case.status = "open"
+        marker = "[A linked source was removed; review the remaining evidence.]"
+        if marker not in case.resolution:
+            case.resolution = f"{marker}\n{case.resolution}".strip()
+        case.updated_at = now
+        session.add(case)
+
+
 def _delete_reference_graph(session: Session, reference: Reference, *, replacement_id: str | None = None) -> None:
-    """Delete one reference without leaving chunks, evidence, or project links."""
-    from selenyx_backend.models import DocumentChunk, EvidenceItem
+    """Delete or merge a source without leaving locators or evidence edges dangling."""
+    from selenyx_backend.models import DocumentChunk, EvidenceItem, ProvenanceAnchor
 
     _replace_project_reference(session, reference.id, replacement_id)
     for chunk in session.exec(select(DocumentChunk).where(DocumentChunk.reference_id == reference.id)).all():
         session.delete(chunk)
-    for item in session.exec(select(EvidenceItem).where(EvidenceItem.reference_id == reference.id)).all():
+    for anchor in session.exec(select(ProvenanceAnchor).where(ProvenanceAnchor.reference_id == reference.id)).all():
+        session.delete(anchor)
+    evidence_items = session.exec(select(EvidenceItem).where(EvidenceItem.reference_id == reference.id)).all()
+    removed_evidence_ids = {item.id for item in evidence_items}
+    for item in evidence_items:
         if replacement_id:
             item.reference_id = replacement_id
-            # The old chunk is deleted below; retaining its id would create a
-            # subtler dangling edge even though reference_id was repaired.
+            # The old attachment has been deleted. Retaining either locator
+            # would falsely claim that the equivalent position exists in the
+            # replacement source.
             item.chunk_id = None
+            item.anchor_id = None
             item.updated_at = datetime.now().isoformat()
             session.add(item)
         else:
             session.delete(item)
+    if not replacement_id:
+        _repair_evidence_domain_after_source_delete(session, removed_evidence_ids)
     session.delete(reference)
 
 

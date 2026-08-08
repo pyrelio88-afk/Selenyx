@@ -21,8 +21,6 @@
 .app-main { min-width: 0; max-width: 100%; overscroll-behavior: contain; }
 .app-main:focus { outline: none; }
 .app-view-region { min-width: 0; }
-.app-version-footer { padding: 14px 0 4px; color: var(--text-muted); font-size: 11px; text-align: center; opacity: .72; }
-.app-version-footer span { margin-left: 8px; }
 .workspace-sidebar { flex: 0 0 var(--sidebar-width, 220px); min-height: 0; }
 .workspace-local-status-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-local-status.is-offline .workspace-status-dot,
@@ -101,7 +99,6 @@
 }
 
 @media (max-width: 390px) {
-  .app-version-footer span { display: block; margin: 3px 0 0; }
   .mobile-drawer { width: min(304px, 88vw); max-width: none; }
 }
 

@@ -156,6 +156,12 @@ class DocumentChunk(SQLModel, table=True):
     section: Optional[str] = None
     char_start: int = 0
     char_end: int = 0
+    # Structured-parser locators are deliberately stored alongside the text
+    # chunk.  They let a UI return to the exact source region without
+    # pretending that a generated answer has a verifiable citation.
+    bbox_json: str = "[]"  # [left, top, right, bottom] in page coordinates
+    heading_path_json: str = "[]"  # e.g. ["Methods", "Participants"]
+    parser_version: str = "legacy"  # docling/x parser identifier, never inferred
     text: str = ""
     embedding_json: str = "[]"
     embedding_backend: str = "hash"  # hash | dense
@@ -172,10 +178,86 @@ class EvidenceItem(SQLModel, table=True):
     claim: str = ""
     excerpt: str = ""
     relation: str = "supports"  # supports | contradicts | qualifies
-    review: str = "pending"  # pending | accepted | rejected
+    # ``review`` is retained for the existing frontend.  ``status`` is the
+    # canonical evidence-state vocabulary and is kept in sync by the router.
+    review: str = "pending"  # pending | accepted | rejected (legacy)
+    status: str = "pending"  # retrieved | pending | accepted | rejected | unresolved
     confidence: str = "medium"  # high | medium | low — user-set only
     page: Optional[int] = None
     chunk_id: Optional[str] = None
+    anchor_id: Optional[str] = None
     notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class ProvenanceAnchor(SQLModel, table=True):
+    """A durable, parser-independent location in an imported source file."""
+
+    __tablename__ = "provenance_anchors"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    reference_id: str = Field(index=True, default="")
+    chunk_id: Optional[str] = Field(default=None, index=True)
+    page: Optional[int] = None
+    bbox_json: str = "[]"
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    heading_path_json: str = "[]"
+    parser_version: str = "manual-v1"
+    source_uri: str = ""
+    content_hash: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class ResearchClaim(SQLModel, table=True):
+    """A project-scoped research claim, separate from a single excerpt."""
+
+    __tablename__ = "research_claims"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    project_id: str = Field(index=True, default="")
+    text: str = ""
+    claim_type: str = "finding"  # finding | method | sample | limitation | hypothesis
+    status: str = "draft"  # draft | active | retired
+    evidence_ids_json: str = "[]"
+    notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class ContradictionCase(SQLModel, table=True):
+    """A documented conflict between evidence items or their applicability."""
+
+    __tablename__ = "contradiction_cases"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    project_id: str = Field(index=True, default="")
+    claim_id: Optional[str] = Field(default=None, index=True)
+    title: str = ""
+    description: str = ""
+    evidence_ids_json: str = "[]"
+    status: str = "open"  # open | resolved | accepted
+    resolution: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class StageArtifact(SQLModel, table=True):
+    """Versioned output of a project stage with an explicit quality gate."""
+
+    __tablename__ = "stage_artifacts"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    project_id: str = Field(index=True, default="")
+    stage: str = Field(index=True, default="problem")
+    title: str = ""
+    artifact_type: str = "note"
+    content_json: str = "{}"
+    content_hash: str = ""
+    version: int = 1
+    quality_gate: str = ""
+    status: str = "draft"  # draft | ready | approved | blocked
+    source_uri: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())

@@ -1,8 +1,8 @@
-import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..');
+const root = realpathSync.native(resolve(import.meta.dirname, '..'));
 const extension = process.platform === 'win32' ? '.exe' : '';
 // 打包 Python sidecar 本身不依赖 Rust。Tauri 最终构建才需要 Rust；这里若为了
 // 获取 target triple 强制调用 rustc，会让已经完成的 backend:bundle 在没有工具链的

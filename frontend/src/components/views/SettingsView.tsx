@@ -150,13 +150,13 @@ export function SettingsView() {
   }
 
   async function revealOllamaInstaller() {
-    if (!window.confirm('即将在 Windows 文件夹中定位随此版本附带的上游 Ollama 安装程序。Selenyx 不会运行或静默安装它；是否继续？')) return;
+    if (!window.confirm('即将在 Windows 文件夹中定位应用附带的上游 Ollama 安装程序。Selenyx 不会运行或静默安装它；是否继续？')) return;
     setOllamaInstallerStatus('正在检查内置安装器…');
     try {
       await revealBundledOllamaInstaller();
       setOllamaInstallerStatus('已在 Windows 文件夹中定位；如需安装，请由您手动打开并确认。');
     } catch (error) {
-      setOllamaInstallerStatus(error instanceof Error ? error.message : '此版本未附带 Ollama 安装器。');
+      setOllamaInstallerStatus(error instanceof Error ? error.message : '当前应用未附带 Ollama 安装器。');
     }
   }
 
@@ -216,14 +216,15 @@ export function SettingsView() {
           <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance">
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ marginBottom: 16, fontSize: 16 }}>主题</h3>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <div className="theme-choice-grid">
                 {THEME_OPTIONS.map((option) => (
                   <button
                     key={option.key}
                     type="button"
-                    className={`btn ${theme === option.key ? 'btn-primary' : ''}`}
+                    className={`btn theme-choice ${theme === option.key ? 'btn-primary' : ''}`}
                     onClick={() => setTheme(option.key)}
-                    style={{ flex: 1, textAlign: 'center', flexDirection: 'column', padding: 12 }}
+                    aria-pressed={theme === option.key}
+                    style={{ flex: 1, textAlign: 'left', flexDirection: 'column', padding: 12 }}
                   >
                     <span style={{ fontWeight: 600 }}>{option.name}</span>
                     <span style={{ fontSize: 11, fontWeight: 400, display: 'block', marginTop: 4 }}>{option.description}</span>
@@ -234,6 +235,9 @@ export function SettingsView() {
                 <button type="button" className={`btn ${mode === 'light' ? 'btn-primary' : ''}`} onClick={() => setMode('light')}><Icon name="sun" size={16} /> 日间</button>
                 <button type="button" className={`btn ${mode === 'dark' ? 'btn-primary' : ''}`} onClick={() => setMode('dark')}><Icon name="moon" size={16} /> 夜间</button>
               </div>
+              <p className="settings-appearance-note">
+                主题只改变颜色、边框、字形与密度，不会改变页面结构或本机研究数据。
+              </p>
             </div>
             <div className="card">
               <h3 style={{ marginBottom: 16, fontSize: 16 }}>界面密度</h3>
@@ -307,6 +311,7 @@ export function SettingsView() {
               <h3 style={{ marginBottom: 10, fontSize: 16 }}>推荐：本机 Ollama（无云端密钥）</h3>
               <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 先由用户自行安装 Ollama 并执行 <code>ollama pull &lt;模型&gt;</code>；Selenyx 只在您主动开启 AI 时连接。
+                未安装 Ollama 或尚未拉取模型时，项目、文献、PDF/OCR、统计和基于本机哈希的检索仍可使用。
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 8 }}>
                 {OLLAMA_MODELS.map(([name, tag, description]) => (
@@ -325,14 +330,14 @@ export function SettingsView() {
                     disabled={checkingOllamaInstaller || !hasOllamaInstaller}
                     onClick={() => { void revealOllamaInstaller(); }}
                   >
-                    {hasOllamaInstaller ? '在文件夹中显示 Ollama 安装器' : '此版本未附带 Ollama 安装器'}
+                    {hasOllamaInstaller ? '在文件夹中显示 Ollama 安装器' : '当前应用未附带 Ollama 安装器'}
                   </button>
                   <p role="status" style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
                     {ollamaInstallerStatus || (checkingOllamaInstaller
-                      ? '正在检查此桌面版本的资源…'
+                      ? '正在检查桌面应用资源…'
                       : hasOllamaInstaller
                         ? '已发现且大小符合清单；打包前 SHA-256 已校验。Selenyx 只定位文件，不会运行安装程序。'
-                        : '普通小体积版本不会包含或下载该资源；仅 --with-ollama Windows 构建会附带。')}
+                        : '普通小体积版本不含 AI 模型或大安装器；仅显式 --offline-pack Windows 构建会附带经 SHA-256 校验的安装器。')}
                   </p>
                 </div>
               )}

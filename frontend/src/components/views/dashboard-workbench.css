@@ -308,3 +308,151 @@
   }
 }
 
+/* Dashboard and project management share the same quiet, bba-style hierarchy:
+   mainline first, then work the user leads, then collaborative/archived work. */
+.research-dashboard-header h1 {
+  margin: 0 0 4px;
+  font-size: clamp(23px, 2vw, 28px);
+}
+
+.research-dashboard-header > div:first-child > p {
+  max-width: 48rem;
+}
+
+.projects-workbench .project-groups {
+  display: grid;
+  gap: 26px;
+}
+
+.projects-workbench .project-mainline-guidance {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.projects-workbench .project-mainline-guidance svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.projects-workbench .project-mainline-guidance strong {
+  color: var(--text);
+}
+
+.projects-workbench .project-mainline-guidance p {
+  margin: 3px 0 0;
+  font-size: 13px;
+}
+
+.projects-workbench .project-group {
+  min-width: 0;
+}
+
+.projects-workbench .project-group-header {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 11px;
+  padding: 0 0 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.projects-workbench .project-group-header::before {
+  position: absolute;
+  inset: 2px auto 10px 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+  content: '';
+}
+
+.projects-workbench .project-group-header h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.projects-workbench .project-group-header p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.projects-workbench .project-group-header > span {
+  display: grid;
+  min-width: 24px;
+  min-height: 24px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.projects-workbench .project-card {
+  border-radius: 10px;
+}
+
+.projects-workbench .project-card.is-mainline {
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
+  background: color-mix(in srgb, var(--accent-light) 30%, var(--bg-elevated));
+}
+
+.projects-workbench .project-group.is-participant .project-group-header::before {
+  background: #587b9d;
+}
+
+.projects-workbench .project-group.is-archived .project-group-header::before {
+  background: var(--text-muted);
+}
+
+.projects-workbench .project-card.is-archived {
+  opacity: .76;
+}
+
+.research-dashboard-rail {
+  grid-auto-rows: 1fr;
+}
+
+.research-dashboard-rail .dashboard-time-card,
+.research-dashboard-rail .dashboard-focus-card {
+  display: flex;
+  min-height: 360px !important;
+  height: 100% !important;
+  flex-direction: column;
+}
+
+.research-dashboard-rail .dashboard-focus-card > div:last-child {
+  margin-top: auto;
+}
+
+@media (max-width: 720px) {
+  .projects-workbench .project-groups {
+    gap: 22px;
+  }
+
+  .projects-workbench .project-group-header {
+    gap: 10px;
+  }
+
+  .projects-workbench .project-group-header h2 {
+    font-size: 16px;
+  }
+
+  .research-dashboard-rail .dashboard-time-card,
+  .research-dashboard-rail .dashboard-focus-card {
+    min-height: 0 !important;
+  }
+}
+

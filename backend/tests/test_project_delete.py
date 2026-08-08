@@ -66,6 +66,39 @@ async def test_delete_project_removes_tasks_and_evidence(tmp_path, monkeypatch):
             },
         )
         assert evidence.status_code in (200, 201), evidence.text
+        evidence_id = evidence.json()["id"]
+
+        claim = await client.post(
+            "/api/evidence/claims",
+            json={
+                "projectId": project["id"],
+                "text": "A claim that belongs only to this project",
+                "evidenceIds": [evidence_id],
+            },
+        )
+        assert claim.status_code in (200, 201), claim.text
+
+        contradiction = await client.post(
+            "/api/evidence/contradictions",
+            json={
+                "projectId": project["id"],
+                "title": "A scoped conflict",
+                "claimId": claim.json()["id"],
+                "evidenceIds": [evidence_id],
+            },
+        )
+        assert contradiction.status_code in (200, 201), contradiction.text
+
+        artifact = await client.post(
+            "/api/evidence/stage-artifacts",
+            json={
+                "projectId": project["id"],
+                "stage": "problem",
+                "title": "Scoped stage artifact",
+                "content": {"question": "kept only with the project"},
+            },
+        )
+        assert artifact.status_code in (200, 201), artifact.text
 
         deleted = await client.delete(f"/api/projects/{project['id']}")
         assert deleted.status_code == 200, deleted.text
@@ -73,6 +106,9 @@ async def test_delete_project_removes_tasks_and_evidence(tmp_path, monkeypatch):
         assert body["deleted"] == project["id"]
         assert body["deletedTasks"] >= 1
         assert body["deletedEvidence"] >= 1
+        assert body["deletedClaims"] >= 1
+        assert body["deletedContradictions"] >= 1
+        assert body["deletedArtifacts"] >= 1
 
         snapshot = await client.get("/api/projects/workspace/snapshot")
         assert snapshot.status_code == 200
@@ -82,3 +118,6 @@ async def test_delete_project_removes_tasks_and_evidence(tmp_path, monkeypatch):
 
         missing = await client.get(f"/api/projects/{project['id']}")
         assert missing.status_code == 404
+        assert (await client.get(f"/api/evidence/claims?projectId={project['id']}")).json() == []
+        assert (await client.get(f"/api/evidence/contradictions?projectId={project['id']}")).json() == []
+        assert (await client.get(f"/api/evidence/stage-artifacts?projectId={project['id']}")).json() == []

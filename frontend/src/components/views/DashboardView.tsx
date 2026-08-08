@@ -11,7 +11,7 @@ import { versionedLoad, versionedSave, getOnboardingState, setOnboardingState } 
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
 import { evidenceApi } from '@services/api';
-import { projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
+import { orderProjectsForWorkspace, projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
 import './dashboard-workbench.css';
 
 // === 番茄钟组件（R86: 自定义事件） ===
@@ -489,10 +489,11 @@ export function DashboardView() {
     references, projects, tasks, tables, setView, setCurrentProject, currentProjectId,
     setPrimaryProject, workspaceSyncStatus, requestCreateProject,
   } = useAppStore();
+  const orderedProjects = orderProjectsForWorkspace(projects);
   const primaryProject = selectPrimaryProject(projects);
-  const focusedProject = projects.find((project) => project.id === currentProjectId)
+  const focusedProject = orderedProjects.find((project) => project.id === currentProjectId)
     ?? primaryProject
-    ?? projects[0]
+    ?? orderedProjects[0]
     ?? null;
   const [evidenceSummary, setEvidenceSummary] = useState<{ total: number; accepted: number; pending: number } | null>(null);
   const [evidenceAvailable, setEvidenceAvailable] = useState(false);
@@ -502,7 +503,10 @@ export function DashboardView() {
   const reading = references.filter((r) => r.readStatus === 'reading').length;
   const todoTasks = tasks.filter((t) => t.column === 'todo').length;
   const doingTasks = tasks.filter((t) => t.column === 'doing').length;
-  const otherProjects = projects.filter((project) => project.id !== focusedProject?.id);
+  const otherProjects = orderedProjects.filter((project) => project.id !== focusedProject?.id && project.status !== 'archived');
+  const otherLeadProjects = otherProjects.filter((project) => project.ownerRole !== 'participant');
+  const otherParticipantProjects = otherProjects.filter((project) => project.ownerRole === 'participant');
+  const activeProjectCount = projects.filter((project) => project.status !== 'archived').length;
   const focusedTasks = focusedProject ? tasks.filter((task) => task.projectId === focusedProject.id) : [];
   const nextTask = focusedTasks.find((task) => task.column === 'doing')
     ?? focusedTasks.find((task) => task.column === 'todo')
@@ -552,9 +556,8 @@ export function DashboardView() {
     <div className="research-dashboard is-command">
       <header className="research-dashboard-header">
         <div>
-          <p className="research-eyebrow">总览 · 科研指挥台</p>
-          <h1>我的项目</h1>
-          <p>点击课题标题可切换当前项目；右侧为北京时间、阶段倒数与专注计时。</p>
+          <h1>总览</h1>
+          <p>主线课题优先；右侧固定显示北京时间、倒数日与专注计时。</p>
         </div>
         <div className="research-header-tools">
           <label className="research-global-search">
@@ -616,7 +619,7 @@ export function DashboardView() {
                   </button>
                   {switcherOpen && projects.length > 0 && (
                     <div className="research-project-switcher-menu" role="listbox" aria-label="选择项目">
-                      {projects.map((project) => (
+                      {orderedProjects.map((project) => (
                         <button
                           key={project.id}
                           type="button"
@@ -725,18 +728,18 @@ export function DashboardView() {
           <button className="btn btn-primary" onClick={() => requestCreateProject()}><Icon name="plus" size={16} /> 新建项目</button>
         </section>
       )}
-      <section className="research-metrics" aria-label="工作区概况">
-        <button onClick={() => setView('references')}><span>文献</span><strong>{references.length}</strong><small>未读 {unread} · 阅读中 {reading}</small></button>
-        <button onClick={() => setView('pipeline')}><span>任务</span><strong>{todoTasks + doingTasks}</strong><small>进行中 {doingTasks} · 待办 {todoTasks}</small></button>
-        <button onClick={() => setView('projects')}><span>全部项目</span><strong>{projects.length}</strong><small>可在总览切换当前课题</small></button>
-        <button onClick={() => setView('tables')}><span>研究表格</span><strong>{tables.length}</strong><small>结构化数据与分析</small></button>
-      </section>
-      <OnboardingChecklist />
-      {otherProjects.length > 0 && (
-        <>
-          <SectionTitle title="其他项目" subtitle="点击即可切换总览当前课题" />
-          <div className="research-project-cards">
-            {otherProjects.map((project) => {
+        <section className="research-metrics" aria-label="工作区概况">
+          <button onClick={() => setView('references')}><span>文献</span><strong>{references.length}</strong><small>未读 {unread} · 阅读中 {reading}</small></button>
+          <button onClick={() => setView('pipeline')}><span>任务</span><strong>{todoTasks + doingTasks}</strong><small>进行中 {doingTasks} · 待办 {todoTasks}</small></button>
+          <button onClick={() => setView('projects')}><span>活跃项目</span><strong>{activeProjectCount}</strong><small>主线与协作项目分开管理</small></button>
+          <button onClick={() => setView('tables')}><span>研究表格</span><strong>{tables.length}</strong><small>结构化数据与分析</small></button>
+        </section>
+        <OnboardingChecklist />
+       {otherLeadProjects.length > 0 && (
+         <>
+           <SectionTitle title="我主导的其他项目" subtitle="点击即可切换当前课题" />
+           <div className="research-project-cards">
+             {otherLeadProjects.map((project) => {
               const projectStage = PIPELINE_STAGES.find((item) => item.key === project.currentStage);
               const projectStageIndex = PIPELINE_STAGES.findIndex((item) => item.key === project.currentStage);
               return (
@@ -768,8 +771,38 @@ export function DashboardView() {
               );
             })}
           </div>
-        </>
-      )}
+         </>
+       )}
+       {otherParticipantProjects.length > 0 && (
+         <>
+           <SectionTitle title="我参与的项目" subtitle="协作项目与主线分开，保留分工与方法入口" />
+           <div className="research-project-cards is-participant">
+             {otherParticipantProjects.map((project) => {
+               const projectStage = PIPELINE_STAGES.find((item) => item.key === project.currentStage);
+               const projectStageIndex = PIPELINE_STAGES.findIndex((item) => item.key === project.currentStage);
+               return (
+                 <button
+                   key={project.id}
+                   type="button"
+                   className="research-project-card"
+                   onClick={() => switchProject(project.id)}
+                 >
+                   <div className="research-project-card-head">
+                     <strong>{project.name}</strong>
+                     <span className="project-role-badge is-participant">{projectRoleLabel(project)}</span>
+                   </div>
+                   <div className="research-mini-rail" aria-hidden="true">
+                     {PIPELINE_STAGES.map((item, index) => (
+                       <i key={item.key} className={index < projectStageIndex ? 'is-done' : index === projectStageIndex ? 'is-current' : ''} />
+                     ))}
+                   </div>
+                   <small>{projectStage ? `当前阶段 ${projectStage.order}. ${projectStage.label}` : '尚未开始'} · 文献 {project.referenceIds.length}</small>
+                 </button>
+               );
+             })}
+           </div>
+         </>
+       )}
       <SectionTitle title="最近工作" subtitle="文献与项目入口" />
       <div className="research-recent-grid">
         <section className="research-list-panel">
@@ -783,7 +816,7 @@ export function DashboardView() {
         </section>
         <section className="research-list-panel">
           <header><h2><Icon name={NAV_ICONS.projects} size={18} /> 全部项目</h2><button onClick={() => setView('projects')}>管理</button></header>
-          {projects.length === 0 ? <p className="research-list-empty">暂无项目。</p> : projects.slice(0, 5).map((project) => (
+           {projects.length === 0 ? <p className="research-list-empty">暂无项目。</p> : orderedProjects.slice(0, 5).map((project) => (
             <button
               key={project.id}
               className={`research-list-row ${project.id === focusedProject?.id ? 'is-active' : ''}`}
