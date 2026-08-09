@@ -1,6 +1,6 @@
 {
   "name": "selenyx",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Selenyx 科研工作台 — 本地优先、BYOK、八段科研流水线（TypeScript + Python + Tauri 多语言架构）",
   "license": "MIT",

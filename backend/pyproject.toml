@@ -1,6 +1,6 @@
 [project]
 name = "selenyx-backend"
-version = "0.0.1"
+version = "0.1.0"
 description = "Selenyx 科研工作台后端 — FastAPI + SQLModel + SQLite"
 requires-python = ">=3.11"
 dependencies = [

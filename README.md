@@ -20,17 +20,19 @@ Selenyx 把科研工作流收进**一个完全在你本机运行**的工作区�
 
 ## 界面
 
-| 总览（主线课题 + 北京时间 + 番茄钟） | 文献库（行内导出/删除） |
+| 总览（主线课题 + 证据健康 + 番茄钟） | 总览 · 内嵌 AI 助手（新建任务入口） |
 |---|---|
-| ![总览](docs/screenshots/overview-paper-green.png) | ![文献库](docs/screenshots/references.png) |
+| ![总览](docs/screenshots/v2/overview.png) | ![AI 助手](docs/screenshots/v2/overview-assistant.png) |
 
-### 三套主题 × 日夜 × 三档密度
+| 任务（agent 自循环：规划→执行→成稿） | 专家（角色化 subagent 人格） |
+|---|---|
+| ![任务](docs/screenshots/v2/tasks.png) | ![专家](docs/screenshots/v2/experts.png) |
 
-同一份 DOM 与功能，只切换设计令牌，切换不重排信息架构：
+| 文献库（检索 + 行内导出/删除） | 设置（主题 / 密度 / 仙鹤桌宠开关） |
+|---|---|
+| ![文献库](docs/screenshots/v2/references.png) | ![设置](docs/screenshots/v2/settings.png) |
 
-| 纸间豆绿（默认） | 瑞士蓝 | 墨岩·新粗野 |
-|---|---|---|
-| ![](docs/screenshots/overview-paper-green.png) | ![](docs/screenshots/overview-swiss-blue.png) | ![](docs/screenshots/overview-ink-classic.png) |
+默认**墨白**黑白极简主题（仅新装）；另有纸间豆绿、瑞士蓝、墨岩·新粗野，均支持日夜切换与三档密度——同一份 DOM，只换设计令牌，不重排信息架构。仙鹤桌宠在桌面端是透明置顶小窗（随机踱步/飞行），网页端降级为应用内右下角漂浮。
 
 ## 核心特性
 
@@ -40,6 +42,8 @@ Selenyx 把科研工作流收进**一个完全在你本机运行**的工作区�
 - **本地 RAG**：结构化解析（保留页码/区域/字符偏移）→ 稀疏 + 稠密检索 → 重排 → 人工证据门；解析失败保留原文件并显示原因。
 - **学术连接器**：OpenAlex / Crossref / PubMed / arXiv（限流 + 诚实空结果，绝不编造）。
 - **AI 助手**：项目级会话隔离，BYOK / 本地后端网关；「仅依据已接受证据」开启后，无证据必拒答。
+- **Agent 任务**：把研究目标交给本机 agent 自循环（规划 → 检索 → 执行 → 成稿），步骤全程落库可审计；可选「成稿前批评审查」；定时自动化（每日/间隔）驱动无人值守任务。
+- **专家与连接器**：角色化专家人格（文献综述员/论文批评员/统计顾问/写作教练）可在对话启用、也可被 agent 委托为子代理；连接器页汇总本机能力状态。
 - **统计工具 / 全学科资料 / 工具箱**：名词、数值、公式、标准规范均标注来源与适用范围。
 
 ## 下载安装包
