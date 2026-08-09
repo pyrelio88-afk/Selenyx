@@ -1,20 +1,32 @@
 """Selenyx local FastAPI application."""
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from selenyx_backend.database import init_db
-from selenyx_backend.routers import ai, citations, clinical, evidence, projects, references, search, zotero
+from selenyx_backend.routers import agent, ai, automations, citations, clinical, connectors, evidence, experts, projects, references, search, zotero
+from selenyx_backend.services.agent import registry
 from selenyx_backend.services.embeddings import embedding_runtime_summary
+from selenyx_backend.services.scheduler import scheduler_loop
 from selenyx_backend.settings import get_settings
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    yield
+    experts.seed_builtin_experts()
+    # 进程重启后进行中的 run 不可能还活着：收敛为 failed，避免前端永久轮询
+    registry.mark_stale_runs_failed()
+    stop = asyncio.Event()
+    scheduler = asyncio.create_task(scheduler_loop(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        await scheduler
 
 
 # CORS is a startup-only transport setting. Secrets and AI configuration are
@@ -44,6 +56,10 @@ app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
 app.include_router(clinical.router, prefix="/api/clinical", tags=["clinical"])
 app.include_router(citations.router, prefix="/api/citations", tags=["citations"])
 app.include_router(zotero.router, prefix="/api/zotero", tags=["zotero"])
+app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
+app.include_router(experts.router, prefix="/api/experts", tags=["experts"])
+app.include_router(automations.router, prefix="/api/automations", tags=["automations"])
+app.include_router(connectors.router, prefix="/api/connectors", tags=["connectors"])
 
 
 @app.get("/api/health")
@@ -58,5 +74,5 @@ async def health():
         # This reports configuration, not reachability. Dense calls always
         # retain a deterministic local fallback when the provider is offline.
         "embedding": embedding_runtime_summary(settings),
-        "features": ["references", "projects", "rag", "scholarly", "evidence", "zotero", "ai-gateway"],
+        "features": ["references", "projects", "rag", "scholarly", "evidence", "zotero", "ai-gateway", "agent", "experts", "automations"],
     }
