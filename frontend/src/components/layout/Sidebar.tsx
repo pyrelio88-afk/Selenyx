@@ -1,5 +1,6 @@
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
+import { Crane } from '@components/ui/Crane';
 import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 
 /**
@@ -55,7 +56,7 @@ export function Sidebar() {
     <aside className="sidebar workspace-sidebar" aria-label="科研工作台侧栏">
       <div className="workspace-brand">
         <div className="workspace-brand-mark" aria-hidden="true">
-          <img src="/brand/selenyx-crane.png" alt="" />
+          <Crane size={28} />
         </div>
         <div className="workspace-brand-name">Selenyx</div>
       </div>

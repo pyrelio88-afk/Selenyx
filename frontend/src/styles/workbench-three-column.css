@@ -1,0 +1,77 @@
+/**
+ * 统一三栏工作台骨架（功能守恒重构 · 第一阶段）
+ *
+ * 目标交互模式：左「对象/目录」— 中「主工作区」— 右「上下文/证据检查器」。
+ * 供 `ThreeColumnWorkbench` 组件使用；左右栏宽由内联 CSS 变量
+ * `--wb-left-w` / `--wb-right-w` 驱动（配合 usePersistentWorkbenchColumns）。
+ *
+ * 设计约束（对齐全局计划）：
+ * - 三主题共享同一 DOM 与语义，只用语义 token（--accent / --border / --bg-*），
+ *   因此纸间豆绿、瑞士蓝、墨岩·新粗野与日夜/密度切换自动生效。
+ * - 键盘与指针都可调整列宽（separator 语义由 hook 注入），尊重 reduced-motion。
+ * - 窄屏降级由具体视图决定（阶段轨横滚 / 单栏堆叠等），此处不强制断点。
+ */
+
+.wb-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    var(--wb-left-w, 200px)
+    minmax(var(--wb-center-min, 360px), 1fr)
+    minmax(var(--wb-right-min, 240px), var(--wb-right-w, 300px));
+  gap: var(--wb-gap, 16px);
+  min-width: 0;
+  align-items: start;
+}
+
+.wb-pane { min-width: 0; }
+
+/* grid 子项可收缩兜底：栏内容（各视图栏元素自身的语义类）通常已设
+   min-width:0，此处仅作保险，避免新视图栏内容溢出轨道。 */
+.wb-grid > * { min-width: 0; }
+
+/* 无右栏（例如移动端降级为 BottomSheet）时，左栏 + 中栏两列 */
+.wb-grid.wb-grid--no-right {
+  grid-template-columns:
+    var(--wb-left-w, 200px)
+    minmax(var(--wb-center-min, 360px), 1fr);
+}
+
+/* ---- 列宽拖拽柄（通用，替代各视图散落的 resizer 实现） ---- */
+.wb-grid > .workbench-column-resizer {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.wb-grid > .workbench-column-resizer::after {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 5px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: '';
+  transition: background var(--motion-instant, 120ms) ease;
+}
+
+.wb-grid > .workbench-column-resizer:hover::after,
+.wb-grid > .workbench-column-resizer:focus-visible::after,
+.wb-grid.is-resizing > .workbench-column-resizer::after { background: var(--accent); }
+
+.wb-grid > .workbench-column-resizer:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.wb-grid > .workbench-column-resizer.is-left { left: calc(var(--wb-left-w, 200px) - 6px); }
+.wb-grid > .workbench-column-resizer.is-right { right: calc(var(--wb-right-w, 300px) - 6px); }

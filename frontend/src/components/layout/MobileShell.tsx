@@ -3,6 +3,7 @@ import { useAppStore, type ViewKey } from '@stores/appStore';
 import { NAV_GROUPS } from '@components/layout/Sidebar';
 import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
+import { Crane } from '@components/ui/Crane';
 
 const VIEW_LABELS: Record<ViewKey, string> = (() => {
   const labels: Partial<Record<ViewKey, string>> = {};
@@ -135,7 +136,7 @@ export function MobileShell() {
           >
             <div className="mobile-drawer-header">
               <div className="mobile-drawer-brand">
-                <img className="mobile-drawer-brand-crane" src="/brand/selenyx-crane.png" alt="" aria-hidden="true" />
+                <Crane size={28} className="mobile-drawer-brand-crane" />
                 <span id="mobile-navigation-title">Selenyx</span>
               </div>
               <button
