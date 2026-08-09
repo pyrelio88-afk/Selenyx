@@ -18,7 +18,7 @@
     "verify:local": "node scripts/verify-local.mjs",
     "backend:dev": "cd backend && uv run uvicorn selenyx_backend.main:app --reload --port 8770",
     "backend:test": "cd backend && uv run --extra dev pytest -q",
-    "backend:bundle": "cd backend && uv run --extra package python -m PyInstaller --noconfirm --clean --onefile --name selenyx-backend --distpath dist --workpath build/pyinstaller --specpath build/pyinstaller sidecar.py && cd .. && node scripts/prepare-backend-sidecar.mjs",
+    "backend:bundle": "cd backend && uv run --extra package python -m PyInstaller --noconfirm --clean --onefile --name selenyx-backend --distpath dist --workpath build/pyinstaller --specpath build/pyinstaller --exclude-module tkinter --exclude-module turtle --exclude-module unittest --exclude-module pydoc --exclude-module test sidecar.py && cd .. && node scripts/prepare-backend-sidecar.mjs",
     "dev:local": "concurrently --kill-others-on-fail --names api,web \"npm run backend:dev\" \"npm run dev\"",
     "desktop:dev": "node scripts/dev-desktop.mjs",
     "desktop:doctor": "node scripts/check-desktop-prereqs.mjs",

@@ -32,7 +32,6 @@ desktop/gen/
 desktop/binaries/
 desktop/.cache/
 desktop/release/
-desktop/resources/ollama/OllamaSetup.exe
 *.tsbuildinfo
 *.bak
 

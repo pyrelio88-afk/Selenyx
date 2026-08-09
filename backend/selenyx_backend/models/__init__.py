@@ -145,6 +145,35 @@ class AgentRun(SQLModel, table=True):
     completed_at: Optional[str] = None
 
 
+class Expert(SQLModel, table=True):
+    """角色化研究助手（专家）——隔离 system prompt 的 subagent 人格"""
+    __tablename__ = "experts"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    key: str = Field(index=True, default="")
+    name: str = ""
+    tagline: str = ""
+    system_prompt: str = ""
+    builtin: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class AutomationTask(SQLModel, table=True):
+    """自动化：按节奏触发 agent 任务的调度定义"""
+    __tablename__ = "automation_tasks"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    name: str = ""
+    prompt: str = ""
+    schedule_type: str = "daily"  # interval | daily
+    interval_min: int = 60
+    daily_hhmm: str = "08:00"
+    project_id: str = ""
+    enabled: bool = True
+    last_run_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
 class DocumentChunk(SQLModel, table=True):
     """RAG 文本块（带页码/字符偏移，extractive 引用）"""
     __tablename__ = "document_chunks"

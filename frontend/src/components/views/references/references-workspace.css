@@ -460,38 +460,11 @@
     display: none !important;
   }
 
-  .reference-column-resizer {
-    position: absolute;
-    z-index: 6;
-    top: 0;
-    bottom: 0;
-    width: 12px;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: col-resize;
-    touch-action: none;
-  }
-
-  .reference-column-resizer::after {
-    position: absolute;
-    top: 12px;
-    bottom: 12px;
-    left: 5px;
-    width: 2px;
-    border-radius: 999px;
-    background: transparent;
-    content: '';
-    transition: background 120ms ease;
-  }
-
-  .reference-column-resizer:hover::after,
-  .reference-column-resizer:focus-visible::after,
-  .references-workspace.is-resizing .reference-column-resizer::after { background: var(--accent); }
-  .reference-column-resizer:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: -1px; }
-  .reference-column-resizer.is-left { left: calc(var(--reference-list-width, 292px) - 6px); }
-  .reference-column-resizer.is-right { right: calc(var(--reference-rag-width, 320px) - 6px); }
+  /* 拖拽柄结构/视觉复用共享 .workbench-column-resizer（workbench-three-column.css），
+     此处只提供阅读布局的定位；z-index 6 压过 sticky 详情/证据面板。 */
+  .workbench-column-resizer { z-index: 6; }
+  .workbench-column-resizer.is-left { left: calc(var(--reference-list-width, 292px) - 6px); }
+  .workbench-column-resizer.is-right { right: calc(var(--reference-rag-width, 320px) - 6px); }
 }
 
 .references-workspace .view-title {

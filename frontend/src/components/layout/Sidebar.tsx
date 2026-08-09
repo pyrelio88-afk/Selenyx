@@ -16,33 +16,51 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: '',
     items: [
-      { key: 'dashboard', label: '总览', hint: '进度与倒数日' },
-      { key: 'aiChat', label: 'AI 助手', hint: '项目会话与证据问答' },
+      { key: 'dashboard', label: '总览', hint: '进度、倒数日与 AI 助手' },
+    ],
+  },
+  {
+    label: '任务',
+    items: [
+      { key: 'tasks', label: '任务', hint: '新建 agent 任务，规划→执行→成稿' },
+      { key: 'pipeline', label: '科研流水线', hint: '立题→检索→评级→设计→数据→分析→写作→传播' },
     ],
   },
   {
     label: '项目',
     items: [
       { key: 'projects', label: '项目管理', hint: '创建、切换与删除项目' },
-      { key: 'references', label: '文献库', hint: '检索 · 导入 · 全文' },
       { key: 'notes', label: '阅读笔记', hint: '摘录与批注' },
-      { key: 'pipeline', label: '科研流水线', hint: '立题→检索→评级→设计→数据→分析→写作→传播' },
+      { key: 'tables', label: '数据表', hint: '筛选与对照' },
     ],
   },
   {
-    label: '数据',
+    label: '资料库',
     items: [
-      { key: 'tables', label: '数据表', hint: '筛选与对照' },
-      { key: 'statTools', label: '统计工具', hint: '检验与效应量' },
+      { key: 'references', label: '文献库', hint: '检索 · 导入 · 全文' },
       { key: 'clinicalData', label: '学科资料', hint: '名词 · 标准 · 公式' },
     ],
   },
   {
     label: '工具',
     items: [
-      { key: 'skills', label: '科研能力', hint: '能力来源与验证状态' },
+      { key: 'statTools', label: '统计工具', hint: '检验与效应量' },
       { key: 'tools', label: '工具箱', hint: 'DOI · 引用 · 设计' },
-      { key: 'settings', label: '设置', hint: '后端 · 主题 · 备份' },
+    ],
+  },
+  {
+    label: '扩展',
+    items: [
+      { key: 'automations', label: '自动化', hint: '定时运行的 agent 任务' },
+      { key: 'experts', label: '专家', hint: '角色化研究助手' },
+      { key: 'skills', label: '科研能力', hint: '能力来源与验证状态' },
+      { key: 'connectors', label: '连接器', hint: '本机与外部服务状态' },
+    ],
+  },
+  {
+    label: '',
+    items: [
+      { key: 'settings', label: '设置', hint: '后端 · API · 主题 · 备份' },
     ],
   },
 ];

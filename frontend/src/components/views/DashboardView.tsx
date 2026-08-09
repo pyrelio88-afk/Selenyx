@@ -12,6 +12,7 @@ import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
 import { evidenceApi } from '@services/api';
 import { orderProjectsForWorkspace, projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
+import { AIChatView } from '@components/views/AIChatView';
 import './dashboard-workbench.css';
 
 // === 番茄钟组件（R86: 自定义事件） ===
@@ -837,6 +838,18 @@ export function DashboardView() {
           ))}
         </section>
       </div>
+      <SectionTitle title="AI 助手" subtitle="项目会话与证据问答；更大的目标可新建任务交给 agent" />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <button type="button" className="btn btn-primary" onClick={() => setView('tasks')} style={{ minHeight: 36 }}>
+          <Icon name="plus" size={15} /> 新建任务
+        </button>
+        <button type="button" className="btn" onClick={() => setView('aiChat')} style={{ minHeight: 36 }}>
+          全屏打开助手
+        </button>
+      </div>
+      <section className="research-assistant" aria-label="AI 助手">
+        <AIChatView embedded />
+      </section>
         </div>
         <aside className="research-dashboard-rail" aria-label="时间与专注">
           <ClockWidget />

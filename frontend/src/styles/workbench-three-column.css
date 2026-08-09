@@ -37,8 +37,39 @@
     minmax(var(--wb-center-min, 360px), 1fr);
 }
 
-/* ---- 列宽拖拽柄（通用，替代各视图散落的 resizer 实现） ---- */
-.wb-grid > .workbench-column-resizer {
+/* 左/右栏收起态：轨道宽度换成 --wb-*-collapsed-w（默认 0）。
+   栏元素仍渲染，收起后的视觉（滑出动画 / 窄条）由视图 CSS 决定。 */
+.wb-grid.wb-grid--left-collapsed {
+  grid-template-columns:
+    var(--wb-left-collapsed-w, 0px)
+    minmax(var(--wb-center-min, 360px), 1fr)
+    minmax(var(--wb-right-min, 240px), var(--wb-right-w, 300px));
+}
+
+.wb-grid.wb-grid--right-collapsed {
+  grid-template-columns:
+    var(--wb-left-w, 200px)
+    minmax(var(--wb-center-min, 360px), 1fr)
+    var(--wb-right-collapsed-w, 0px);
+}
+
+.wb-grid.wb-grid--left-collapsed.wb-grid--right-collapsed {
+  grid-template-columns:
+    var(--wb-left-collapsed-w, 0px)
+    minmax(var(--wb-center-min, 360px), 1fr)
+    var(--wb-right-collapsed-w, 0px);
+}
+
+.wb-grid.wb-grid--no-right.wb-grid--left-collapsed {
+  grid-template-columns:
+    var(--wb-left-collapsed-w, 0px)
+    minmax(var(--wb-center-min, 360px), 1fr);
+}
+
+/* ---- 列宽拖拽柄（通用，替代各视图散落的 resizer 实现） ----
+   结构/视觉不限定 .wb-grid：任何 position:relative 的三栏容器均可复用
+   （References 条件阅读布局即用同一份）；定位由各布局的 is-left/is-right 提供。 */
+.workbench-column-resizer {
   position: absolute;
   z-index: 4;
   top: 0;
@@ -52,7 +83,7 @@
   touch-action: none;
 }
 
-.wb-grid > .workbench-column-resizer::after {
+.workbench-column-resizer::after {
   position: absolute;
   top: 12px;
   bottom: 12px;
@@ -64,11 +95,12 @@
   transition: background var(--motion-instant, 120ms) ease;
 }
 
-.wb-grid > .workbench-column-resizer:hover::after,
-.wb-grid > .workbench-column-resizer:focus-visible::after,
-.wb-grid.is-resizing > .workbench-column-resizer::after { background: var(--accent); }
+.workbench-column-resizer:hover::after,
+.workbench-column-resizer:focus-visible::after,
+.wb-grid.is-resizing > .workbench-column-resizer::after,
+.references-workspace.is-resizing > .workbench-column-resizer::after { background: var(--accent); }
 
-.wb-grid > .workbench-column-resizer:focus-visible {
+.workbench-column-resizer:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }

@@ -15,10 +15,10 @@
  * 持久化：localStorage，按项目 scope 隔离；自动迁移旧版单会话历史。
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { useIsMobile } from '@lib/useIsMobile';
-import { usePersistentWorkbenchColumns } from '@lib/usePersistentWorkbenchColumns';
+import { ThreeColumnWorkbench } from '@components/layout/ThreeColumnWorkbench';
 import { streamChat, LLMError, type LLMMessage } from '@services/llm';
 import { evidenceApi, type EvidenceRecord } from '@services/api';
 import { Icon } from '@components/ui/Icon';
@@ -156,7 +156,7 @@ function loadSessions(scope: string): { sessions: Session[]; activeId: string | 
 
 /* ============ 主组件 ============ */
 
-export function AIChatView() {
+export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   const {
     llmConfig, setLLMConfig, projects, currentProjectId,
     setCurrentProject, setView, references,
@@ -171,15 +171,10 @@ export function AIChatView() {
   // Keep the scope that produced the in-memory sessions. A new project first
   // renders with old React state, which must never be persisted under its key.
   const [sessionScope, setSessionScope] = useState(scope);
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (embedded ? false : window.innerWidth > 768));
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [evidenceRailOpen, setEvidenceRailOpen] = useState(true);
-  const panes = usePersistentWorkbenchColumns({
-    storageKey: 'selenyx.ai-workbench.columns',
-    initial: { left: 248, right: 286 },
-    limits: { left: [208, 340], right: [246, 420] },
-  });
+  const [evidenceRailOpen, setEvidenceRailOpen] = useState(!embedded);
   const [acceptedOnly, setAcceptedOnly] = useState(false);
   const [constraintNotice, setConstraintNotice] = useState('');
   const [evidenceState, setEvidenceState] = useState<{
@@ -648,13 +643,7 @@ export function AIChatView() {
   /* ============ 渲染 ============ */
 
   return (
-    <div
-      className={`aichat-root aichat-workbench ${sidebarOpen ? 'is-sidebar-open' : ''} ${evidenceRailOpen ? 'is-evidence-open' : ''}${panes.dragging ? ' is-resizing' : ''}`}
-      style={{
-        '--aichat-session-width': `${panes.left}px`,
-        '--aichat-evidence-width': `${panes.right}px`,
-      } as CSSProperties}
-    >
+    <div className={embedded ? 'aichat-root is-embedded' : 'aichat-root'}>
       {isMobile && sidebarOpen && (
         <button
           type="button"
@@ -664,7 +653,19 @@ export function AIChatView() {
           tabIndex={-1}
         />
       )}
-      {/* 会话侧栏 */}
+      <ThreeColumnWorkbench
+        storageKey="selenyx.ai-workbench.columns"
+        initial={{ left: 248, right: 286 }}
+        limits={{ left: [208, 340], right: [246, 420] }}
+        leftLabel="会话列表"
+        rightLabel="证据轨"
+        className={`aichat-workbench ${sidebarOpen ? 'is-sidebar-open' : ''} ${evidenceRailOpen ? 'is-evidence-open' : ''}`}
+        leftWidthVar="--aichat-session-width"
+        rightWidthVar="--aichat-evidence-width"
+        leftCollapsed={!sidebarOpen}
+        rightCollapsed={!evidenceRailOpen}
+        rightCollapsedWidth={46}
+        left={(
       <aside
         className={`aichat-sidebar ${sidebarOpen ? 'open' : ''} ${isMobile ? 'mobile-full' : ''}`}
         aria-label={`${project?.name ?? '全局'}的会话列表`}
@@ -715,12 +716,8 @@ export function AIChatView() {
           )}
         </div>
       </aside>
-
-      {!isMobile && sidebarOpen && (
-        <button className="aichat-column-resizer is-left" aria-label="调整会话列表宽度" {...panes.leftHandleProps} />
-      )}
-
-      {/* 主对话区 */}
+        )}
+        center={(
       <section className="aichat-main">
         <header className="aichat-header">
           <button
@@ -912,12 +909,8 @@ export function AIChatView() {
           </div>
         </div>
       </section>
-
-      {!isMobile && (
-        <>
-          {evidenceRailOpen && (
-            <button className="aichat-column-resizer is-right" aria-label="调整证据轨宽度" {...panes.rightHandleProps} />
-          )}
+        )}
+        right={(
           <aside className={`aichat-evidence-rail ${evidenceRailOpen ? 'open' : 'collapsed'}`} aria-label="项目证据轨">
           <div className="aichat-evidence-head">
             {evidenceRailOpen && (
@@ -986,8 +979,8 @@ export function AIChatView() {
             </>
           )}
           </aside>
-        </>
-      )}
+        )}
+      />
     </div>
   );
 

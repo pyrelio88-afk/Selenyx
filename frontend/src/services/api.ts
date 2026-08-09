@@ -14,7 +14,7 @@ const API_BASE = (isMobileTauri()
   ? ''
   : configuredApiBase || (isDesktopTauri() ? 'http://127.0.0.1:8770/api' : '/api')).replace(/\/$/, '');
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!API_BASE) {
     throw new Error('The mobile app is offline-first. A paired companion service is not available in this build.');
   }
@@ -185,8 +185,6 @@ export const aiApi = {
   config: () => request<{ configured: boolean; baseUrl: string; model: string }>('/ai/config'),
   chat: (messages: Omit<ChatMessage, 'id' | 'timestamp'>[], projectId?: string) =>
     request<ChatMessage>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, projectId }) }),
-  runRecipe: (recipeId: string, input: string, projectId: string) =>
-    request<{ runId: string; status: string }>('/ai/recipes/run', { method: 'POST', body: JSON.stringify({ recipeId, input, projectId }) }),
   testConnection: () => request<{ ok: boolean; model: string }>('/ai/test'),
 };
 

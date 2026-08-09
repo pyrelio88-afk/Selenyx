@@ -12,6 +12,8 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use tauri::Manager;
 
+mod pet;
+
 #[cfg(all(not(mobile), any(not(debug_assertions), test)))]
 use tauri_plugin_shell::ShellExt;
 
@@ -445,7 +447,8 @@ pub fn run() {
             app_data_dir,
             has_bundled_ollama_installer,
             reveal_bundled_ollama_installer,
-            save_llm_config
+            save_llm_config,
+            pet::toggle_pet
         ])
         .setup(|app| {
             // 创建数据目录 ~/.selenyx/

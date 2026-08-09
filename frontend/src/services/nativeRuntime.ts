@@ -53,6 +53,11 @@ export function saveLocalLLMConfig(config: LocalLLMConfigInput): Promise<void> {
   return invoke<void>('save_llm_config', { config });
 }
 
+/** 切换仙鹤桌宠（桌面端独立透明窗口）；返回切换后的可见状态。 */
+export function setPetVisible(visible: boolean): Promise<boolean> {
+  return invoke<boolean>('toggle_pet', { visible });
+}
+
 export function exportNativeState(json: string): Promise<string> {
   return invoke<string>('export_state', { json });
 }
@@ -64,14 +69,4 @@ export function importNativeState(): Promise<string | null> {
 /** Deletes only the explicit native JSON recovery snapshot. */
 export function deleteNativeStateBackup(): Promise<void> {
   return invoke<void>('delete_state_backup');
-}
-
-/** Reveals the installer in Explorer; the app never executes it. */
-export function revealBundledOllamaInstaller(): Promise<void> {
-  return invoke<void>('reveal_bundled_ollama_installer');
-}
-
-/** Read-only capability probe; it never downloads, launches, or installs. */
-export function hasBundledOllamaInstaller(): Promise<boolean> {
-  return invoke<boolean>('has_bundled_ollama_installer');
 }

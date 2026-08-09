@@ -32,6 +32,11 @@ export function useTheme() {
 
 export const THEME_OPTIONS: { key: ThemeName; name: string; description: string }[] = [
   {
+    key: 'mono',
+    name: '墨白',
+    description: '黑白极简、1px 细线、零阴影，焦点清晰',
+  },
+  {
     key: 'paper-green',
     name: '纸间豆绿',
     description: '暖纸白、豆绿强调、克制的 1.5px 边线与硬影',

@@ -10,6 +10,8 @@ const VIEW_LABELS: Record<ViewKey, string> = (() => {
   for (const group of NAV_GROUPS) {
     for (const item of group.items) labels[item.key] = item.label;
   }
+  // 不在侧边栏导航、但可经深链进入的视图（技能/专家注入跳全屏 AI 会话）
+  labels.aiChat ??= 'AI 助手';
   return labels as Record<ViewKey, string>;
 })();
 
@@ -20,7 +22,7 @@ const QUICK_NAV: Array<{ key: ViewKey; label: string }> = [
   // not a substitute for project ownership and project switching.
   { key: 'projects', label: '项目' },
   { key: 'references', label: '文献' },
-  { key: 'aiChat', label: 'AI' },
+  { key: 'tasks', label: '任务' },
 ];
 
 function focusMainContent() {

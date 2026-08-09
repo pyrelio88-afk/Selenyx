@@ -302,7 +302,3 @@ async def chat_stream(request: ChatRequest):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-
-@router.post("/recipes/run")
-def run_recipe(recipe_id: str, input: str, project_id: str):
-    return {"runId": f"run-{datetime.now().timestamp()}", "status": "staged", "recipeId": recipe_id, "projectId": project_id}

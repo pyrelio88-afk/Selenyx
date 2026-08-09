@@ -49,7 +49,7 @@ Windows 可显式制作离线能力包：
 npm run desktop:build:offline-pack
 \`\`\`
 
-该命令才会准备约 1.46 GiB 的固定版本 Ollama 安装器并校验精确大小与 SHA-256，同时选择 Tauri 的 WebView2 离线前置包。能力包仍不包含任何 Ollama 模型权重；模型需由用户明确拉取。普通 \`desktop:build\` 不下载、不打包这些大资源。Selenyx 只会在 Windows 文件夹中定位 Ollama 安装器，绝不代替用户运行。旧命令 \`desktop:build:with-ollama\` 仅作为兼容别名保留。对外分发前需复核上游许可条款。
+该命令选择 Tauri 的 WebView2 离线前置包，除此以外与普通包一致：**任何构建都不附带 Ollama 安装器或 AI 模型权重**（桌面前置检查脚本会强制拦截此类资源）。Ollama 属于用户自行安装的 BYOK 运行时——应用在「设置 → AI 配置」提供 ollama.com 官网下载引导，装好后由用户自行 \`ollama pull <模型>\`。旧命令 \`desktop:build:with-ollama\` 仅作为兼容别名保留，行为与 offline-pack 相同。
 
 通过桌面 Junction 启动脚本时，发布脚本会先解析到真实物理目录，再将同一条规范路径交给 Node、Cargo 和 Tauri，避免同一仓库因 Desktop/OneDrive 两种路径产生重复缓存或 sidecar 资源错位。
 
@@ -95,3 +95,10 @@ npm run verify:local
 \`\`\`
 
 发布桌面应用时，再在目标平台运行 \`npm run desktop:doctor\` 和 \`npm run desktop:build\`。工作流产物不等于已验收发布；发布前仍应实际安装并检查 sidecar、数据持久化、导入导出、RAG、离线 OCR 和主流程。
+
+## 8. 体积基线（2026-08-09，P8 后）
+
+- 前端 \`frontend/dist/\` 共 28MB：单文件 \`index.html\` 9.72MB（gzip 2.00MB，KaTeX 仅 woff2）、\`anydoc.wasm\` 6.4MB、OCR 四核心与双语模型、\`pet.html\` 3.6KB（仙鹤桌宠窗口页）。
+- 后端 sidecar \`selenyx-backend.exe\` 21.4MB（PyInstaller onefile；已 exclude tkinter/turtle/unittest/pydoc/test，较未排除时 -0.29MB）。
+- 前端按需化：echarts 走 \`echarts/core\` 按需注册；pdfjs-dist 动态 import 延迟到首次打开 PDF。构建为单文件模式（viteSingleFile + inlineDynamicImports），manualChunks 不适用。
+- 本机注意：构建前需在沙箱外 \`rm -rf frontend/dist\`（safe-delete 会拦截 vite emptyDir 删 anydoc.wasm）；PyInstaller 勿用 \`--clean\` 同因，改为手动删 \`backend/build/pyinstaller\`。

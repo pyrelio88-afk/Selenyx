@@ -716,8 +716,8 @@ export function ReferencesView() {
     >
       {selected && !isMobile && (
         <>
-          <button className="reference-column-resizer is-left" aria-label="调整文献列表宽度" {...panes.leftHandleProps} />
-          <button className="reference-column-resizer is-right" aria-label="调整证据检查器宽度" {...panes.rightHandleProps} />
+          <button className="workbench-column-resizer is-left" aria-label="调整文献列表宽度" {...panes.leftHandleProps} />
+          <button className="workbench-column-resizer is-right" aria-label="调整证据检查器宽度" {...panes.rightHandleProps} />
         </>
       )}
       <div className="view-header">

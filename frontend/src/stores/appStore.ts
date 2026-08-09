@@ -24,9 +24,10 @@ import { mirrorWorkspace, removeMirroredProject, type WorkspaceSyncStatus } from
 export type ViewKey =
   | 'dashboard' | 'projects' | 'references' | 'pipeline'
   | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings' | 'tools' | 'skills'
-  | 'notes';
+  | 'notes'
+  | 'tasks' | 'automations' | 'experts' | 'connectors';
 
-export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic';
+export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic' | 'mono';
 export type ThemeMode = 'light' | 'dark';
 export type Density = 'compact' | 'comfortable' | 'spacious';
 
@@ -130,6 +131,11 @@ interface AppState {
   /** 跨视图触发：从流水线/文献页快速记笔记后，记录待打开的笔记 id */
   pendingNoteId: string | null;
   setPendingNoteId: (id: string | null) => void;
+
+  // === 仙鹤桌宠 ===
+  /** 桌面端为独立透明窗口；Web/移动端降级为应用内漂浮鹤 */
+  petEnabled: boolean;
+  setPetEnabled: (enabled: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -138,13 +144,16 @@ export const useAppStore = create<AppState>()(
       currentView: 'dashboard' as ViewKey,
       setView: (v) => set({ currentView: v }),
 
-      theme: 'paper-green',
+      theme: 'mono',
       mode: 'light',
       density: 'comfortable',
       setTheme: (t) => set({ theme: t }),
       setMode: (m) => set({ mode: m }),
       toggleMode: () => set((s) => ({ mode: s.mode === 'light' ? 'dark' : 'light' })),
       setDensity: (d) => set({ density: d }),
+
+      petEnabled: true,
+      setPetEnabled: (enabled) => set({ petEnabled: enabled }),
 
       references: [],
       referenceSyncStatus: 'idle',

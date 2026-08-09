@@ -173,4 +173,8 @@ export const NAV_ICONS: Record<string, IconName> = {
   skills: 'skills',
   notes: 'notes',
   tools: 'blueprint',
+  tasks: 'target',
+  automations: 'clock',
+  experts: 'sparkles',
+  connectors: 'globe',
 };

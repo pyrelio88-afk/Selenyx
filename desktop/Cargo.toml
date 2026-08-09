@@ -21,6 +21,7 @@ tauri-plugin-http = "2"
 tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tokio = { version = "1", features = ["time"] }
 
 [features]
 default = ["desktop"]

@@ -7,6 +7,7 @@ import { PIPELINE_STAGES } from '@apptypes/project';
 import { NOTE_CATEGORIES, NOTE_MOODS } from '@apptypes/index';
 import type { Note, PipelineStageKey, Reference, ResearchProject } from '@apptypes/index';
 import { renderMarkdown } from '@utils/markdown';
+import { ThreeColumnWorkbench } from '@components/layout/ThreeColumnWorkbench';
 import './notes-workbench.css';
 
 const STAGE_LABEL: Record<string, string> = Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage.key, stage.label]));
@@ -220,8 +221,17 @@ export function NotesView() {
         </div>
       )}
 
-      <div className="notes-workbench-layout">
-        {showList && (
+      <ThreeColumnWorkbench
+        storageKey="selenyx.notes-workbench.columns"
+        initial={{ left: 294, right: 258 }}
+        limits={{ left: [220, 420], right: [200, 380] }}
+        leftLabel="笔记列表"
+        rightLabel="上下文面板"
+        className="notes-workbench-layout"
+        centerMin={380}
+        rightMin={200}
+        collapseRightOnMobile={false}
+        left={showList ? (
           <aside className="notes-list-pane" aria-label="笔记列表">
             {filtered.length === 0 ? <div className="notes-no-results"><Icon name="search" size={22} /><span>没有匹配的笔记</span></div> : filtered.map((note) => (
               <button key={note.id} className={`notes-list-item ${selectedId === note.id ? 'is-active' : ''}`} onClick={() => openNote(note)} aria-current={selectedId === note.id ? 'page' : undefined}>
@@ -231,9 +241,8 @@ export function NotesView() {
               </button>
             ))}
           </aside>
-        )}
-
-        {showDocument && (
+        ) : <div aria-hidden="true" />}
+        center={showDocument ? (
           <section className="notes-document-pane" aria-label="笔记内容">
             {!selected ? (
               <div className="notes-document-empty"><Icon name="notes" size={38} /><p>从左侧选择笔记，或新建一条开始记录。</p></div>
@@ -243,9 +252,8 @@ export function NotesView() {
               <DetailPanel note={selected} onEdit={startEdit} onPin={() => toggleNotePin(selected.id)} onDelete={removeNote} />
             )}
           </section>
-        )}
-
-        {showDocument && selected && (
+        ) : <div aria-hidden="true" />}
+        right={showDocument && selected ? (
           <ContextPanel
             note={editing && draft ? draft : selected}
             editing={editing}
@@ -256,8 +264,8 @@ export function NotesView() {
             toggleLinkedReference={toggleLinkedReference}
             onJumpReferences={() => setView('references')}
           />
-        )}
-      </div>
+        ) : <div aria-hidden="true" />}
+      />
     </div>
   );
 }

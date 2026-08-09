@@ -15,7 +15,10 @@
 .notes-search input, .notes-context-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; }
 .notes-filterbar select, .notes-editor-fields input, .notes-editor-fields select, .notes-context-pane select { min-height: 44px; border: 1px solid var(--notes-line); border-radius: 8px; background: var(--bg-surface); color: var(--text-primary); font: inherit; font-size: 12px; padding: 0 10px; }
 
-.notes-workbench-layout { display: grid; grid-template-columns: 294px minmax(380px, 1fr) 258px; min-height: min(730px, calc(100vh - 190px)); overflow: hidden; border: 1px solid var(--notes-line); border-radius: 14px; background: var(--bg-surface); }
+/* 三栏轨道（列宽/拖拽/收起）由统一骨架 .wb-grid 管理，列宽经 --wb-left-w/--wb-right-w 注入；
+   本视图只保留视觉：栏间无间距（边框分隔）、栏内容拉伸填满行高（覆盖骨架 align-items:start）。
+   提权到 (0,2,0) 确保压过骨架同级定义。 */
+.notes-workbench .notes-workbench-layout { --wb-gap: 0px; min-height: min(730px, calc(100vh - 190px)); overflow: hidden; align-items: stretch; border: 1px solid var(--notes-line); border-radius: 14px; background: var(--bg-surface); }
 .notes-list-pane { min-width: 0; overflow-y: auto; border-right: 1px solid var(--notes-line); background: color-mix(in srgb, var(--bg-canvas) 76%, var(--bg-surface)); }
 .notes-list-item { display: grid; gap: 7px; width: 100%; min-height: 96px; padding: 12px 13px; border: 0; border-bottom: 1px solid var(--notes-line); background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
 .notes-list-item:hover { background: var(--bg-hover); }
@@ -93,9 +96,11 @@
 .notes-workbench button:focus-visible, .notes-workbench input:focus-visible, .notes-workbench select:focus-visible, .notes-workbench textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 @media (max-width: 1280px) and (min-width: 768px) {
-  .notes-workbench-layout { grid-template-columns: 250px minmax(360px, 1fr); }
-  .notes-list-pane { grid-row: 1 / span 2; }
-  .notes-context-pane { grid-column: 2; border-top: 1px solid var(--notes-line); border-left: 0; }
+  /* 提权 (0,3,0) 压过骨架 .wb-grid 三列定义：中屏降为 左列表 | 右(文档+上下文) 两列，拖拽柄隐藏 */
+  .notes-workbench .notes-workbench-layout.wb-grid { grid-template-columns: minmax(220px, 250px) minmax(360px, 1fr); }
+  .notes-workbench .notes-workbench-layout .workbench-column-resizer { display: none; }
+  .notes-workbench .notes-list-pane { grid-row: 1 / span 2; }
+  .notes-workbench .notes-context-pane { grid-column: 2; border-top: 1px solid var(--notes-line); border-left: 0; }
   .notes-document, .notes-editor { padding-inline: 20px; }
 }
 
@@ -104,7 +109,13 @@
   .notes-search { grid-column: 1 / -1; }
   .notes-filterbar select:last-child { grid-column: 1 / -1; }
   .notes-filterbar select { width: 100%; }
-  .notes-workbench-layout { display: block; min-height: 0; overflow: visible; border-radius: 10px; }
+  /* 提权 (0,3,0) 压过骨架各态 grid 定义：移动端单栏堆叠，拖拽柄隐藏 */
+  .notes-workbench .notes-workbench-layout.wb-grid,
+  .notes-workbench .notes-workbench-layout.wb-grid--no-right,
+  .notes-workbench .notes-workbench-layout.wb-grid--left-collapsed,
+  .notes-workbench .notes-workbench-layout.wb-grid--right-collapsed,
+  .notes-workbench .notes-workbench-layout.wb-grid--left-collapsed.wb-grid--right-collapsed { display: block; min-height: 0; overflow: visible; border-radius: 10px; }
+  .notes-workbench .notes-workbench-layout .workbench-column-resizer { display: none; }
   .notes-list-pane { overflow: visible; border-right: 0; }
   .notes-list-item { min-height: 104px; }
   .notes-document-pane { overflow: visible; }

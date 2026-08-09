@@ -1,0 +1,6 @@
+# 默认：文本文件交给 git 自动判断（Windows 工作区 autocrlf=true）
+* text=auto
+
+# 离线运行资源：minified JS / wasm / 模型 / 许可证文本一律禁止换行转换。
+# scripts/check-offline-assets.mjs 对这些文件做 sha256 钉版校验，CRLF 转换会破坏哈希。
+frontend/public/** -text

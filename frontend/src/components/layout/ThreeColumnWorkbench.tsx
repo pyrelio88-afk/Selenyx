@@ -44,6 +44,14 @@ export interface ThreeColumnWorkbenchProps {
   rightMin?: number;
   /** 移动端隐藏右栏（右栏内容由视图用 BottomSheet 另行呈现），默认 true */
   collapseRightOnMobile?: boolean;
+  /** 左栏收起（如会话侧栏）：轨道宽变为 leftCollapsedWidth，拖拽柄隐藏；栏元素仍渲染（视图可自行做滑出动画或收起态内容） */
+  leftCollapsed?: boolean;
+  /** 右栏收起（如证据轨收成窄条）：轨道宽变为 rightCollapsedWidth，拖拽柄隐藏 */
+  rightCollapsed?: boolean;
+  /** 左栏收起后的轨道宽，默认 0 */
+  leftCollapsedWidth?: number;
+  /** 右栏收起后的轨道宽，默认 0（收起后仍要保留窄条的视图可传如 46） */
+  rightCollapsedWidth?: number;
 }
 
 export function ThreeColumnWorkbench({
@@ -61,6 +69,10 @@ export function ThreeColumnWorkbench({
   centerMin,
   rightMin,
   collapseRightOnMobile = true,
+  leftCollapsed = false,
+  rightCollapsed = false,
+  leftCollapsedWidth = 0,
+  rightCollapsedWidth = 0,
 }: ThreeColumnWorkbenchProps) {
   const isMobile = useIsMobile();
   const panes = usePersistentWorkbenchColumns({ storageKey, initial, limits });
@@ -71,6 +83,8 @@ export function ThreeColumnWorkbench({
     '--wb-right-w': `${panes.right}px`,
     ...(centerMin != null ? { '--wb-center-min': `${centerMin}px` } : {}),
     ...(rightMin != null ? { '--wb-right-min': `${rightMin}px` } : {}),
+    ...(leftCollapsed ? { '--wb-left-collapsed-w': `${leftCollapsedWidth}px` } : {}),
+    ...(rightCollapsed ? { '--wb-right-collapsed-w': `${rightCollapsedWidth}px` } : {}),
     ...(leftWidthVar ? { [leftWidthVar]: `${panes.left}px` } : {}),
     ...(rightWidthVar ? { [rightWidthVar]: `${panes.right}px` } : {}),
   } as CSSProperties;
@@ -78,26 +92,32 @@ export function ThreeColumnWorkbench({
   const gridClass = [
     'wb-grid',
     hideRight ? 'wb-grid--no-right' : '',
+    leftCollapsed ? 'wb-grid--left-collapsed' : '',
+    rightCollapsed ? 'wb-grid--right-collapsed' : '',
     panes.dragging ? 'is-resizing' : '',
     className ?? '',
   ].filter(Boolean).join(' ');
 
   return (
     <div className={gridClass} style={style}>
-      <button
-        className="workbench-column-resizer is-left"
-        aria-label={`调整${leftLabel}宽度`}
-        {...panes.leftHandleProps}
-      />
+      {!leftCollapsed && (
+        <button
+          className="workbench-column-resizer is-left"
+          aria-label={`调整${leftLabel}宽度`}
+          {...panes.leftHandleProps}
+        />
+      )}
       {left}
       {center}
       {!hideRight && (
         <>
-          <button
-            className="workbench-column-resizer is-right"
-            aria-label={`调整${rightLabel}宽度`}
-            {...panes.rightHandleProps}
-          />
+          {!rightCollapsed && (
+            <button
+              className="workbench-column-resizer is-right"
+              aria-label={`调整${rightLabel}宽度`}
+              {...panes.rightHandleProps}
+            />
+          )}
           {right}
         </>
       )}

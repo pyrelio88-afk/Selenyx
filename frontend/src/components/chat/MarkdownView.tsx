@@ -14,7 +14,7 @@ import { memo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import '../../styles/katex-woff2.css';
 import { Icon } from '@components/ui/Icon';
 
 /* ============ 轻量语法高亮（单遍 tokenizer） ============ */

@@ -48,38 +48,8 @@
   align-items: start;
 }
 
-.workbench-column-resizer {
-  position: absolute;
-  z-index: 4;
-  top: 0;
-  bottom: 0;
-  width: 12px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.workbench-column-resizer::after {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 5px;
-  width: 2px;
-  border-radius: 999px;
-  background: transparent;
-  content: '';
-  transition: background 120ms ease;
-}
-
-.workbench-column-resizer:hover::after,
-.workbench-column-resizer:focus-visible::after,
-.pipeline-workbench-grid.is-resizing .workbench-column-resizer::after { background: var(--accent); }
-.workbench-column-resizer:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: -1px; }
-.workbench-column-resizer.is-left { left: calc(var(--pipeline-stage-width, 184px) - 6px); }
-.workbench-column-resizer.is-right { right: calc(var(--pipeline-evidence-width, 328px) - 6px); }
+/* 拖拽柄已收敛到共享 .workbench-column-resizer（workbench-three-column.css），
+   定位由骨架的 --wb-left-w/--wb-right-w 注入，此处不再重复定义。 */
 
 .pipeline-stage-rail,
 .pipeline-stage-workspace,

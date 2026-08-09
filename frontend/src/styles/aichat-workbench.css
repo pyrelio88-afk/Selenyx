@@ -1,15 +1,40 @@
 /* Selenyx AI research workbench — project-scoped conversation + reviewed evidence. */
-.aichat-workbench {
-  position: relative;
-  display: grid;
-  grid-template-columns: var(--aichat-session-width, 248px) minmax(420px, 1fr) var(--aichat-evidence-width, 286px);
+/* 三栏 grid 与列宽拖拽由统一骨架 ThreeColumnWorkbench（.wb-grid）提供；
+   本文件只保留 AIChat 的栏内容与收起态视觉。收起态由骨架修饰类驱动：
+   .wb-grid--left-collapsed（会话侧栏，轨道 0）/ .wb-grid--right-collapsed（证据轨，轨道 46px）。 */
+
+/* 嵌入模式（总览页下方宿主卡片内）：抵消全屏负边距，限高成卡 */
+.aichat-root.is-embedded {
+  margin: 0;
+  height: min(72vh, 780px);
+  min-height: 480px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
   overflow: hidden;
-  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+@media (max-width: 767px) {
+  .aichat-root.is-embedded { height: 78vh; min-height: 0; }
+  .aichat-root.is-embedded .aichat-workbench.wb-grid,
+  .aichat-root.is-embedded .aichat-workbench.wb-grid--no-right,
+  .aichat-root.is-embedded .aichat-workbench.wb-grid--left-collapsed,
+  .aichat-root.is-embedded .aichat-workbench.wb-grid--right-collapsed,
+  .aichat-root.is-embedded .aichat-workbench.wb-grid--left-collapsed.wb-grid--right-collapsed { height: 100%; }
 }
 
-.aichat-workbench:not(.is-sidebar-open) { grid-template-columns: 0 minmax(420px, 1fr) var(--aichat-evidence-width, 286px); }
-.aichat-workbench:not(.is-evidence-open) { grid-template-columns: var(--aichat-session-width, 248px) minmax(420px, 1fr) 46px; }
-.aichat-workbench:not(.is-sidebar-open):not(.is-evidence-open) { grid-template-columns: 0 minmax(420px, 1fr) 46px; }
+.aichat-root > .aichat-workbench {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.aichat-workbench {
+  position: relative;
+  overflow: hidden;
+  color: var(--text-primary);
+  /* 骨架轨道参数：沿用迁移前的 420px 主区最小宽；栏间无间距（边框分隔） */
+  --wb-center-min: 420px;
+  --wb-gap: 0px;
+}
 
 .aichat-workbench .aichat-sidebar {
   width: var(--aichat-session-width, 248px);
@@ -153,38 +178,6 @@
   background: var(--bg-elevated);
 }
 
-.aichat-column-resizer {
-  position: absolute;
-  z-index: 7;
-  top: 0;
-  bottom: 0;
-  width: 12px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.aichat-column-resizer::after {
-  position: absolute;
-  top: 14px;
-  bottom: 14px;
-  left: 5px;
-  width: 2px;
-  border-radius: 999px;
-  background: transparent;
-  content: '';
-  transition: background 120ms ease;
-}
-
-.aichat-column-resizer:hover::after,
-.aichat-column-resizer:focus-visible::after,
-.aichat-workbench.is-resizing .aichat-column-resizer::after { background: var(--accent); }
-.aichat-column-resizer:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: -1px; }
-.aichat-column-resizer.is-left { left: calc(var(--aichat-session-width, 248px) - 6px); }
-.aichat-column-resizer.is-right { right: calc(var(--aichat-evidence-width, 286px) - 6px); }
 .aichat-evidence-rail.collapsed { align-items: center; }
 .aichat-evidence-head { display: flex; min-height: 58px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px 8px 14px; border-bottom: 1px solid var(--border); }
 .aichat-evidence-rail.collapsed .aichat-evidence-head { padding: 10px 5px; border-bottom: 0; }
@@ -213,20 +206,19 @@
 .aichat-session-scrim { display: none; }
 
 @media (max-width: 1180px) and (min-width: 769px) {
-  .aichat-workbench { grid-template-columns: minmax(208px, var(--aichat-session-width, 220px)) minmax(380px, 1fr) minmax(246px, var(--aichat-evidence-width, 250px)); }
-  .aichat-workbench:not(.is-sidebar-open) { grid-template-columns: 0 minmax(380px, 1fr) minmax(246px, var(--aichat-evidence-width, 250px)); }
-  .aichat-workbench:not(.is-evidence-open) { grid-template-columns: minmax(208px, var(--aichat-session-width, 220px)) minmax(380px, 1fr) 46px; }
-  .aichat-workbench:not(.is-sidebar-open):not(.is-evidence-open) { grid-template-columns: 0 minmax(380px, 1fr) 46px; }
+  .aichat-workbench { --wb-center-min: 380px; --wb-right-min: 246px; }
   .aichat-workbench .aichat-sidebar { width: var(--aichat-session-width, 220px); min-width: var(--aichat-session-width, 220px); }
   .aichat-context-stat:not(.is-evidence) { display: none; }
   .aichat-workbench .aichat-model-chip { max-width: 150px; }
 }
 
 @media (max-width: 768px) {
-  .aichat-workbench,
-  .aichat-workbench:not(.is-sidebar-open),
-  .aichat-workbench:not(.is-evidence-open),
-  .aichat-workbench:not(.is-sidebar-open):not(.is-evidence-open) {
+  /* 提权到 (0,3,0)：必须压过骨架 .wb-grid / .wb-grid--no-right 的 grid 定义 */
+  .aichat-root .aichat-workbench.wb-grid,
+  .aichat-root .aichat-workbench.wb-grid--no-right,
+  .aichat-root .aichat-workbench.wb-grid--left-collapsed,
+  .aichat-root .aichat-workbench.wb-grid--right-collapsed,
+  .aichat-root .aichat-workbench.wb-grid--left-collapsed.wb-grid--right-collapsed {
     display: block;
     height: calc(100dvh - 116px);
     min-height: 0;
@@ -234,7 +226,7 @@
     overflow: hidden;
   }
   .aichat-workbench .aichat-main { width: 100%; height: 100%; }
-  .aichat-column-resizer { display: none; }
+  .aichat-workbench .workbench-column-resizer { display: none; }
   .aichat-workbench .aichat-sidebar,
   .aichat-workbench .aichat-sidebar.mobile-full {
     position: fixed;

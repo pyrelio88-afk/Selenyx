@@ -355,6 +355,90 @@
   border-right: 2px solid var(--border-strong);
 }
 
+/* --- 主题 D: 墨白（mono · 黑白极简，参考 WorkBuddy 黑白设计） --- */
+[data-theme="mono"][data-mode="light"] {
+  --bg-canvas: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #fafafa;
+  --bg-hover: #f2f2f2;
+  --text-primary: #111111;
+  --text-secondary: #525252;
+  --text-muted: #a3a3a3;
+  --accent: #111111;
+  --accent-hover: #000000;
+  --accent-light: #f0f0f0;
+  --danger: #b3261e;
+  --danger-light: #f9efef;
+  --warning: #8a6800;
+  --success: #2f6b3a;
+  --border: #e5e5e5;
+  --border-strong: #111111;
+  --shadow: none;
+  --sidebar-bg: #fafafa;
+}
+[data-theme="mono"][data-mode="dark"] {
+  --bg-canvas: #0a0a0a;
+  --bg-surface: #101010;
+  --bg-elevated: #161616;
+  --bg-hover: #1e1e1e;
+  --text-primary: #f2f2f2;
+  --text-secondary: #a8a8a8;
+  --text-muted: #5f5f5f;
+  --accent: #f2f2f2;
+  --accent-hover: #ffffff;
+  --accent-light: #1e1e1e;
+  --danger: #e05a4d;
+  --danger-light: #241312;
+  --warning: #c9a227;
+  --success: #58a36b;
+  --border: #242424;
+  --border-strong: #e8e8e8;
+  --shadow: none;
+  --sidebar-bg: #0d0d0d;
+}
+
+/* 墨白组件增强：1px 细线、零阴影、零位移，主按钮反色填充 */
+[data-theme="mono"] .card {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+[data-theme="mono"] .card:hover {
+  border-color: var(--text-muted);
+}
+[data-theme="mono"] .btn {
+  border: 1px solid var(--border);
+  font-weight: 500;
+  box-shadow: none;
+}
+[data-theme="mono"] .btn:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+[data-theme="mono"] .btn-primary {
+  background: var(--accent);
+  color: var(--bg-canvas); /* 浅主题黑底白字 / 深主题白底黑字 */
+  border-color: var(--accent);
+}
+[data-theme="mono"] .btn-primary:hover {
+  background: var(--accent-hover);
+  color: var(--bg-canvas);
+}
+[data-theme="mono"] .stat-card {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+[data-theme="mono"] .nav-item.active {
+  background: var(--accent-light);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+[data-theme="mono"] .pipeline-stage {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+[data-theme="mono"] .density-toggle {
+  border: 1px solid var(--border);
+}
+
 /* ===== Reset ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
