@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="frontend/public/brand/crane-full.png" alt="Selenyx · 展翼丹顶鹤" width="150" />
-
 # Selenyx 科研工作台
 
 **本地优先 · 三栏工作台 · 八段证据门科研流水线**

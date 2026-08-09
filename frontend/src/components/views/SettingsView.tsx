@@ -3,7 +3,8 @@ import { useAppStore } from '@stores/appStore';
 import { THEME_OPTIONS } from '@hooks/useTheme';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { DensityToggle } from '@components/ui/StatusChip';
-import { testConnection, type TestResult } from '@services/llm';
+import { testConnection, PROVIDER_DEFAULTS, type TestResult } from '@services/llm';
+import type { LLMConfig } from '@apptypes/index';
 import { readEnvironmentLLM } from '@services/envLLM';
 import { aiApi, localApi } from '@services/api';
 import {
@@ -54,11 +55,42 @@ export function SettingsView() {
   const [backendDetail, setBackendDetail] = useState('');
   const appState = useAppStore();
   const {
-    theme, setTheme, mode, setMode, density, setDensity, llmConfig,
+    theme, setTheme, mode, setMode, density, setDensity, llmConfig, setLLMConfig,
+    petEnabled, setPetEnabled,
     projects, references, tables, notes,
   } = appState;
   const environmentLLM = useMemo(() => readEnvironmentLLM(), []);
   const configuredLLM = llmConfig ?? environmentLLM.config;
+
+  /* ---- 界面直填 API 配置（BYOK） ---- */
+  const PROVIDERS = Object.keys(PROVIDER_DEFAULTS) as LLMConfig['provider'][];
+  const [form, setForm] = useState<{ provider: LLMConfig['provider']; apiKey: string; baseUrl: string; model: string }>({
+    provider: llmConfig?.provider ?? 'openrouter',
+    apiKey: llmConfig?.apiKey ?? '',
+    baseUrl: llmConfig?.baseUrl ?? PROVIDER_DEFAULTS[llmConfig?.provider ?? 'openrouter'].baseUrl,
+    model: llmConfig?.model ?? PROVIDER_DEFAULTS[llmConfig?.provider ?? 'openrouter'].model,
+  });
+  const [formSaved, setFormSaved] = useState(false);
+
+  const applyProvider = (provider: LLMConfig['provider']) => {
+    const defaults = PROVIDER_DEFAULTS[provider];
+    setForm((f) => ({ ...f, provider, baseUrl: defaults.baseUrl, model: defaults.model }));
+  };
+
+  const saveForm = () => {
+    setLLMConfig({
+      provider: form.provider,
+      apiKey: form.apiKey.trim() || undefined,
+      baseUrl: form.baseUrl.trim(),
+      model: form.model.trim(),
+      temperature: llmConfig?.temperature ?? 0.3,
+      maxTokens: llmConfig?.maxTokens ?? 4096,
+      tokenBudget: llmConfig?.tokenBudget ?? 0,
+      tokensUsed: llmConfig?.tokensUsed ?? 0,
+    });
+    setFormSaved(true);
+    window.setTimeout(() => setFormSaved(false), 2400);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +241,20 @@ export function SettingsView() {
               <DensityToggle density={density} onChange={setDensity} />
               <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>紧凑模式显示更多信息；宽松模式提供更大的留白。</p>
             </div>
+            <div className="card" style={{ marginTop: 16 }}>
+              <h3 style={{ marginBottom: 8, fontSize: 16 }}>仙鹤桌宠</h3>
+              <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                在屏幕上放养一只仙鹤：桌面端为透明置顶小窗（随机踱步与飞行），网页端降级为应用内右下角漂浮。关闭后立即收起。
+              </p>
+              <button
+                type="button"
+                className={`btn ${petEnabled ? 'btn-primary' : ''}`}
+                onClick={() => setPetEnabled(!petEnabled)}
+                aria-pressed={petEnabled}
+              >
+                {petEnabled ? '已开启 · 点击收起' : '已关闭 · 点击放养'}
+              </button>
+            </div>
           </section>
         )}
 
@@ -230,6 +276,46 @@ export function SettingsView() {
                 推荐把密钥写在后端环境文件，由本机网关代理。也可在 <code>frontend/.env.local</code> 设置
                 <code>VITE_LLM_*</code>（仅私有本机开发；会进入前端构建产物，勿分发）。
               </p>
+              <div style={{ display: 'grid', gap: 10, marginBottom: 14, padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-canvas)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    提供商
+                    <select value={form.provider} onChange={(e) => applyProvider(e.target.value as LLMConfig['provider'])} style={{ minHeight: 40 }}>
+                      {PROVIDERS.map((p) => (
+                        <option key={p} value={p}>{p} — {PROVIDER_DEFAULTS[p].hint}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    API Key
+                    <input
+                      type="password"
+                      value={form.apiKey}
+                      onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
+                      placeholder={form.provider === 'ollama' ? '本地模型可留空' : 'sk-…'}
+                      autoComplete="off"
+                      style={{ minHeight: 40 }}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    Base URL
+                    <input value={form.baseUrl} onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))} placeholder="https://…" style={{ minHeight: 40 }} />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    模型
+                    <input value={form.model} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} placeholder="模型名" style={{ minHeight: 40 }} />
+                  </label>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn btn-primary" onClick={saveForm} disabled={!form.baseUrl.trim() || !form.model.trim()} style={{ minHeight: 38 }}>
+                    保存配置
+                  </button>
+                  {formSaved && <span role="status" style={{ fontSize: 12.5, color: 'var(--success)' }}>已保存，可直接到总览与 Selenyx 对话</span>}
+                </div>
+                <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.55 }}>
+                  密钥只进入本机内存与本地配置，不经任何第三方中转；为安全起见刷新页面后需重新填入 Key（Base URL 与模型会记住）。也可写入 <code>backend/.env.local</code> 由本机网关持久代理。
+                </p>
+              </div>
               {environmentLLM.error && (
                 <div role="alert" style={{ padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--danger-light, var(--bg-canvas))', border: '1px solid var(--danger)', fontSize: 13 }}>
                   环境变量配置无效：{environmentLLM.error}

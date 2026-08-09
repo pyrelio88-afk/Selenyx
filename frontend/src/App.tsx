@@ -1,4 +1,4 @@
-import { useEffect, Component, type ReactNode } from 'react';
+import { useEffect, useState, Component, type ReactNode } from 'react';
 import { Sidebar } from '@components/layout/Sidebar';
 import { MobileShell } from '@components/layout/MobileShell';
 import { DashboardView } from '@components/views/DashboardView';
@@ -13,10 +13,16 @@ import { SettingsView } from '@components/views/SettingsView';
 import { ToolsView } from '@components/views/ToolsView';
 import { SkillsView } from '@components/views/SkillsView';
 import { NotesView } from '@components/views/NotesView';
+import { TasksView } from '@components/views/TasksView';
+import { AutomationsView } from '@components/views/AutomationsView';
+import { ExpertsView } from '@components/views/ExpertsView';
+import { ConnectorsView } from '@components/views/ConnectorsView';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
 import { clearSelenyxBrowserStorage } from '@services/workspaceBackup';
 import { readEnvironmentLLM } from '@services/envLLM';
+import { isDesktopTauri, setPetVisible } from '@services/nativeRuntime';
+import { FloatingCrane } from '@components/pet/FloatingCrane';
 import { bootstrapReferenceRepository } from '@services/referenceRepository';
 import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
 import './styles/tokens.css';
@@ -71,13 +77,20 @@ const VIEWS: Record<ViewKey, () => ReactNode> = {
   tools: () => <ToolsView />,
   skills: () => <SkillsView />,
   notes: () => <NotesView />,
+  tasks: () => <TasksView />,
+  automations: () => <AutomationsView />,
+  experts: () => <ExpertsView />,
+  connectors: () => <ConnectorsView />,
 };
 
 export default function App() {
   const {
-    currentView, theme, mode, density, setLLMConfig,
+    currentView, theme, mode, density, setLLMConfig, petEnabled,
     replaceReferences, setReferenceSync, replaceWorkspace, setWorkspaceSync,
   } = useAppStore();
+  // 桌面桌宠窗口创建失败（如 Wayland 透明支持不佳）时降级为应用内漂浮鹤
+  const [petWindowFailed, setPetWindowFailed] = useState(false);
+  const desktopPetActive = petEnabled && isDesktopTauri() && !petWindowFailed;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -121,6 +134,16 @@ export default function App() {
     }
   }, [currentView]);
 
+  // 仙鹤桌宠：桌面端驱动独立透明窗口；失败时降级为应用内漂浮鹤。
+  useEffect(() => {
+    if (!isDesktopTauri()) return;
+    setPetVisible(petEnabled)
+      .then(() => setPetWindowFailed(false)) // 成功路径复位，防原生窗与漂浮鹤双开
+      .catch(() => {
+        if (petEnabled) setPetWindowFailed(true);
+      });
+  }, [petEnabled]);
+
   const renderView = VIEWS[currentView] ?? VIEWS.dashboard;
 
   return (
@@ -134,6 +157,7 @@ export default function App() {
             <ErrorBoundary>{renderView()}</ErrorBoundary>
           </div>
         </main>
+        {petEnabled && !desktopPetActive && <FloatingCrane />}
       </div>
     </ThemeProvider>
   );
