@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, readdirSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
-import { basename, delimiter, join, resolve } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 
 // Read-only preflight for the complete local desktop build. It never installs
 // software, resolves dependencies, or downloads optional resources.
@@ -71,14 +71,12 @@ function referencesAiModelOrInstaller(config) {
   ));
 }
 
-function verifyOptionalOllamaPackagingBoundary() {
+function verifyAiResourceBoundary() {
   const baseConfigPath = join(desktopDirectory, 'tauri.conf.json');
   const overlayPath = join(desktopDirectory, 'tauri.offline-pack.conf.json');
-  const manifestPath = join(desktopDirectory, 'resources', 'ollama', 'manifest.json');
   const capabilityPath = join(desktopDirectory, 'capabilities', 'default.json');
   const baseConfig = readJson(baseConfigPath, 'base Tauri config');
-  const overlay = readJson(overlayPath, 'opt-in Ollama Tauri overlay');
-  const manifest = readJson(manifestPath, 'optional Ollama manifest');
+  const overlay = readJson(overlayPath, 'opt-in offline-pack Tauri overlay');
   const capability = readJson(capabilityPath, 'default desktop capability');
 
   if (referencesOllama(baseConfig) || referencesAiModelOrInstaller(baseConfig)) {
@@ -110,41 +108,16 @@ function verifyOptionalOllamaPackagingBoundary() {
     }
   }
 
-  if (!referencesOllama(overlay)) {
-    throw new Error('The explicit --offline-pack overlay does not include its Ollama resource directory.');
+  if (referencesOllama(overlay) || referencesAiModelOrInstaller(overlay)) {
+    throw new Error('The explicit --offline-pack overlay must not include Ollama installers or AI model weights.');
   }
   if (overlay?.bundle?.windows?.webviewInstallMode?.type !== 'offlineInstaller') {
     throw new Error('The explicit --offline-pack overlay must carry the WebView2 offline prerequisite.');
   }
-  if (
-    manifest.schemaVersion !== 1
-    || basename(manifest.fileName ?? '') !== manifest.fileName
-    || !/^OllamaSetup\.exe$/i.test(manifest.fileName)
-    || !Number.isSafeInteger(manifest.expectedSizeBytes)
-    || manifest.expectedSizeBytes <= 0
-    || !/^[a-f0-9]{64}$/i.test(manifest.sha256 ?? '')
-  ) {
-    throw new Error(`Invalid optional Ollama manifest: ${manifestPath}`);
-  }
-  const source = new URL(manifest.sourceUrl);
-  const expectedReleaseSuffix = `/v${manifest.version}/${manifest.fileName}`;
-  if (
-    source.protocol !== 'https:'
-    || source.hostname !== 'github.com'
-    || !source.pathname.startsWith('/ollama/ollama/releases/download/')
-    || !source.pathname.endsWith(expectedReleaseSuffix)
-  ) {
-    throw new Error('The optional Ollama manifest must pin an HTTPS release asset from github.com/ollama/ollama.');
-  }
-
-  const gitignore = readFileSync(join(root, '.gitignore'), 'utf8');
-  if (!gitignore.split(/\r?\n/).some((line) => line.trim() === 'desktop/resources/ollama/OllamaSetup.exe')) {
-    throw new Error('The large optional Ollama installer must remain explicitly ignored by git.');
-  }
 }
 
 try {
-  verifyOptionalOllamaPackagingBoundary();
+  verifyAiResourceBoundary();
 } catch (error) {
   missing.push(error instanceof Error ? error.message : String(error));
 }

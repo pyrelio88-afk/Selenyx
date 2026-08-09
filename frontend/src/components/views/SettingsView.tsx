@@ -7,11 +7,6 @@ import { testConnection, type TestResult } from '@services/llm';
 import { readEnvironmentLLM } from '@services/envLLM';
 import { aiApi, localApi } from '@services/api';
 import {
-  hasBundledOllamaInstaller,
-  isDesktopTauri,
-  revealBundledOllamaInstaller,
-} from '@services/nativeRuntime';
-import {
   clearSelenyxBrowserStorage,
   createWorkspaceBackupJson,
   restoreWorkspaceBackup,
@@ -57,9 +52,6 @@ export function SettingsView() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [backendHealth, setBackendHealth] = useState<string>('检测中…');
   const [backendDetail, setBackendDetail] = useState('');
-  const [hasOllamaInstaller, setHasOllamaInstaller] = useState(false);
-  const [checkingOllamaInstaller, setCheckingOllamaInstaller] = useState(isDesktopTauri());
-  const [ollamaInstallerStatus, setOllamaInstallerStatus] = useState('');
   const appState = useAppStore();
   const {
     theme, setTheme, mode, setMode, density, setDensity, llmConfig,
@@ -82,22 +74,6 @@ export function SettingsView() {
         setBackendDetail(error instanceof Error ? error.message : '无法连接 127.0.0.1:8770');
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    if (!isDesktopTauri()) return;
-    let cancelled = false;
-    void hasBundledOllamaInstaller()
-      .then((available) => {
-        if (!cancelled) setHasOllamaInstaller(available);
-      })
-      .catch(() => {
-        if (!cancelled) setHasOllamaInstaller(false);
-      })
-      .finally(() => {
-        if (!cancelled) setCheckingOllamaInstaller(false);
-      });
     return () => { cancelled = true; };
   }, []);
 
@@ -147,17 +123,6 @@ export function SettingsView() {
     if (!window.confirm('确定要清除当前浏览器中的全部 Selenyx 数据吗？此操作不可恢复，请先导出 JSON 备份。')) return;
     clearSelenyxBrowserStorage();
     window.location.reload();
-  }
-
-  async function revealOllamaInstaller() {
-    if (!window.confirm('即将在 Windows 文件夹中定位应用附带的上游 Ollama 安装程序。Selenyx 不会运行或静默安装它；是否继续？')) return;
-    setOllamaInstallerStatus('正在检查内置安装器…');
-    try {
-      await revealBundledOllamaInstaller();
-      setOllamaInstallerStatus('已在 Windows 文件夹中定位；如需安装，请由您手动打开并确认。');
-    } catch (error) {
-      setOllamaInstallerStatus(error instanceof Error ? error.message : '当前应用未附带 Ollama 安装器。');
-    }
   }
 
   function moveTab(current: SettingsTab, direction: -1 | 1) {
@@ -322,25 +287,20 @@ export function SettingsView() {
                   </div>
                 ))}
               </div>
-              {isDesktopTauri() && (
-                <div style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    className="btn"
-                    disabled={checkingOllamaInstaller || !hasOllamaInstaller}
-                    onClick={() => { void revealOllamaInstaller(); }}
-                  >
-                    {hasOllamaInstaller ? '在文件夹中显示 Ollama 安装器' : '当前应用未附带 Ollama 安装器'}
-                  </button>
-                  <p role="status" style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                    {ollamaInstallerStatus || (checkingOllamaInstaller
-                      ? '正在检查桌面应用资源…'
-                      : hasOllamaInstaller
-                        ? '已发现且大小符合清单；打包前 SHA-256 已校验。Selenyx 只定位文件，不会运行安装程序。'
-                        : '普通小体积版本不含 AI 模型或大安装器；仅显式 --offline-pack Windows 构建会附带经 SHA-256 校验的安装器。')}
-                  </p>
-                </div>
-              )}
+              <div style={{ marginTop: 12 }}>
+                <a
+                  className="btn"
+                  href="https://ollama.com/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Icon name="link" size={14} /> 下载 Ollama（官网）
+                </a>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                  安装包不附带 Ollama 或任何 AI 模型。点击前往 ollama.com 下载官方安装器；装好后执行 <code>ollama pull &lt;模型&gt;</code>，Selenyx 即可连接本机推理。
+                </p>
+              </div>
             </div>
 
             <div className="card" style={{ borderColor: 'var(--warning, #b7791f)' }}>

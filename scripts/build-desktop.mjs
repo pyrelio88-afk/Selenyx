@@ -10,7 +10,7 @@ const environment = { ...process.env };
 const argv = process.argv.slice(2);
 
 function printUsage() {
-  console.log(`Usage: node scripts/build-desktop.mjs [--offline-pack]\n\n  --offline-pack  Explicitly prepare the pinned, SHA-256-verified Ollama\n                  installer and the WebView2 offline prerequisite. No AI\n                  model weights are included. This is never the default.\n\n  --with-ollama   Backward-compatible alias for --offline-pack.`);
+  console.log(`Usage: node scripts/build-desktop.mjs [--offline-pack]\n\n  --offline-pack  Windows-only: bundle the WebView2 offline prerequisite.\n                  No Ollama installer and no AI model weights are included.\n                  This is never the default.\n\n  --with-ollama   Deprecated alias kept for backward compatibility; it no\n                  longer stages any Ollama artifact (Ollama is now a\n                  user-installed BYOK runtime guided from the app UI).`);
 }
 
 if (argv.includes('--help') || argv.includes('-h')) {
@@ -62,7 +62,9 @@ if (withOfflinePack) {
   if (platform() !== 'win32') {
     throw new Error('--offline-pack is only supported for a Windows installer build.');
   }
-  run(process.execPath, [join(root, 'scripts', 'prepare-ollama-installer.mjs'), '--with-ollama']);
+  // Ollama is intentionally NOT staged here anymore: the offline-pack bundle
+  // carries only the WebView2 offline prerequisite. Ollama is a BYOK runtime
+  // the user installs themselves, guided from the app UI with an official link.
 }
 
 const tauriArguments = ['tauri', 'build'];

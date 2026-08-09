@@ -23,12 +23,7 @@
     "desktop:dev": "node scripts/dev-desktop.mjs",
     "desktop:doctor": "node scripts/check-desktop-prereqs.mjs",
     "desktop:build": "node scripts/build-desktop.mjs",
-    "desktop:prepare-ollama": "node scripts/prepare-ollama-installer.mjs --with-ollama",
-    "desktop:verify-ollama": "node scripts/prepare-ollama-installer.mjs --verify",
-    "desktop:prepare-offline-pack": "node scripts/prepare-ollama-installer.mjs --with-ollama",
-    "desktop:verify-offline-pack": "node scripts/prepare-ollama-installer.mjs --verify",
     "desktop:build:offline-pack": "node scripts/build-desktop.mjs --offline-pack",
-    "desktop:build:with-ollama": "node scripts/build-desktop.mjs --with-ollama",
     "lint": "npm --workspace @selenyx/frontend run lint"
   },
   "engines": {
