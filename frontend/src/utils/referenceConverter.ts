@@ -249,6 +249,56 @@ export function exportRIS(refs: Reference[]): string {
   return refs.map(referenceToRIS).join('\n\n') + '\n';
 }
 
+// ===== Reference → CSL JSON =====
+
+const ITEMTYPE_TO_CSL: Record<string, string> = {
+  journalArticle: 'article-journal',
+  book: 'book',
+  bookSection: 'chapter',
+  conferencePaper: 'paper-conference',
+  thesis: 'thesis',
+  dissertation: 'thesis',
+  report: 'report',
+  webpage: 'webpage',
+  magazineArticle: 'article-magazine',
+  newspaperArticle: 'article-newspaper',
+  preprint: 'article',
+  standard: 'standard',
+};
+
+export function referenceToCSLJSON(r: Reference): Record<string, unknown> {
+  const year = parseInt(r.year, 10);
+  const toName = (c: Reference['creators'][number]) => ({ family: c.lastName, given: c.firstName });
+  const authors = r.creators.filter((c) => c.type === 'author').map(toName);
+  const editors = r.creators.filter((c) => c.type === 'editor').map(toName);
+  return {
+    id: r.id,
+    type: ITEMTYPE_TO_CSL[r.type] ?? 'article',
+    title: r.title,
+    ...(authors.length ? { author: authors } : {}),
+    ...(editors.length ? { editor: editors } : {}),
+    ...(Number.isFinite(year) ? { issued: { 'date-parts': [[year]] } } : {}),
+    ...(r.publication ? { 'container-title': r.publication } : {}),
+    ...(r.volume ? { volume: r.volume } : {}),
+    ...(r.issue ? { issue: r.issue } : {}),
+    ...(r.pages ? { page: r.pages } : {}),
+    ...(r.publisher ? { publisher: r.publisher } : {}),
+    ...(r.place ? { 'publisher-place': r.place } : {}),
+    ...(r.doi ? { DOI: r.doi } : {}),
+    ...(r.url ? { URL: r.url } : {}),
+    ...(r.isbn ? { ISBN: r.isbn } : {}),
+    ...(r.issn ? { ISSN: r.issn } : {}),
+    ...(r.abstract ? { abstract: r.abstract } : {}),
+    ...(r.language ? { language: r.language } : {}),
+    ...(r.tags.length ? { keyword: r.tags.join(', ') } : {}),
+    ...(r.notes ? { note: r.notes } : {}),
+  };
+}
+
+export function exportCSLJSON(refs: Reference[]): string {
+  return JSON.stringify(refs.map(referenceToCSLJSON), null, 2) + '\n';
+}
+
 /** 统一导入入口：自动嗅探格式 */
 export function importReferences(src: string): { format: 'bibtex' | 'ris'; refs: Reference[] } {
   const head = src.slice(0, 2000);

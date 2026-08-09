@@ -35,3 +35,13 @@ desktop/release/
 desktop/resources/ollama/OllamaSetup.exe
 *.tsbuildinfo
 *.bak
+
+# One-off debug / screenshot artifacts (not shipped)
+artifacts/
+frontend/artifacts/
+frontend/diag*.cjs
+frontend/shot_*.mjs
+frontend/shot_*.cjs
+
+# Local agent workspace data
+.workbuddy/

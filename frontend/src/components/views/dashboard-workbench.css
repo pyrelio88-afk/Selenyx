@@ -263,19 +263,20 @@
   position: sticky;
   top: 12px;
   display: grid;
-  grid-template-rows: 1fr 1fr;
-  align-items: stretch;
   gap: 12px;
 }
 
 .research-dashboard-rail .dashboard-time-card,
 .research-dashboard-rail .dashboard-focus-card {
-  min-height: 0 !important;
-  height: auto !important;
-  border-radius: 14px !important;
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  overflow: auto;
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--bg-elevated);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 55%, transparent);}
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 55%, transparent);
+}
 
 /* Enlarge Beijing clock in rail */
 .research-dashboard-rail .dashboard-time-card {
@@ -421,18 +422,6 @@
   opacity: .76;
 }
 
-.research-dashboard-rail {
-  grid-auto-rows: 1fr;
-}
-
-.research-dashboard-rail .dashboard-time-card,
-.research-dashboard-rail .dashboard-focus-card {
-  display: flex;
-  min-height: 360px !important;
-  height: 100% !important;
-  flex-direction: column;
-}
-
 .research-dashboard-rail .dashboard-focus-card > div:last-child {
   margin-top: auto;
 }
@@ -452,6 +441,7 @@
 
   .research-dashboard-rail .dashboard-time-card,
   .research-dashboard-rail .dashboard-focus-card {
+    height: auto !important;
     min-height: 0 !important;
   }
 }

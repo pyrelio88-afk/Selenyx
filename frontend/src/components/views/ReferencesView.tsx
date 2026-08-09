@@ -4,7 +4,7 @@ import { FIELD_LABELS } from '@apptypes/index';
 import type { Reference } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
-import { importReferences, exportBibTeX, exportRIS } from '@utils/referenceConverter';
+import { importReferences, exportBibTeX, exportRIS, exportCSLJSON } from '@utils/referenceConverter';
 import {
   dedupeIncomingReferences,
   normalizeDoi,
@@ -584,11 +584,11 @@ export function ReferencesView() {
   }, [addReferences, flashToast, references, zoteroCandidates, zoteroSelected]);
 
   /** A1 导出修复：生成 BibTeX/RIS 文本 → 应用内弹窗展示 + 复制按钮。 */
-  const handleExport = useCallback((format: 'bibtex' | 'ris') => {
+  const handleExport = useCallback((format: 'bibtex' | 'ris' | 'csljson') => {
     const target = searchQuery ? filtered : references;
     if (target.length === 0) { flashToast('没有可导出的文献'); return; }
-    const content = format === 'bibtex' ? exportBibTeX(target) : exportRIS(target);
-    setExportPreview({ format: format.toUpperCase(), content, referenceCount: target.length });
+    const content = format === 'bibtex' ? exportBibTeX(target) : format === 'ris' ? exportRIS(target) : exportCSLJSON(target);
+    setExportPreview({ format: format === 'csljson' ? 'CSL JSON' : format.toUpperCase(), content, referenceCount: target.length });
   }, [searchQuery, filtered, references, flashToast]);
 
   /** A1 导出复制：优先 clipboard API，降级 execCommand 选中文本框（webview 兼容） */
@@ -613,8 +613,9 @@ export function ReferencesView() {
    */
   const handleExportDownload = useCallback(() => {
     if (!exportPreview) return;
-    const extension = exportPreview.format.toLowerCase() === 'ris' ? 'ris' : 'bib';
-    const mime = extension === 'ris' ? 'application/x-research-info-systems' : 'application/x-bibtex';
+    const fmt = exportPreview.format;
+    const extension = fmt === 'RIS' ? 'ris' : fmt === 'CSL JSON' ? 'json' : 'bib';
+    const mime = fmt === 'RIS' ? 'application/x-research-info-systems' : fmt === 'CSL JSON' ? 'application/json' : 'application/x-bibtex';
     const stamp = new Date().toISOString().slice(0, 10);
     const filename = `selenyx-references-${stamp}.${extension}`;
     let href: string | null = null;
@@ -760,6 +761,7 @@ export function ReferencesView() {
               <div className="reference-more-divider" />
               <button role="menuitem" onClick={() => { setShowMoreMenu(false); void handleExport('bibtex'); }}><Icon name="download" size={16} /><span><strong>导出 BibTeX</strong><small>适用于 LaTeX 与文献工具</small></span></button>
               <button role="menuitem" onClick={() => { setShowMoreMenu(false); void handleExport('ris'); }}><Icon name="download" size={16} /><span><strong>导出 RIS</strong><small>适用于 EndNote 等工具</small></span></button>
+              <button role="menuitem" onClick={() => { setShowMoreMenu(false); void handleExport('csljson'); }}><Icon name="download" size={16} /><span><strong>导出 CSL JSON</strong><small>适用于 Zotero 与 citeproc</small></span></button>
               <button className="reference-more-close" onClick={() => setShowMoreMenu(false)}>关闭</button>
             </div>
           )}
@@ -917,6 +919,7 @@ export function ReferencesView() {
                 <th className="sortable-th" onClick={() => toggleSort('readStatus')} style={{ cursor: 'pointer' }}>
                   状态{sortField === 'readStatus' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                 </th>
+                <th style={{ width: 140 }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -937,6 +940,10 @@ export function ReferencesView() {
                   <td>{r.year}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.doi}</td>
                   <td><StatusChip status={r.readStatus} /></td>
+                  <td className="ref-row-actions" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="btn btn-sm" title="导出此条为 BibTeX" onClick={() => setExportPreview({ format: 'BIBTEX', content: exportBibTeX([r]), referenceCount: 1 })}>导出</button>
+                    <button type="button" className="btn btn-sm btn-danger" title="删除此文献（含关联清理）" onClick={() => setConfirmDeleteId(r.id)}>删除</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
