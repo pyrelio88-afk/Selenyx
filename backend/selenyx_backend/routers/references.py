@@ -12,6 +12,8 @@ from sqlmodel import Session, col, func, select
 
 from selenyx_backend.database import get_session
 from selenyx_backend.models import Reference
+from selenyx_backend.services.citekeys import make_cite_key
+from selenyx_backend.services.dedup import find_duplicate_sets
 
 router = APIRouter()
 
@@ -190,16 +192,16 @@ def _create_or_update(session: Session, payload: dict[str, Any]) -> tuple[Refere
         reference.cite_key = (
             requested_cite_key.strip()
             if isinstance(requested_cite_key, str) and requested_cite_key.strip()
-            else _next_cite_key(session)
+            else make_cite_key(
+                session,
+                payload.get("creators") if isinstance(payload.get("creators"), list) else [],
+                str(payload.get("year") or ""),
+                str(payload.get("title") or ""),
+            )
         )
     _apply_payload(reference, payload, creating=created)
     session.add(reference)
     return reference, created
-
-
-def _next_cite_key(session: Session) -> str:
-    count = session.exec(select(func.count()).select_from(Reference)).one()
-    return f"Selenyx-{count + 1:04d}"
 
 
 def _replace_project_reference(session: Session, old_id: str, replacement_id: str | None) -> None:
@@ -485,20 +487,16 @@ def export_references(body: ExportReferencesBody, session: Session = Depends(get
 
 @router.post("/deduplicate")
 def deduplicate_references(session: Session = Depends(get_session)):
-    references = session.exec(select(Reference)).all()
-    seen: dict[tuple[str, str], Reference] = {}
-    duplicate_pairs: list[tuple[Reference, Reference]] = []
-    for reference in references:
-        normalized_title = "".join(char for char in reference.title.lower() if char.isalnum())
-        key = (reference.doi.lower() or reference.pmid.lower() or normalized_title, reference.year)
-        if key in seen and key[0]:
-            duplicate_pairs.append((reference, seen[key]))
-        else:
-            seen[key] = reference
-    for duplicate, keeper in duplicate_pairs:
-        _delete_reference_graph(session, duplicate, replacement_id=keeper.id)
+    """多通路判重（DOI/PMID/标题+年份或作者）+ 并查集传递归并，算法见 services/dedup.py。"""
+    references = list(session.exec(select(Reference)).all())
+    merged = 0
+    for group in find_duplicate_sets(references):
+        keeper = references[group[0]]  # 组内最早录入者保留
+        for idx in group[1:]:
+            _delete_reference_graph(session, references[idx], replacement_id=keeper.id)
+            merged += 1
     session.commit()
-    return {"merged": len(duplicate_pairs), "remaining": len(references) - len(duplicate_pairs)}
+    return {"merged": merged, "remaining": len(references) - merged}
 
 
 @router.get("/lookup/doi/{doi:path}")

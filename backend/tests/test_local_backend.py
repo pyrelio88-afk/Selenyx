@@ -75,7 +75,7 @@ async def test_health_and_persistent_reference_crud(tmp_path, monkeypatch):
         )
         assert created.status_code == 200
         reference = created.json()
-        assert reference["cite_key"] == "Selenyx-0001"
+        assert reference["cite_key"] == "local2026"  # better-bibtex 风格：标题实词+年份（无作者回退）
 
         updated = await client.patch(
             f"/api/references/{reference['id']}",
