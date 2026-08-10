@@ -174,7 +174,7 @@ async def test_review_gate_revises_final(tmp_path, monkeypatch):
     async def fake_complete(messages):
         nonlocal calls
         calls += 1
-        if any("审阅以下草稿" in m.get("content", "") for m in messages):
+        if any("核查以下草稿" in m.get("content", "") for m in messages):
             return "问题：缺少证据引用；结论过度外推。"
         return next(main_replies)
 

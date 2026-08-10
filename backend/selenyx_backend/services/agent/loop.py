@@ -154,6 +154,20 @@ def _critic_snapshot() -> tuple[str, str] | None:
         return critic.name, critic.system_prompt
 
 
+# 审查门指令（参考 synthetic-sciences/openscience 的 reviewer sub-agent：
+# 盲审对抗式核查，「论断有罪推定，证据自证清白」；五类结构化发现对齐证据门）
+_REVIEW_INSTRUCTION = (
+    "你是盲审核查员：默认怀疑，论断有罪推定，证据自证清白。"
+    "逐项核查以下草稿，只报告有依据的缺陷，按类别列出（无问题就明说通过）：\n"
+    "(a) 引用不符——论断所附证据不支持该论断（错引、夸大、断章取义）；\n"
+    "(b) 无源数字——数字或统计无法回溯到检索/观察记录，查无出处即视为编造；\n"
+    "(c) 记录不全——声称的结论缺少对应的检索、阅读或证据卡记录；\n"
+    "(d) 方法结论错位——所用方法或材料撑不起结论的强度与置信表述；\n"
+    "(e) 表述失真——与原文摘录相比存在曲解或过度概括。\n"
+    "只审不改：直给问题清单，不重写草稿。\n\n"
+)
+
+
 async def _review_draft(draft: str) -> tuple[str, str]:
     """让批评员审一遍 final 草稿，返回 (批评员名, 意见)。失败抛 HTTPException。"""
     snapshot = _critic_snapshot()
@@ -164,11 +178,7 @@ async def _review_draft(draft: str) -> tuple[str, str]:
         {"role": "system", "content": persona},
         {
             "role": "user",
-            "content": (
-                "请从事实准确性、证据支撑、逻辑一致性、结构完整性、表述清晰度五个维度"
-                "审阅以下草稿，直给问题清单（无问题就明说通过）：\n\n"
-                f"{_truncate(draft, 6000)}"
-            ),
+            "content": f"{_REVIEW_INSTRUCTION}{_truncate(draft, 6000)}",
         },
     ]
     return name, await _complete(messages)
