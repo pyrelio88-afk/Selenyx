@@ -1,4 +1,21 @@
 /** Pure migrations for persisted application state. */
+
+/** v4 IA 重排：旧导航 key → 新容器视图（侧边栏 7 项 + 设置弹窗） */
+const V4_VIEW_MAP: Record<string, string> = {
+  dashboard: 'newTask',
+  aiChat: 'assistant',
+  settings: 'newTask',
+  references: 'library',
+  notes: 'library',
+  tables: 'library',
+  clinicalData: 'library',
+  experts: 'extensions',
+  skills: 'extensions',
+  connectors: 'extensions',
+  statTools: 'more',
+  tools: 'more',
+};
+
 export function migratePersistedAppState(persistedState: unknown): Record<string, unknown> {
   const state = persistedState && typeof persistedState === 'object' && !Array.isArray(persistedState)
     ? { ...(persistedState as Record<string, unknown>) }
@@ -26,6 +43,10 @@ export function migratePersistedAppState(persistedState: unknown): Record<string
     });
   }
   if (state.pendingNoteId !== null && typeof state.pendingNoteId !== 'string') state.pendingNoteId = null;
+  // v4：废弃视图的持久化 currentView 归一化（旧 key 落到新容器）
+  if (typeof state.currentView === 'string' && V4_VIEW_MAP[state.currentView]) {
+    state.currentView = V4_VIEW_MAP[state.currentView];
+  }
   if (state.llmConfig && typeof state.llmConfig === 'object' && !Array.isArray(state.llmConfig)) {
     const llmConfig = { ...(state.llmConfig as Record<string, unknown>) };
     delete llmConfig.apiKey;

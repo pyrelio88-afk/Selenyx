@@ -15,6 +15,8 @@ import { agentApi, type AgentRunDetail, type AgentRunSummary } from '@services/a
 export function TasksView() {
   const projects = useAppStore((s) => s.projects);
   const currentProjectId = useAppStore((s) => s.currentProjectId);
+  const focusRunId = useAppStore((s) => s.focusRunId);
+  const clearRunFocus = useAppStore((s) => s.clearRunFocus);
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
@@ -52,6 +54,13 @@ export function TasksView() {
   useEffect(() => {
     void refreshList();
   }, [refreshList]);
+
+  /* 外部聚焦（新建任务主页 / 侧边栏动态区）：选中指定 run 的详情 */
+  useEffect(() => {
+    if (!focusRunId) return;
+    void refreshDetail(focusRunId);
+    clearRunFocus();
+  }, [focusRunId, refreshDetail, clearRunFocus]);
 
   const selectedId = selected?.id;
   const selectedStatus = selected?.status;

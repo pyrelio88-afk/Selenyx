@@ -7,7 +7,7 @@ rust-version = "1.77"
 
 [lib]
 name = "selenyx_desktop_lib"
-crate-type = ["lib", "cdylib", "staticlib"]
+crate-type = ["lib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -26,7 +26,5 @@ tokio = { version = "1", features = ["time"] }
 [features]
 default = ["desktop"]
 desktop = []
-mobile = []
 
-# Android 构建用 mobile feature：cargo tauri android build 自动启用
-# 桌面构建用 default (desktop) feature
+# 仅桌面端（v4 起不再构建 Android/iOS 移动端）

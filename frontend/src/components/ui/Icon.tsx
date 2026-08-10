@@ -161,10 +161,18 @@ export const STAGE_ICONS: Record<string, IconName> = {
 
 /** 导航 key → 图标名映射 */
 export const NAV_ICONS: Record<string, IconName> = {
+  // v4 主导航
+  newTask: 'plus',
+  assistant: 'aiChat',
+  projects: 'projects',
+  library: 'references',
+  extensions: 'sparkles',
+  automations: 'clock',
+  more: 'more',
+  // 旧 key（容器 tab / 深链兜底）
   dashboard: 'dashboard',
   references: 'references',
   pipeline: 'pipeline',
-  projects: 'projects',
   tables: 'tables',
   statTools: 'statTools',
   clinicalData: 'clinicalData',
@@ -174,7 +182,6 @@ export const NAV_ICONS: Record<string, IconName> = {
   notes: 'notes',
   tools: 'blueprint',
   tasks: 'target',
-  automations: 'clock',
   experts: 'sparkles',
   connectors: 'globe',
 };

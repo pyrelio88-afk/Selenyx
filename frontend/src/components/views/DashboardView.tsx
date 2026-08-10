@@ -3,7 +3,7 @@
  * 新增：番茄钟、实时时钟、倒数日、横向时间线
  */
 import { useState, useEffect } from 'react';
-import { useAppStore, type ViewKey } from '@stores/appStore';
+import { useAppStore, type AnyViewKey } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/index';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
 import { StatusChip } from '@components/ui/StatusChip';
@@ -413,7 +413,7 @@ function OnboardingChecklist() {
   const { projects, references, llmConfig, setView, requestCreateProject } = useAppStore();
   const [dismissed, setDismissed] = useState(() => !!getOnboardingState());
   const visitedPipeline = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('visited-pipeline') === 'true';
-  const steps: { label: string; done: boolean; view: ViewKey; tip: string }[] = [
+  const steps: { label: string; done: boolean; view: AnyViewKey; tip: string }[] = [
     { label: '创建项目', done: projects.length > 0, view: 'projects', tip: '选择适合你研究类型的设计框架（如 PICO 适合临床试验、PRISMA 适合系统综述），系统会自动生成对应项目字段' },
     { label: '导入文献', done: references.length > 0, view: 'references', tip: '输入论文 DOI 自动抓取标题、作者、期刊等元数据，也可上传 PDF' },
     { label: '配置 AI', done: !!llmConfig, view: 'settings', tip: '在本机配置大模型服务，让 AI 帮你精读文献、起草报告' },

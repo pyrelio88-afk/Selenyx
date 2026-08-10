@@ -640,12 +640,9 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-/* ===== Responsive (mobile/tablet) — Spec v1 drawer 范式 ===== */
-/* 平板/大屏手机过渡档 ≤768px：隐藏常驻 Sidebar, 启用 MobileShell(TopBar+Drawer) */
+/* ===== Responsive（桌面窄窗适配 —— v4 起仅桌面端，无 MobileShell） ===== */
+/* 窗口收窄时保留常驻侧栏，仅折叠多列网格与流水线为单列。 */
 @media (max-width: 768px) {
-  .sidebar { display: none; }
-  .mobile-topbar { display: flex; }
-  .app-shell { flex-direction: column; }
   .app-main { padding: 12px 16px 80px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .pipeline { flex-direction: column; }

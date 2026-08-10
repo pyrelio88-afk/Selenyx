@@ -1,22 +1,15 @@
 import { useEffect, useState, Component, type ReactNode } from 'react';
 import { Sidebar } from '@components/layout/Sidebar';
-import { MobileShell } from '@components/layout/MobileShell';
-import { DashboardView } from '@components/views/DashboardView';
-import { ReferencesView } from '@components/views/ReferencesView';
+import { NewTaskHome } from '@components/views/NewTaskHome';
+import { LibraryView } from '@components/views/LibraryView';
+import { ExtensionsView } from '@components/views/ExtensionsView';
+import { MoreView } from '@components/views/MoreView';
 import { PipelineView } from '@components/views/PipelineView';
 import { ProjectsView } from '@components/views/ProjectsView';
-import { TablesView } from '@components/views/TablesView';
-import { StatToolsView } from '@components/views/StatToolsView';
-import { ClinicalDataView } from '@components/views/ClinicalDataView';
 import { AIChatView } from '@components/views/AIChatView';
-import { SettingsView } from '@components/views/SettingsView';
-import { ToolsView } from '@components/views/ToolsView';
-import { SkillsView } from '@components/views/SkillsView';
-import { NotesView } from '@components/views/NotesView';
 import { TasksView } from '@components/views/TasksView';
 import { AutomationsView } from '@components/views/AutomationsView';
-import { ExpertsView } from '@components/views/ExpertsView';
-import { ConnectorsView } from '@components/views/ConnectorsView';
+import { SettingsModal } from '@components/settings/SettingsModal';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
 import { clearSelenyxBrowserStorage } from '@services/workspaceBackup';
@@ -26,7 +19,7 @@ import { FloatingCrane } from '@components/pet/FloatingCrane';
 import { bootstrapReferenceRepository } from '@services/referenceRepository';
 import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
 import './styles/tokens.css';
-import './styles/mobile-shell.css';
+import './styles/shell-v4.css';
 
 export type { ViewKey } from '@stores/appStore';
 
@@ -65,27 +58,22 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 const VIEWS: Record<ViewKey, () => ReactNode> = {
-  dashboard: () => <DashboardView />,
+  newTask: () => <NewTaskHome />,
+  assistant: () => <AIChatView />,
   projects: () => <ProjectsView />,
-  references: () => <ReferencesView />,
-  pipeline: () => <PipelineView />,
-  tables: () => <TablesView />,
-  statTools: () => <StatToolsView />,
-  clinicalData: () => <ClinicalDataView />,
-  aiChat: () => <AIChatView />,
-  settings: () => <SettingsView />,
-  tools: () => <ToolsView />,
-  skills: () => <SkillsView />,
-  notes: () => <NotesView />,
-  tasks: () => <TasksView />,
+  library: () => <LibraryView />,
+  extensions: () => <ExtensionsView />,
   automations: () => <AutomationsView />,
-  experts: () => <ExpertsView />,
-  connectors: () => <ConnectorsView />,
+  more: () => <MoreView />,
+  // 不在侧边栏一级导航、经深链进入的视图
+  tasks: () => <TasksView />,
+  pipeline: () => <PipelineView />,
 };
 
 export default function App() {
   const {
-    currentView, theme, mode, density, setLLMConfig, petEnabled,
+    currentView, theme, mode, density, setLLMConfig, petEnabled, fontScale, setView,
+    openSettings, closeSettings,
     replaceReferences, setReferenceSync, replaceWorkspace, setWorkspaceSync,
   } = useAppStore();
   // 桌面桌宠窗口创建失败（如 Wayland 透明支持不佳）时降级为应用内漂浮鹤
@@ -97,6 +85,34 @@ export default function App() {
     document.documentElement.dataset.mode = mode;
     document.documentElement.dataset.density = density;
   }, [theme, mode, density]);
+
+  // v4 通用设置：界面缩放（字体大小滑杆）
+  useEffect(() => {
+    document.body.style.setProperty('zoom', String(fontScale));
+    return () => { document.body.style.removeProperty('zoom'); };
+  }, [fontScale]);
+
+  // v4 全局快捷键：Ctrl+, 设置弹窗；Ctrl+N 新建任务主页；Esc 关闭弹窗
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === ',') {
+        event.preventDefault();
+        if (useAppStore.getState().settingsOpen) closeSettings();
+        else openSettings();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && (event.key === 'n' || event.key === 'N')) {
+        event.preventDefault();
+        setView('newTask');
+        return;
+      }
+      if (event.key === 'Escape' && useAppStore.getState().settingsOpen) {
+        closeSettings();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [openSettings, closeSettings, setView]);
 
   // A local build may opt into direct AI requests through .env.local.  This
   // overwrites stale UI configuration on every launch and keeps keys out of
@@ -144,7 +160,7 @@ export default function App() {
       });
   }, [petEnabled]);
 
-  const renderView = VIEWS[currentView] ?? VIEWS.dashboard;
+  const renderView = VIEWS[currentView] ?? VIEWS.newTask;
 
   return (
     <ThemeProvider>
@@ -152,13 +168,13 @@ export default function App() {
       <div className="app-shell">
         <Sidebar />
         <main id="workspace-main" className="app-main" tabIndex={-1}>
-          <MobileShell />
           <div className="app-view-region">
             <ErrorBoundary>{renderView()}</ErrorBoundary>
           </div>
         </main>
         {petEnabled && !desktopPetActive && <FloatingCrane />}
       </div>
+      <SettingsModal />
     </ThemeProvider>
   );
 }

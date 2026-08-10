@@ -22,10 +22,45 @@ import {
 import { mirrorWorkspace, removeMirroredProject, type WorkspaceSyncStatus } from '@services/workspaceRepository';
 
 export type ViewKey =
-  | 'dashboard' | 'projects' | 'references' | 'pipeline'
-  | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings' | 'tools' | 'skills'
-  | 'notes'
-  | 'tasks' | 'automations' | 'experts' | 'connectors';
+  | 'newTask' | 'assistant' | 'projects' | 'library' | 'extensions' | 'automations' | 'more'
+  | 'tasks' | 'pipeline';
+
+/** v4 IA 重排前的旧导航 key：setView 归一化为新 key，旧深链不断 */
+export type LegacyViewKey =
+  | 'dashboard' | 'aiChat' | 'settings'
+  | 'references' | 'notes' | 'tables' | 'clinicalData'
+  | 'experts' | 'skills' | 'connectors'
+  | 'statTools' | 'tools';
+
+export type AnyViewKey = ViewKey | LegacyViewKey;
+export type LibraryTab = 'references' | 'notes' | 'evidence' | 'tables' | 'clinical' | 'files';
+export type ExtensionsTab = 'experts' | 'skills' | 'connectors';
+export type MoreTab = 'statTools' | 'tools' | 'widgets';
+export type SettingsSection =
+  | 'general' | 'appearance' | 'personality' | 'memory' | 'model'
+  | 'assistant' | 'data' | 'shortcuts' | 'about';
+
+interface LegacyViewTarget {
+  view: ViewKey;
+  libraryTab?: LibraryTab;
+  extensionsTab?: ExtensionsTab;
+  moreTab?: MoreTab;
+}
+
+/** 旧视图 → 新容器（+对应 tab）；settings 特殊处理：设置已改为弹窗 */
+const LEGACY_VIEW_TARGET: Record<string, LegacyViewTarget | undefined> = {
+  dashboard: { view: 'newTask' },
+  aiChat: { view: 'assistant' },
+  references: { view: 'library', libraryTab: 'references' },
+  notes: { view: 'library', libraryTab: 'notes' },
+  tables: { view: 'library', libraryTab: 'tables' },
+  clinicalData: { view: 'library', libraryTab: 'clinical' },
+  experts: { view: 'extensions', extensionsTab: 'experts' },
+  skills: { view: 'extensions', extensionsTab: 'skills' },
+  connectors: { view: 'extensions', extensionsTab: 'connectors' },
+  statTools: { view: 'more', moreTab: 'statTools' },
+  tools: { view: 'more', moreTab: 'tools' },
+};
 
 export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic' | 'mono';
 export type ThemeMode = 'light' | 'dark';
@@ -42,7 +77,44 @@ export interface PipelineRun {
 interface AppState {
   // === 导航 ===
   currentView: ViewKey;
-  setView: (v: ViewKey) => void;
+  setView: (v: AnyViewKey) => void;
+
+  // === v4 容器页 tab ===
+  libraryTab: LibraryTab;
+  setLibraryTab: (t: LibraryTab) => void;
+  extensionsTab: ExtensionsTab;
+  setExtensionsTab: (t: ExtensionsTab) => void;
+  moreTab: MoreTab;
+  setMoreTab: (t: MoreTab) => void;
+
+  // === v4 设置弹窗（不再是路由视图） ===
+  settingsOpen: boolean;
+  settingsSection: SettingsSection;
+  openSettings: (section?: SettingsSection) => void;
+  closeSettings: () => void;
+
+  // === v4 run 聚焦（新建任务主页 / 侧边栏动态区 → 任务详情） ===
+  focusRunId: string | null;
+  requestRunFocus: (runId: string) => void;
+  clearRunFocus: () => void;
+
+  // === v4 用户区 / 个性化 ===
+  nickname: string;
+  setNickname: (name: string) => void;
+  replyStyle: 'concise' | 'balanced' | 'thorough';
+  setReplyStyle: (s: 'concise' | 'balanced' | 'thorough') => void;
+  customInstructions: string;
+  setCustomInstructions: (text: string) => void;
+  fontScale: number;
+  setFontScale: (v: number) => void;
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+
+  // === v4 助理行为（桌宠通知，模块 G 生效） ===
+  petNotifyDone: boolean;
+  setPetNotifyDone: (v: boolean) => void;
+  petNotifyPending: boolean;
+  setPetNotifyPending: (v: boolean) => void;
 
   // === 主题 ===
   theme: ThemeName;
@@ -141,8 +213,54 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      currentView: 'dashboard' as ViewKey,
-      setView: (v) => set({ currentView: v }),
+      currentView: 'newTask' as ViewKey,
+      setView: (v) => {
+        // 设置已改为模态弹窗（WorkBuddy 范式），不再是路由视图
+        if (v === 'settings') { set({ settingsOpen: true }); return; }
+        const legacy = LEGACY_VIEW_TARGET[v as string];
+        if (legacy) {
+          set((s) => ({
+            currentView: legacy.view,
+            libraryTab: legacy.libraryTab ?? s.libraryTab,
+            extensionsTab: legacy.extensionsTab ?? s.extensionsTab,
+            moreTab: legacy.moreTab ?? s.moreTab,
+          }));
+          return;
+        }
+        set({ currentView: v as ViewKey });
+      },
+
+      libraryTab: 'references' as LibraryTab,
+      setLibraryTab: (t) => set({ libraryTab: t }),
+      extensionsTab: 'experts' as ExtensionsTab,
+      setExtensionsTab: (t) => set({ extensionsTab: t }),
+      moreTab: 'statTools' as MoreTab,
+      setMoreTab: (t) => set({ moreTab: t }),
+
+      settingsOpen: false,
+      settingsSection: 'general' as SettingsSection,
+      openSettings: (section) => set((s) => ({ settingsOpen: true, settingsSection: section ?? s.settingsSection })),
+      closeSettings: () => set({ settingsOpen: false }),
+
+      focusRunId: null,
+      requestRunFocus: (runId) => set({ focusRunId: runId, currentView: 'tasks' }),
+      clearRunFocus: () => set({ focusRunId: null }),
+
+      nickname: '',
+      setNickname: (name) => set({ nickname: name.slice(0, 24) }),
+      replyStyle: 'balanced' as const,
+      setReplyStyle: (replyStyle) => set({ replyStyle }),
+      customInstructions: '',
+      setCustomInstructions: (text) => set({ customInstructions: text.slice(0, 1500) }),
+      fontScale: 1,
+      setFontScale: (v) => set({ fontScale: Math.min(1.15, Math.max(0.9, Math.round(v * 100) / 100)) }),
+      sidebarCollapsed: false,
+      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+
+      petNotifyDone: true,
+      setPetNotifyDone: (v) => set({ petNotifyDone: v }),
+      petNotifyPending: true,
+      setPetNotifyPending: (v) => set({ petNotifyPending: v }),
 
       theme: 'mono',
       mode: 'light',
@@ -365,7 +483,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'selenyx-v2',
-      version: 5,
+      version: 6,
       // D6：版本化迁移链（R102）。migrate 只做"补默认值 + 结构调整"，绝不整个 reset
       // ——reset 留给下方 storage.getItem 的 JSON 预校验兜底（数据真损坏读不出时才回退）。
       // 新增持久化字段时在此补默认（state.xxx ??= defaultValue），保持链路完整可追踪。
@@ -378,8 +496,11 @@ export const useAppStore = create<AppState>()(
       },
       // Secrets are accepted only transiently for browser development. The
       // installed desktop app writes them through a native command instead.
+      // settingsOpen / focusRunId 为会话态，不落盘。
       partialize: (state) => ({
         ...state,
+        settingsOpen: false,
+        focusRunId: null,
         llmConfig: state.llmConfig ? { ...state.llmConfig, apiKey: undefined } : null,
       }),
       // C1 修复：自定义 storage 预校验 JSON，脏数据降级为初始状态而非白屏崩溃
