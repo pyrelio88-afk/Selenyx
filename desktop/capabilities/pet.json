@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pet",
+  "description": "仙鹤桌宠窗口最小权限：仅允许向前端事件总线发点击/收起事件",
+  "windows": ["pet"],
+  "permissions": [
+    "core:event:allow-emit"
+  ]
+}

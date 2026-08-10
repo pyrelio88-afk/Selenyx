@@ -6,7 +6,6 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Crane } from '@components/ui/Crane';
 
 interface PetState {
   x: number;
@@ -71,13 +70,18 @@ export function FloatingCrane() {
         transition: 'transform 120ms ease',
       }}
     >
-      <Crane variant="full" size={52} className="floating-crane-svg" />
+      <img src="crane.png" alt="" draggable={false} width={56} className="floating-crane-img" />
       <style>{`
-        .floating-crane .floating-crane-svg { animation: crane-bob 1.8s ease-in-out infinite; color: var(--text-primary); opacity: .92; }
-        .floating-crane.is-flying .floating-crane-svg { animation: crane-fly 700ms ease-in-out infinite; }
-        @keyframes crane-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(2px); } }
-        @keyframes crane-fly { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
-        @media (prefers-reduced-motion: reduce) { .floating-crane .floating-crane-svg { animation: none !important; } }
+        .floating-crane .floating-crane-img {
+          display: block;
+          filter: drop-shadow(0 0 1.5px rgba(27,27,27,.4)) drop-shadow(0 3px 6px rgba(27,27,27,.18));
+          animation: crane-bob 2.8s ease-in-out infinite;
+          transform-origin: 50% 88%;
+        }
+        .floating-crane.is-flying .floating-crane-img { animation: crane-fly 700ms ease-in-out infinite; }
+        @keyframes crane-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+        @keyframes crane-fly { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+        @media (prefers-reduced-motion: reduce) { .floating-crane .floating-crane-img { animation: none !important; } }
       `}</style>
     </div>
   );
