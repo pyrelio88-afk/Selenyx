@@ -11,6 +11,7 @@ import { useAppStore } from '@stores/appStore';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
 import { agentApi, type AgentRunSummary } from '@services/agent';
+import { evidenceApi } from '@services/api';
 
 interface TaskTemplate {
   icon: IconName;
@@ -61,13 +62,14 @@ function greeting(): string {
 }
 
 export function NewTaskHome() {
-  const { projects, currentProjectId, nickname, requestRunFocus } = useAppStore();
+  const { projects, currentProjectId, nickname, requestRunFocus, setView, setLibraryTab } = useAppStore();
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
   const [recent, setRecent] = useState<AgentRunSummary[]>([]);
+  const [pendingEvidence, setPendingEvidence] = useState(0);
 
   const activeProjects = projects.filter((p) => p.status !== 'archived');
 
@@ -82,6 +84,25 @@ export function NewTaskHome() {
   }, []);
 
   useEffect(() => { void loadRecent(); }, [loadRecent]);
+
+  /* 证据门角标：待裁决证据卡计数（朱砂点睛） */
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const summary = await evidenceApi.summary();
+        if (!cancelled) setPendingEvidence(Number(summary.pending ?? 0));
+      } catch { /* 后端离线时不显示角标 */ }
+    };
+    void load();
+    const timer = window.setInterval(load, 15000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
+  const openEvidenceQueue = () => {
+    setLibraryTab('evidence');
+    setView('library');
+  };
 
   const applyTemplate = (template: TaskTemplate) => {
     setGoal(template.prompt);
@@ -109,6 +130,11 @@ export function NewTaskHome() {
       <header className="newtask-hero">
         <h1>{greeting()}，{nickname || '研究者'}</h1>
         <p>把研究目标交给 Selenyx：规划 → 检索 → 执行 → 成稿，全程步骤可审计。</p>
+        {pendingEvidence > 0 && (
+          <button type="button" className="evidence-pending-badge" onClick={openEvidenceQueue} title="前往证据卡队列裁决">
+            <span className="dot" aria-hidden="true" /> 证据门待裁决 {pendingEvidence}
+          </button>
+        )}
       </header>
 
       {backendOffline && (

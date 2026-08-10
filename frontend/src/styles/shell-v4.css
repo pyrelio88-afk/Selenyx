@@ -214,3 +214,49 @@
 .v4-placeholder p { margin: 0; font-size: 13px; line-height: 1.7; color: var(--text-secondary); }
 .v4-placeholder-note { margin-top: 10px !important; font-size: 12px !important; color: var(--text-muted) !important; }
 .v4-pending-count { color: var(--cinnabar); font-size: 15px; padding: 0 2px; }
+
+/* ---------- 证据卡裁决队列（模块 A） ---------- */
+.evidence-review kbd {
+  padding: 1px 5px; border-radius: 4px; font-size: 10.5px;
+  font-family: var(--font-mono); background: var(--bg-canvas); border: 1px solid var(--border);
+}
+.evidence-queue { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; max-width: 780px; }
+.evidence-card {
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-surface); cursor: default;
+  display: grid; gap: 8px;
+}
+.evidence-card.is-cursor { border-color: var(--cinnabar); box-shadow: inset 3px 0 0 var(--cinnabar); }
+.evidence-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.evidence-card-claim { flex: 1; min-width: 200px; font-size: 13.5px; color: var(--text-primary); line-height: 1.5; }
+.evidence-badge {
+  flex-shrink: 0; padding: 1px 8px; border-radius: 99px;
+  font-size: 10.5px; font-weight: 700;
+  border: 1px solid var(--border); color: var(--text-muted);
+}
+.evidence-badge.is-supports { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.evidence-badge.is-contradicts { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.evidence-badge.is-qualifies { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.evidence-card-excerpt {
+  margin: 0; padding: 8px 12px;
+  border-left: 2px solid var(--border); border-radius: 0 8px 8px 0;
+  background: var(--bg-canvas);
+  font-size: 12.5px; line-height: 1.7; color: var(--text-secondary);
+}
+.evidence-card-meta {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--text-muted);
+}
+.evidence-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.evidence-card-actions { display: flex; gap: 8px; }
+
+/* ---------- 证据门待裁决角标（朱砂点睛） ---------- */
+.evidence-pending-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 99px;
+  border: 1px solid var(--cinnabar); background: transparent;
+  color: var(--cinnabar); font-size: 12px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+.evidence-pending-badge:hover { background: color-mix(in srgb, var(--cinnabar) 8%, transparent); }
+.evidence-pending-badge .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--cinnabar); }

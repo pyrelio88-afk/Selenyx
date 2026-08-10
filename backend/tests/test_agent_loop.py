@@ -394,3 +394,91 @@ async def test_subagent_llm_failure_degrades_to_observation(tmp_path, monkeypatc
         run = session.get(AgentRun, run_id)
         assert run is not None and run.status == "completed"
         assert run.output_text == "fallback 结论。"
+
+
+async def test_save_evidence_creates_pending_card(tmp_path, monkeypatch):
+    """证据门：save_evidence 落 pending 卡（claim/excerpt/page），裁决权在人。"""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("落证据卡", project_id)
+    script_llm(monkeypatch, [
+        json.dumps({"thought": "落卡", "tool": "save_evidence", "args": {
+            "claim": "集束化护理降低谵妄发生率", "excerpt": "ABCDE 集束使谵妄发生率下降 12%…",
+            "page": 5, "relation": "supports",
+        }}),
+        json.dumps({"thought": "收尾", "final": "证据已落卡。"}),
+    ])
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "落证据卡", project_id, events.append, lambda: False)
+
+    observation = next(e for e in events if e.get("kind") == "observation")
+    assert observation["result"]["saved"] is True
+    assert observation["result"]["status"] == "pending"
+    with Session(get_engine()) as session:
+        item = session.get(EvidenceItem, observation["result"]["evidenceId"])
+        assert item is not None
+        assert item.status == "pending" and item.review == "pending"
+        assert item.claim == "集束化护理降低谵妄发生率"
+        assert item.page == 5
+        assert item.project_id == project_id
+
+
+async def test_save_evidence_requires_project(tmp_path, monkeypatch):
+    """证据门：未关联项目的 run 不能落卡。"""
+    reset_backend(tmp_path, monkeypatch)
+    run_id = make_run("无项目落卡", seed_project())
+    script_llm(monkeypatch, [
+        json.dumps({"thought": "落卡", "tool": "save_evidence", "args": {"claim": "x", "excerpt": "y"}}),
+        json.dumps({"thought": "收尾", "final": "完。"}),
+    ])
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "无项目落卡", None, events.append, lambda: False)
+
+    observation = next(e for e in events if e.get("kind") == "observation")
+    assert "未关联项目" in observation["result"]["error"]
+
+
+async def test_save_evidence_rejects_unknown_reference(tmp_path, monkeypatch):
+    """证据门：referenceId 必须真实存在，防 agent 编造出处。"""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("编造出处", project_id)
+    script_llm(monkeypatch, [
+        json.dumps({"thought": "落卡", "tool": "save_evidence", "args": {
+            "claim": "x", "excerpt": "y", "referenceId": "ref-not-exist",
+        }}),
+        json.dumps({"thought": "收尾", "final": "完。"}),
+    ])
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "编造出处", project_id, events.append, lambda: False)
+
+    observation = next(e for e in events if e.get("kind") == "observation")
+    assert "文献不存在" in observation["result"]["error"]
+
+
+def test_pending_evidence_route_enriches_titles(tmp_path, monkeypatch):
+    """/evidence/pending：只回 pending 卡，并附文献标题与项目名。"""
+    from selenyx_backend.models import Reference
+    from selenyx_backend.routers.evidence import pending_evidence
+
+    reset_backend(tmp_path, monkeypatch)
+    with Session(get_engine()) as session:
+        project = ResearchProject(name="谵妄预防", current_stage="evidence", reference_ids_json="[]")
+        session.add(project)
+        session.commit()
+        session.refresh(project)
+        session.add(Reference(id="r1", title="ABCDE 集束化护理与谵妄"))
+        session.add(EvidenceItem(project_id=project.id, reference_id="r1", claim="待裁决论断", excerpt="摘录", status="pending", review="pending"))
+        session.add(EvidenceItem(project_id=project.id, reference_id="r1", claim="已接受论断", excerpt="摘录2", status="accepted", review="accepted"))
+        session.commit()
+
+        result = pending_evidence(projectId=None, session=session)
+
+    assert result["count"] == 1
+    card = result["items"][0]
+    assert card["claim"] == "待裁决论断"
+    assert card["referenceTitle"] == "ABCDE 集束化护理与谵妄"
+    assert card["projectName"] == "谵妄预防"

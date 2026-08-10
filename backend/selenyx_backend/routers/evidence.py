@@ -325,6 +325,49 @@ def evidence_summary(projectId: str | None = None, session: Session = Depends(ge
     }
 
 
+@router.get("/pending")
+def pending_evidence(projectId: str | None = None, session: Session = Depends(get_session)):
+    """证据门待裁决队列：附文献标题与项目名，供裁决卡片流直接渲染。"""
+    statement = (
+        select(EvidenceItem)
+        .where(EvidenceItem.status == "pending")
+        .order_by(EvidenceItem.updated_at.desc())
+    )
+    if projectId:
+        statement = statement.where(EvidenceItem.project_id == projectId)
+    items = list(session.exec(statement).all())
+    ref_ids = {item.reference_id for item in items if item.reference_id}
+    project_ids = {item.project_id for item in items if item.project_id}
+    ref_titles = (
+        {r.id: r.title for r in session.exec(select(Reference).where(Reference.id.in_(ref_ids))).all()}
+        if ref_ids else {}
+    )
+    project_names = (
+        {p.id: p.name for p in session.exec(select(ResearchProject).where(ResearchProject.id.in_(project_ids))).all()}
+        if project_ids else {}
+    )
+    return {
+        "items": [
+            {
+                "id": item.id,
+                "projectId": item.project_id,
+                "projectName": project_names.get(item.project_id, ""),
+                "referenceId": item.reference_id,
+                "referenceTitle": ref_titles.get(item.reference_id, ""),
+                "claim": item.claim,
+                "excerpt": item.excerpt,
+                "relation": item.relation,
+                "confidence": item.confidence,
+                "page": item.page,
+                "notes": item.notes,
+                "createdAt": item.created_at,
+            }
+            for item in items
+        ],
+        "count": len(items),
+    }
+
+
 @router.post("")
 def create_evidence(body: EvidenceCreate, session: Session = Depends(get_session)):
     if body.relation not in ALLOWED_RELATIONS:

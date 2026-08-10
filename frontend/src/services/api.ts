@@ -155,6 +155,22 @@ export interface EvidenceRecord {
   updated_at: string;
 }
 
+/** 证据门待裁决卡（/evidence/pending 富化返回） */
+export interface PendingEvidenceCard {
+  id: string;
+  projectId: string;
+  projectName: string;
+  referenceId: string;
+  referenceTitle: string;
+  claim: string;
+  excerpt: string;
+  relation: 'supports' | 'contradicts' | 'qualifies';
+  confidence: 'high' | 'medium' | 'low';
+  page: number | null;
+  notes: string;
+  createdAt: string;
+}
+
 export const searchApi = {
   semantic: (query: string, projectId?: string) =>
     request<{ results: SemanticHit[]; count: number; query: string }>('/search/semantic', {
@@ -174,6 +190,8 @@ export const searchApi = {
 export const evidenceApi = {
   list: (projectId?: string) => request<EvidenceRecord[]>(`/evidence${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
   summary: (projectId?: string) => request<Record<string, number>>(`/evidence/summary${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+  pending: (projectId?: string) =>
+    request<{ items: PendingEvidenceCard[]; count: number }>(`/evidence/pending${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
   create: (body: Record<string, unknown>) => request<EvidenceRecord>('/evidence', { method: 'POST', body: JSON.stringify(body) }),
   patch: (id: string, body: Record<string, unknown>) => request<EvidenceRecord>(`/evidence/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => request<{ deleted: string }>(`/evidence/${id}`, { method: 'DELETE' }),

@@ -7,7 +7,9 @@ loop.py（主自循环）与 subagents.py（专家子循环）共用本模块；
 
 from __future__ import annotations
 
+import inspect
 import json
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -34,14 +36,17 @@ SYSTEM_PROMPT = """你是 Selenyx 的本机研究 agent。你通过「规划→�
 - 调用工具：{"thought": "本轮推理", "tool": "工具名", "args": {"参数": "值"}}
 - 结束并作答：{"thought": "本轮推理", "final": "给用户的完整中文回答"}
 
-可用工具（只读本机数据）：
+可用工具（只读本机数据 + 落证据卡）：
 1. search_library — 在项目文献库做混合语义检索。args: {"query": "检索词", "topK": 6}
-2. list_references — 列出文献标题清单。args: {"limit": 30}
+2. list_references — 列出文献标题清单（返回 id/title/year，save_evidence 的 referenceId 用这里的 id）。args: {"limit": 30}
 3. project_context — 查看当前项目概况（阶段、文献数、证据数）。args: {}
 4. list_evidence — 列出项目证据链（默认仅人工已接受）。args: {"acceptedOnly": true}
 5. ask_expert — 把子问题委托给专家子代理（独立人格与上下文）。args: {"expert": "专家 key 或名称", "question": "子问题"}
+6. save_evidence — 把一条可核验的证据存为证据卡（进人工待裁决队列）。args: {"claim": "论断", "excerpt": "原文摘录", "referenceId": "文献 id（可空）", "page": 页码（可空）, "relation": "supports|contradicts|qualifies"}
+7. list_pending_evidence — 查看当前待人工裁决的证据卡。args: {}
 
 原则：计划 2-6 步、量力而行；不编造文献、作者、DOI 或数据；工具没查到的就明说不知道；final 用中文、结构清晰、直给结论。
+证据门：final 中凡引用文献结论，必须先 save_evidence 落卡并附原文摘录；证据卡一律 pending，经人接受才算数。
 通常先 project_context 或 search_library 摸底，再按需补查，然后 final 成稿。"""
 
 
@@ -123,61 +128,145 @@ def _clamp_int(raw: Any, default: int, upper: int) -> int:
     return max(1, min(value, upper))
 
 
-async def run_tool(session: Session, project_id: str | None, tool: str, args: dict[str, Any]) -> Any:
-    """执行白名单工具，返回可 JSON 序列化的观察结果。
+# ---------------------------------------------------------------------------
+# 工具实现：每工具一个独立函数 + TOOLS 注册表（借鉴 huggingface/smolagents
+# 的 {name: tool} 注册表模式——替代 if-chain，便于测试与模块 F 的技能
+# 白名单按名裁剪）。所有查询一律下推 SQL（limit / where / count），
+# 不全表进内存再切片。
+# ---------------------------------------------------------------------------
 
-    查询一律下推 SQL（limit / where / count），不全表进内存再切片。
-    """
-    if tool == "search_library":
-        query = str(args.get("query", "")).strip()
-        if not query:
-            return {"error": "query 不能为空"}
-        top_k = _clamp_int(args.get("topK"), 6, 12)
-        hits = await semantic_search(session, query, project_id=project_id, top_k=top_k)
-        return {
-            "hits": [
-                {"title": h.title, "excerpt": truncate(h.excerpt, 500), "page": h.page, "score": h.score}
-                for h in hits
-            ],
-            "count": len(hits),
-        }
-    if tool == "list_references":
-        limit = _clamp_int(args.get("limit"), 30, 100)
-        refs = list(session.exec(select(Reference).limit(limit)).all())
-        return {"references": [{"id": r.id, "title": r.title, "year": r.year} for r in refs], "count": len(refs)}
-    if tool == "project_context":
-        if not project_id:
-            return {"error": "任务未关联项目"}
-        project = session.get(ResearchProject, project_id)
-        if not project:
-            return {"error": "项目不存在"}
-        ref_ids = json.loads(project.reference_ids_json or "[]")
-        evidence_count = session.exec(
-            select(func.count(EvidenceItem.id)).where(EvidenceItem.project_id == project_id)
-        ).one()
-        return {
-            "name": project.name,
-            "currentStage": project.current_stage,
-            "referenceCount": len(ref_ids),
-            "evidenceCount": evidence_count,
-        }
-    if tool == "list_evidence":
-        if not project_id:
-            return {"error": "任务未关联项目"}
-        accepted_only = bool(args.get("acceptedOnly", True))
-        filters = [EvidenceItem.project_id == project_id]
-        if accepted_only:
-            filters.append(EvidenceItem.review == "accepted")
-        items = list(session.exec(select(EvidenceItem).where(*filters).limit(20)).all())
-        total = session.exec(select(func.count(EvidenceItem.id)).where(*filters)).one()
-        return {
-            "evidence": [
-                {"claim": truncate(item.claim, 300), "excerpt": truncate(item.excerpt, 400), "relation": item.relation, "review": item.review}
-                for item in items
-            ],
-            "count": total,
-        }
-    return {"error": f"未知工具：{tool}"}
+
+async def _tool_search_library(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    query = str(args.get("query", "")).strip()
+    if not query:
+        return {"error": "query 不能为空"}
+    top_k = _clamp_int(args.get("topK"), 6, 12)
+    hits = await semantic_search(session, query, project_id=project_id, top_k=top_k)
+    return {
+        "hits": [
+            {"title": h.title, "excerpt": truncate(h.excerpt, 500), "page": h.page, "score": h.score}
+            for h in hits
+        ],
+        "count": len(hits),
+    }
+
+
+def _tool_list_references(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    limit = _clamp_int(args.get("limit"), 30, 100)
+    refs = list(session.exec(select(Reference).limit(limit)).all())
+    return {"references": [{"id": r.id, "title": r.title, "year": r.year} for r in refs], "count": len(refs)}
+
+
+def _tool_project_context(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    if not project_id:
+        return {"error": "任务未关联项目"}
+    project = session.get(ResearchProject, project_id)
+    if not project:
+        return {"error": "项目不存在"}
+    ref_ids = json.loads(project.reference_ids_json or "[]")
+    evidence_count = session.exec(
+        select(func.count(EvidenceItem.id)).where(EvidenceItem.project_id == project_id)
+    ).one()
+    return {
+        "name": project.name,
+        "currentStage": project.current_stage,
+        "referenceCount": len(ref_ids),
+        "evidenceCount": evidence_count,
+    }
+
+
+def _evidence_filters(project_id: str, accepted_only: bool) -> list[Any]:
+    filters: list[Any] = [EvidenceItem.project_id == project_id]
+    if accepted_only:
+        filters.append(EvidenceItem.review == "accepted")
+    return filters
+
+
+def _tool_list_evidence(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    if not project_id:
+        return {"error": "任务未关联项目"}
+    filters = _evidence_filters(project_id, bool(args.get("acceptedOnly", True)))
+    items = list(session.exec(select(EvidenceItem).where(*filters).limit(20)).all())
+    total = session.exec(select(func.count(EvidenceItem.id)).where(*filters)).one()
+    return {
+        "evidence": [
+            {"claim": truncate(item.claim, 300), "excerpt": truncate(item.excerpt, 400), "relation": item.relation, "review": item.review}
+            for item in items
+        ],
+        "count": total,
+    }
+
+
+def _tool_save_evidence(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    # 证据门：agent 只能落 pending 卡，接受/驳回权永远在人
+    if not project_id:
+        return {"error": "任务未关联项目，无法保存证据卡"}
+    excerpt = truncate(str(args.get("excerpt", "")).strip(), 2000)
+    if not excerpt:
+        return {"error": "excerpt 不能为空：证据卡必须附原文摘录"}
+    claim = truncate(str(args.get("claim", "")).strip(), 300)
+    reference_id = str(args.get("referenceId", "")).strip()
+    if reference_id and not session.get(Reference, reference_id):
+        return {"error": f"文献不存在：{reference_id}（先用 list_references 取真实 id）"}
+    relation = str(args.get("relation", "supports"))
+    if relation not in ("supports", "contradicts", "qualifies"):
+        return {"error": f"relation 非法：{relation}"}
+    page_raw = args.get("page")
+    page = page_raw if isinstance(page_raw, int) and page_raw > 0 else None
+    item = EvidenceItem(
+        project_id=project_id,
+        reference_id=reference_id,
+        claim=claim,
+        excerpt=excerpt,
+        relation=relation,
+        review="pending",
+        status="pending",
+        confidence="medium",
+        page=page,
+        notes="agent 产出，待人工裁决",
+    )
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return {"saved": True, "evidenceId": item.id, "status": "pending", "message": "证据卡已进入待裁决队列"}
+
+
+def _tool_list_pending_evidence(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    if not project_id:
+        return {"error": "任务未关联项目"}
+    pending_filters = [EvidenceItem.project_id == project_id, EvidenceItem.status == "pending"]
+    items = list(session.exec(select(EvidenceItem).where(*pending_filters).limit(20)).all())
+    total = session.exec(select(func.count(EvidenceItem.id)).where(*pending_filters)).one()
+    return {
+        "pending": [
+            {"id": item.id, "claim": item.claim, "excerpt": truncate(item.excerpt, 300), "page": item.page}
+            for item in items
+        ],
+        "count": total,
+    }
+
+
+ToolHandler = Callable[..., Any]
+
+TOOLS: dict[str, ToolHandler] = {
+    "search_library": _tool_search_library,
+    "list_references": _tool_list_references,
+    "project_context": _tool_project_context,
+    "list_evidence": _tool_list_evidence,
+    "save_evidence": _tool_save_evidence,
+    "list_pending_evidence": _tool_list_pending_evidence,
+}
+
+
+async def run_tool(session: Session, project_id: str | None, tool: str, args: dict[str, Any]) -> Any:
+    """按注册表执行白名单工具，返回可 JSON 序列化的观察结果。"""
+    handler = TOOLS.get(tool)
+    if handler is None:
+        return {"error": f"未知工具：{tool}"}
+    result = handler(session, project_id, args)
+    if inspect.isawaitable(result):
+        result = await result
+    return result
 
 
 __all__ = [
@@ -185,6 +274,7 @@ __all__ = [
     "FOLD_KEEP_LAST",
     "FOLD_BUDGET",
     "MAX_MSG_CHARS",
+    "TOOLS",
     "extract_action",
     "complete",
     "truncate",

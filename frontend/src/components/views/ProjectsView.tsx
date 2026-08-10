@@ -13,6 +13,7 @@ import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
 import { CORE_RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
 import { orderProjectsForWorkspace, projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
+import { evidenceApi } from '@services/api';
 
 const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
   { label: '全部', match: [] },
@@ -221,7 +222,7 @@ export function ProjectsView() {
   const {
     projects, tasks, currentProjectId, setCurrentProject, addProject, deleteProject,
     setPrimaryProject, setView, workspaceSyncStatus, workspaceSyncMessage,
-    pendingCreateProject, clearPendingCreateProject,
+    pendingCreateProject, clearPendingCreateProject, setLibraryTab,
   } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
   const [showFrameworks, setShowFrameworks] = useState(false);
@@ -231,7 +232,22 @@ export function ProjectsView() {
   });
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [disciplineFilter, setDisciplineFilter] = useState(DISCIPLINE_FILTERS[0]);
+  const [pendingEvidenceByProject, setPendingEvidenceByProject] = useState<Record<string, number>>({});
   const isMobile = useIsMobile();
+
+  /* 证据门角标：各项目待裁决证据卡计数（后端离线时静默不显示） */
+  useEffect(() => {
+    let cancelled = false;
+    evidenceApi.list().then((items) => {
+      if (cancelled) return;
+      const counts: Record<string, number> = {};
+      for (const item of items) {
+        if (item.review === 'pending') counts[item.project_id] = (counts[item.project_id] ?? 0) + 1;
+      }
+      setPendingEvidenceByProject(counts);
+    }).catch(() => { /* 后端离线 */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const visibleFrameworks = disciplineFilter.match.length === 0
     ? CORE_RESEARCH_FRAMEWORKS
@@ -451,6 +467,17 @@ export function ProjectsView() {
                     </span>
                     {project.isPrimary && <span className="project-primary-badge">主线课题</span>}
                     {isActive && <span className="project-active-badge">当前</span>}
+                    {(pendingEvidenceByProject[project.id] ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        className="evidence-pending-badge"
+                        style={{ padding: '1px 9px', fontSize: 11 }}
+                        title="有待裁决证据卡，前往证据门"
+                        onClick={(event) => { event.stopPropagation(); setLibraryTab('evidence'); setView('library'); }}
+                      >
+                        <span className="dot" aria-hidden="true" /> 待裁决 {pendingEvidenceByProject[project.id]}
+                      </button>
+                    )}
                   </h3>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '3px 10px', borderRadius: 10, background: 'var(--accent-light)', color: 'var(--accent)', flexShrink: 0 }}>
                     {stage && <Icon name={STAGE_ICONS[stage.key]} size={13} />} {stage?.label}
