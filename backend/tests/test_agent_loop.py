@@ -310,3 +310,87 @@ async def test_step_numbering_no_gaps(tmp_path, monkeypatch):
     assert steps == sorted(steps)
     first_seen = list(dict.fromkeys(steps))
     assert first_seen == [1, 2, 3]
+
+
+async def test_max_steps_forces_wrap_up(tmp_path, monkeypatch):
+    """步数耗尽：强制模型基于已收集信息收尾一次，终稿来自强制收尾。"""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("超长任务", project_id)
+    replies = [
+        json.dumps({"thought": f"第 {i} 查", "tool": "list_references", "args": {}})
+        for i in range(agent_loop.MAX_STEPS)
+    ] + [json.dumps({"thought": "被迫收尾", "final": "阶段性结论：证据不足。"})]
+    calls = script_llm(monkeypatch, replies)
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "超长任务", project_id, events.append, lambda: False)
+
+    assert len(calls) == agent_loop.MAX_STEPS + 1  # 12 步工具循环 + 1 次强制收尾
+    assert any("已达到最大工具步数" in m.get("content", "") for m in calls[-1] if m["role"] == "user")
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None and run.status == "completed"
+        assert run.output_text == "阶段性结论：证据不足。"
+
+
+async def test_max_steps_wrap_up_failure_falls_back(tmp_path, monkeypatch):
+    """强制收尾也失败（LLM 故障）：落兜底文案，run 仍正常 completed。"""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("超长任务", project_id)
+    replies = iter([
+        json.dumps({"thought": f"第 {i} 查", "tool": "list_references", "args": {}})
+        for i in range(agent_loop.MAX_STEPS)
+    ])
+
+    async def fake_complete(messages):
+        try:
+            return next(replies)
+        except StopIteration:
+            from fastapi import HTTPException
+            raise HTTPException(502, "LLM 连接失败。")
+
+    monkeypatch.setattr(agent_loop, "_complete", fake_complete)
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "超长任务", project_id, events.append, lambda: False)
+
+    errors = [e for e in events if e.get("kind") == "error"]
+    assert any("收尾调用失败" in e.get("message", "") for e in errors)
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None and run.status == "completed"
+        assert "已达到最大步数" in run.output_text
+
+
+async def test_subagent_llm_failure_degrades_to_observation(tmp_path, monkeypatch):
+    """子代理 LLM 故障：降级为 error 观察回灌主循环，不炸掉整个 run。"""
+    from fastapi import HTTPException
+
+    from selenyx_backend.routers.experts import seed_builtin_experts
+
+    reset_backend(tmp_path, monkeypatch)
+    seed_builtin_experts()
+    run_id = make_run("委托专家", seed_project())
+
+    script_llm(monkeypatch, [
+        '{"thought": "委托", "tool": "ask_expert", "args": {"expert": "reviewer", "question": "怎么归类？"}}',
+        '{"thought": "专家挂了，自己答", "final": "fallback 结论。"}',
+    ])
+
+    async def failing_complete(messages):
+        raise HTTPException(503, "LLM 未配置。")
+
+    import selenyx_backend.services.agent.subagents as subagents
+    monkeypatch.setattr(subagents, "_complete", failing_complete)
+
+    events: list[dict] = []
+    await agent_loop.execute_run(run_id, "委托专家", None, events.append, lambda: False)
+
+    observation = next(e for e in events if e.get("kind") == "observation")
+    assert "暂不可用" in observation["result"]["error"]
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None and run.status == "completed"
+        assert run.output_text == "fallback 结论。"
