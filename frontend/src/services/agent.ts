@@ -51,10 +51,10 @@ export function isActiveRun(status: string): boolean {
 }
 
 export const agentApi = {
-  start: (goal: string, projectId: string | null, review = false, confirmPlan = false) =>
+  start: (goal: string, projectId: string | null, review = false, confirmPlan = false, recipe?: string) =>
     request<{ runId: string; status: string }>('/agent/runs', {
       method: 'POST',
-      body: JSON.stringify({ goal, projectId, review, confirmPlan }),
+      body: JSON.stringify({ goal, projectId, review, confirmPlan, recipe: recipe ?? null }),
     }),
   list: () => request<{ runs: AgentRunSummary[] }>('/agent/runs'),
   get: (runId: string) => request<AgentRunDetail>(`/agent/runs/${runId}`),

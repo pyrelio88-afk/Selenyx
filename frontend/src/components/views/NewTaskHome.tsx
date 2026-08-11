@@ -19,15 +19,18 @@ interface TaskTemplate {
   desc: string;
   prompt: string;
   review: boolean;
+  /** 内置流水线（V4 模块 E）：综述流水线 = 综述员起草→批评员审→修订→染色成稿 */
+  recipe?: string;
 }
 
 const TEMPLATES: TaskTemplate[] = [
   {
     icon: 'stageLiterature',
     title: '文献综述',
-    desc: '梳理文献库证据，产出结构化综述提纲',
+    desc: '综述流水线：综述员起草→批评员审→证据染色成稿',
     prompt: '帮我梳理这个项目文献库的核心证据，产出一份结构化综述提纲（含研究缺口）。',
     review: true,
+    recipe: 'review-pipeline',
   },
   {
     icon: 'stageEvidence',
@@ -67,6 +70,7 @@ export function NewTaskHome() {
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
   const [confirmPlan, setConfirmPlan] = useState(false);
+  const [recipe, setRecipe] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
   const [recent, setRecent] = useState<AgentRunSummary[]>([]);
@@ -108,6 +112,7 @@ export function NewTaskHome() {
   const applyTemplate = (template: TaskTemplate) => {
     setGoal(template.prompt);
     setReview(template.review);
+    setRecipe(template.recipe);
   };
 
   const submit = async () => {
@@ -115,7 +120,7 @@ export function NewTaskHome() {
     if (!text || submitting) return;
     setSubmitting(true);
     try {
-      const { runId } = await agentApi.start(text, projectId || null, review, confirmPlan);
+      const { runId } = await agentApi.start(text, projectId || null, review, confirmPlan, recipe);
       setGoal('');
       requestRunFocus(runId); // 跳任务详情（任务视图）
     } catch (error) {
@@ -192,6 +197,12 @@ export function NewTaskHome() {
             <input type="checkbox" checked={confirmPlan} onChange={(event) => setConfirmPlan(event.target.checked)} />
             计划先给我确认
           </label>
+          {recipe && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, padding: '3px 10px', borderRadius: 999, border: '1px solid var(--cinnabar)', color: 'var(--cinnabar)' }}>
+              流水线：综述流水线
+              <button type="button" onClick={() => setRecipe(undefined)} aria-label="移除流水线" style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, font: 'inherit' }}>×</button>
+            </span>
+          )}
           <button
             type="button"
             className="btn btn-primary"

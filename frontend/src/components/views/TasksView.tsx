@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
 import { STATUS_COLOR, STATUS_LABEL, StepRow } from '@components/tasks/StepRow';
+import { groupSubagentSteps, isSubagentGroup } from '@components/tasks/groupSteps';
 import { RunOutput } from '@components/tasks/RunOutput';
 import {
   agentApi,
@@ -314,7 +315,28 @@ export function TasksView() {
             )}
 
             <ul className="agent-steps" style={{ margin: '0 0 12px', padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
-              {selected.auditLog.map((step, i) => <StepRow key={i} step={step} />)}
+              {groupSubagentSteps(selected.auditLog).map((item, i) =>
+                isSubagentGroup(item) ? (
+                  <li key={i} className="agent-step is-subagent" style={{ display: 'block' }}>
+                    <details>
+                      <summary style={{ cursor: 'pointer', display: 'flex', gap: 7, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                        <Icon name="chip" size={13} />
+                        <span>专家 <b>{item.expert}</b> 接力 · {item.entries.length} 步</span>
+                        {item.answer && (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>
+                            结论：{item.answer.slice(0, 60)}{item.answer.length > 60 ? '…' : ''}
+                          </span>
+                        )}
+                      </summary>
+                      <ul className="agent-steps" style={{ margin: '6px 0 0', padding: '0 0 0 20px', listStyle: 'none', display: 'grid', gap: 6 }}>
+                        {item.entries.map((s, j) => <StepRow key={j} step={s} />)}
+                      </ul>
+                    </details>
+                  </li>
+                ) : (
+                  <StepRow key={i} step={item} />
+                ),
+              )}
               {selected.status === 'running' && <li className="agent-step is-thought"><Icon name="clock" size={13} /><span>Selenyx 正在思考与检索…</span></li>}
             </ul>
 

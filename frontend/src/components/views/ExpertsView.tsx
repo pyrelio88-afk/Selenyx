@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon, type IconName } from '@components/ui/Icon';
-import { expertsApi, type ExpertDef } from '@services/extensions';
+import { expertsApi, TOOL_BOUNDARY_LABEL, type ExpertDef, type ExpertDelegation } from '@services/extensions';
 
 const EXPERT_ICONS: Record<string, IconName> = {
   reviewer: 'references',
@@ -20,6 +20,7 @@ const EXPERT_ICONS: Record<string, IconName> = {
 
 export function ExpertsView() {
   const setView = useAppStore((s) => s.setView);
+  const requestRunFocus = useAppStore((s) => s.requestRunFocus);
   const [experts, setExperts] = useState<ExpertDef[]>([]);
   const [offline, setOffline] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -27,6 +28,8 @@ export function ExpertsView() {
   const [name, setName] = useState('');
   const [tagline, setTagline] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [delegations, setDelegations] = useState<Record<string, ExpertDelegation[]>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -46,6 +49,20 @@ export function ExpertsView() {
     sessionStorage.setItem('selenyx_skill_prompt', `${expert.systemPrompt}\n\n请先问我：这次需要协助的材料或问题是什么。`);
     sessionStorage.setItem('selenyx_skill_name', `专家 · ${expert.name}`);
     setView('aiChat');
+  };
+
+  /* 详情展开：工具边界随列表已下发，被委托记录按需拉取 */
+  const toggleDetail = async (expert: ExpertDef) => {
+    const next = detailId === expert.id ? null : expert.id;
+    setDetailId(next);
+    if (next && !delegations[next]) {
+      try {
+        const { delegations: list } = await expertsApi.delegations(next);
+        setDelegations((prev) => ({ ...prev, [next]: list }));
+      } catch {
+        setDelegations((prev) => ({ ...prev, [next]: [] }));
+      }
+    }
   };
 
   const create = async () => {
@@ -134,9 +151,63 @@ export function ExpertsView() {
               )}
             </div>
             <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{expert.tagline || '自定义专家'}</p>
-            <button type="button" className="btn btn-primary" onClick={() => activate(expert)} style={{ justifySelf: 'start', minHeight: 36 }}>
-              <Icon name="sparkles" size={14} /> 启用
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="btn btn-primary" onClick={() => activate(expert)} style={{ justifySelf: 'start', minHeight: 36 }}>
+                <Icon name="sparkles" size={14} /> 对话
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void toggleDetail(expert)}
+                aria-expanded={detailId === expert.id}
+                style={{ minHeight: 36, fontSize: 12.5 }}
+              >
+                <Icon name="list" size={13} /> {detailId === expert.id ? '收起' : '详情'}
+              </button>
+            </div>
+            {detailId === expert.id && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'grid', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 4 }}>工具边界（被 agent 委托时）</div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {(expert.toolBoundary ?? []).map((tool) => (
+                      <span key={tool} style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 999, border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                        {TOOL_BOUNDARY_LABEL[tool] ?? tool}
+                      </span>
+                    ))}
+                    <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 999, border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                      不可写笔记/工件 · 不可再委托
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 4 }}>被委托记录</div>
+                  {(delegations[expert.id] ?? []).length === 0 ? (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>还没有被委托过；在任务里它会以子代理身份出场。</span>
+                  ) : (
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
+                      {(delegations[expert.id] ?? []).map((d) => (
+                        <li key={d.runId}>
+                          <button
+                            type="button"
+                            onClick={() => requestRunFocus(d.runId)}
+                            title="跳转到任务详情"
+                            style={{
+                              width: '100%', textAlign: 'left', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                              background: 'transparent', cursor: 'pointer', font: 'inherit', padding: '6px 10px',
+                              display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)',
+                            }}
+                          >
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>{d.goal}</span>
+                            <span style={{ flexShrink: 0, color: 'var(--text-muted)' }}>{d.steps} 步</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
