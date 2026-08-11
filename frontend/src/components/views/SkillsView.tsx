@@ -3,6 +3,7 @@ import { RESEARCH_SKILLS, SKILL_CATEGORIES, type ResearchSkill } from '@data/ski
 import { useAppStore } from '@stores/appStore';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { useIsMobile } from '@lib/useIsMobile';
+import { AgentSkillsPanel } from '@components/views/AgentSkillsPanel';
 import '../../styles/skills-workbench.css';
 
 interface SkillRuntimeStatus {
@@ -191,6 +192,7 @@ function SkillDetail({ skill, copied, onCopy, onSend, onBack }: SkillDetailProps
 
 export function SkillsView() {
   const isMobile = useIsMobile();
+  const [section, setSection] = useState<'agent' | 'catalog'>('agent');
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(RESEARCH_SKILLS[0]?.id ?? null);
@@ -250,7 +252,32 @@ export function SkillsView() {
 
   return (
     <div className="skills-workbench">
-      {isMobile ? (mobileDetailOpen && selected ? detail : directory) : <div className="skills-workbench-grid">{directory}{detail}</div>}
+      {/* 模块 F：Agent 技能（本机 SKILL.md 真管理）与静态能力目录分区 */}
+      <div style={{ display: 'flex', gap: 6, padding: '10px 16px 0' }} role="group" aria-label="技能分区">
+        <button
+          type="button"
+          className={`btn ${section === 'agent' ? 'btn-primary' : ''}`}
+          onClick={() => setSection('agent')}
+          aria-pressed={section === 'agent'}
+          style={{ minHeight: 32, fontSize: 12.5 }}
+        >
+          Agent 技能
+        </button>
+        <button
+          type="button"
+          className={`btn ${section === 'catalog' ? 'btn-primary' : ''}`}
+          onClick={() => setSection('catalog')}
+          aria-pressed={section === 'catalog'}
+          style={{ minHeight: 32, fontSize: 12.5 }}
+        >
+          能力目录
+        </button>
+      </div>
+      {section === 'agent' ? (
+        <AgentSkillsPanel />
+      ) : isMobile ? (mobileDetailOpen && selected ? detail : directory) : (
+        <div className="skills-workbench-grid">{directory}{detail}</div>
+      )}
       {message && <div className="skills-toast" role="status">{message}</div>}
     </div>
   );

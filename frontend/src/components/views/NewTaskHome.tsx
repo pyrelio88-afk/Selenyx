@@ -11,6 +11,7 @@ import { useAppStore } from '@stores/appStore';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
 import { agentApi, type AgentRunSummary } from '@services/agent';
+import { parseSkillPrefix } from '@services/skills';
 import { evidenceApi } from '@services/api';
 
 interface TaskTemplate {
@@ -65,7 +66,7 @@ function greeting(): string {
 }
 
 export function NewTaskHome() {
-  const { projects, currentProjectId, nickname, requestRunFocus, setView, setLibraryTab } = useAppStore();
+  const { projects, currentProjectId, nickname, requestRunFocus, setView, setLibraryTab, customInstructions } = useAppStore();
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
@@ -120,7 +121,15 @@ export function NewTaskHome() {
     if (!text || submitting) return;
     setSubmitting(true);
     try {
-      const { runId } = await agentApi.start(text, projectId || null, review, confirmPlan, recipe);
+      // 输入框 /技能名 前缀（模块 F）：解析后随 run 注入指令并裁剪工具白名单
+      const parsed = parseSkillPrefix(text);
+      const { runId } = await agentApi.start(parsed.goal, projectId || null, {
+        review,
+        confirmPlan,
+        recipe,
+        skill: parsed.skill,
+        customInstructions,
+      });
       setGoal('');
       requestRunFocus(runId); // 跳任务详情（任务视图）
     } catch (error) {
@@ -174,7 +183,7 @@ export function NewTaskHome() {
               void submit();
             }
           }}
-          placeholder="一句话开始干活，例如：帮我梳理这个项目文献库里关于「谵妄预防」的证据…"
+          placeholder="一句话开始干活，例如：帮我梳理这个项目文献库里关于「谵妄预防」的证据…（可用 /技能名 开头调用技能）"
           rows={3}
           style={{ width: '100%', resize: 'vertical' }}
           aria-label="任务目标"

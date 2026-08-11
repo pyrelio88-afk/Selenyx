@@ -50,11 +50,28 @@ export function isActiveRun(status: string): boolean {
   return status === 'running' || status === 'cancelling' || status === 'waiting_confirm';
 }
 
+export interface StartRunOptions {
+  review?: boolean;
+  confirmPlan?: boolean;
+  recipe?: string;
+  /** 模块 F：/技能名 解析出的技能；自定义指令随 run 注入 system 后缀 */
+  skill?: string | null;
+  customInstructions?: string;
+}
+
 export const agentApi = {
-  start: (goal: string, projectId: string | null, review = false, confirmPlan = false, recipe?: string) =>
+  start: (goal: string, projectId: string | null, opts: StartRunOptions = {}) =>
     request<{ runId: string; status: string }>('/agent/runs', {
       method: 'POST',
-      body: JSON.stringify({ goal, projectId, review, confirmPlan, recipe: recipe ?? null }),
+      body: JSON.stringify({
+        goal,
+        projectId,
+        review: opts.review ?? false,
+        confirmPlan: opts.confirmPlan ?? false,
+        recipe: opts.recipe ?? null,
+        skill: opts.skill ?? null,
+        customInstructions: opts.customInstructions ?? null,
+      }),
     }),
   list: () => request<{ runs: AgentRunSummary[] }>('/agent/runs'),
   get: (runId: string) => request<AgentRunDetail>(`/agent/runs/${runId}`),

@@ -15,6 +15,7 @@ import { testConnection, PROVIDER_DEFAULTS, type TestResult } from '@services/ll
 import type { LLMConfig } from '@apptypes/index';
 import { readEnvironmentLLM } from '@services/envLLM';
 import { aiApi, localApi } from '@services/api';
+import { MemorySection } from '@components/settings/MemorySection';
 import {
   clearSelenyxBrowserStorage,
   createWorkspaceBackupJson,
@@ -323,26 +324,13 @@ export function SettingsModal() {
                     <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--text-muted)' }}>{customInstructions.length}/1500</span>
                   </div>
                   <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    注入接线随「技能 + 记忆」模块一同接通（见产品计划模块 F）；当前先行保存。
+                    已接通：每次 agent 任务启动时，这段指令会作为 system 后缀注入（≤1500 字）。
                   </p>
                 </div>
               </section>
             )}
 
-            {settingsSection === 'memory' && (
-              <section aria-label="记忆">
-                <div className="card v4-placeholder">
-                  <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>记忆管理</h3>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                    Selenyx 将拥有两层记忆：全局记忆（跨项目的偏好与结论）与项目记忆（如「该项目聚焦老年谵妄」）。
-                    agent 任务启动时注入摘要、收尾时追加要点——记忆永不外发，只进 prompt。
-                  </p>
-                  <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                    查看 / 编辑 / 清空 / 导出将在「技能 + 记忆」模块上线后可用（产品计划模块 F）。
-                  </p>
-                </div>
-              </section>
-            )}
+            {settingsSection === 'memory' && <MemorySection />}
 
             {settingsSection === 'model' && (
               <section aria-label="模型">

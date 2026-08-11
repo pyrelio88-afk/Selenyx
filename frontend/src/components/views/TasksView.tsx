@@ -18,12 +18,14 @@ import {
   type AgentRunDetail,
   type AgentRunSummary,
 } from '@services/agent';
+import { parseSkillPrefix } from '@services/skills';
 
 export function TasksView() {
   const projects = useAppStore((s) => s.projects);
   const currentProjectId = useAppStore((s) => s.currentProjectId);
   const focusRunId = useAppStore((s) => s.focusRunId);
   const clearRunFocus = useAppStore((s) => s.clearRunFocus);
+  const customInstructions = useAppStore((s) => s.customInstructions);
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
@@ -124,7 +126,14 @@ export function TasksView() {
     if (!text || submitting) return;
     setSubmitting(true);
     try {
-      const { runId } = await agentApi.start(text, projectId || null, review, confirmPlan);
+      // 输入框 /技能名 前缀（模块 F）：解析后随 run 注入指令并裁剪工具白名单
+      const parsed = parseSkillPrefix(text);
+      const { runId } = await agentApi.start(parsed.goal, projectId || null, {
+        review,
+        confirmPlan,
+        skill: parsed.skill,
+        customInstructions,
+      });
       setGoal('');
       await refreshList();
       await refreshDetail(runId);
