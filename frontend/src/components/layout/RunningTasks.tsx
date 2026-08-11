@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
-import { agentApi, type AgentRunSummary } from '@services/agent';
+import { agentApi, isActiveRun, type AgentRunSummary } from '@services/agent';
 
 function relativeTime(iso: string | null): string {
   if (!iso) return '';
@@ -30,7 +30,7 @@ export function RunningTasks() {
     const load = async () => {
       try {
         const { runs } = await agentApi.list();
-        if (!stopped) setRunning(runs.filter((r) => r.status === 'running' || r.status === 'cancelling'));
+        if (!stopped) setRunning(runs.filter((r) => isActiveRun(r.status)));
       } catch {
         if (!stopped) setRunning([]);
       }

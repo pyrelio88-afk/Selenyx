@@ -5,12 +5,18 @@
  * 运行记录持久化在后端 SQLite；刷新页面后仍可回看。
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
 import { STATUS_COLOR, STATUS_LABEL, StepRow } from '@components/tasks/StepRow';
 import { RunOutput } from '@components/tasks/RunOutput';
-import { agentApi, type AgentRunDetail, type AgentRunSummary } from '@services/agent';
+import {
+  agentApi,
+  isActiveRun,
+  subscribeRunEvents,
+  type AgentRunDetail,
+  type AgentRunSummary,
+} from '@services/agent';
 
 export function TasksView() {
   const projects = useAppStore((s) => s.projects);
@@ -20,10 +26,14 @@ export function TasksView() {
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
+  const [confirmPlan, setConfirmPlan] = useState(false);
   const [runs, setRuns] = useState<AgentRunSummary[]>([]);
   const [selected, setSelected] = useState<AgentRunDetail | null>(null);
   const [backendOffline, setBackendOffline] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [steerText, setSteerText] = useState('');
+  const [adjustment, setAdjustment] = useState('');
+  const [sseFailed, setSseFailed] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const activeProjects = projects.filter((p) => p.status !== 'archived');
@@ -64,14 +74,38 @@ export function TasksView() {
 
   const selectedId = selected?.id;
   const selectedStatus = selected?.status;
+
+  /* SSE 优先（V4 模块 D）：活动 run 订阅事件流，事件驱动刷新详情（DB 为真相源） */
+  useEffect(() => {
+    if (!selectedId || !selectedStatus || !isActiveRun(selectedStatus)) return;
+    setSseFailed(false);
+    let refreshTimer: number | null = null;
+    const close = subscribeRunEvents(selectedId, {
+      onEvent: () => {
+        if (refreshTimer) window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => void refreshDetail(selectedId), 300);
+      },
+      onStatus: () => {
+        void refreshDetail(selectedId);
+        void refreshList();
+      },
+      onError: () => setSseFailed(true),
+    });
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      close();
+    };
+  }, [selectedId, selectedStatus, refreshDetail, refreshList]);
+
+  /* 轮询兜底：SSE 断线时接管实时刷新 */
   useEffect(() => {
     if (pollRef.current) window.clearInterval(pollRef.current);
     pollRef.current = null;
-    if (!selectedId || (selectedStatus !== 'running' && selectedStatus !== 'cancelling')) return;
+    if (!selectedId || !selectedStatus || !isActiveRun(selectedStatus) || !sseFailed) return;
     pollRef.current = window.setInterval(() => {
       void (async () => {
         const detail = await refreshDetail(selectedId);
-        if (detail && detail.status !== 'running' && detail.status !== 'cancelling') {
+        if (detail && !isActiveRun(detail.status)) {
           if (pollRef.current) window.clearInterval(pollRef.current);
           pollRef.current = null;
           void refreshList();
@@ -82,14 +116,14 @@ export function TasksView() {
       if (pollRef.current) window.clearInterval(pollRef.current);
       pollRef.current = null;
     };
-  }, [selectedId, selectedStatus, refreshDetail, refreshList]);
+  }, [selectedId, selectedStatus, sseFailed, refreshDetail, refreshList]);
 
   const submit = async () => {
     const text = goal.trim();
     if (!text || submitting) return;
     setSubmitting(true);
     try {
-      const { runId } = await agentApi.start(text, projectId || null, review);
+      const { runId } = await agentApi.start(text, projectId || null, review, confirmPlan);
       setGoal('');
       await refreshList();
       await refreshDetail(runId);
@@ -107,6 +141,37 @@ export function TasksView() {
       await refreshDetail(runId);
     } catch { /* 忽略：下一次轮询会收敛状态 */ }
   };
+
+  const sendSteer = async () => {
+    const text = steerText.trim();
+    if (!text || !selected) return;
+    try {
+      await agentApi.steer(selected.id, text);
+      setSteerText('');
+    } catch (error) {
+      alert(`插话失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const confirmRun = async (withAdjustment: boolean) => {
+    if (!selected) return;
+    try {
+      await agentApi.confirm(selected.id, withAdjustment ? adjustment.trim() : undefined);
+      setAdjustment('');
+      await refreshDetail(selected.id);
+    } catch (error) {
+      alert(`确认失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  /* plan 确认门横幅用：取最近一条计划 */
+  const latestPlan = useMemo(() => {
+    if (!selected) return null;
+    for (let i = selected.auditLog.length - 1; i >= 0; i -= 1) {
+      if (selected.auditLog[i].kind === 'plan') return selected.auditLog[i];
+    }
+    return null;
+  }, [selected]);
 
   return (
     <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
@@ -148,6 +213,10 @@ export function TasksView() {
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
             <input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} />
             成稿前批评审查（多 1-2 次模型调用）
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+            <input type="checkbox" checked={confirmPlan} onChange={(e) => setConfirmPlan(e.target.checked)} />
+            计划先给我确认
           </label>
           <button type="button" className="btn btn-primary" onClick={() => void submit()} disabled={!goal.trim() || submitting || backendOffline}>
             <Icon name="send" size={15} /> {submitting ? '创建中…' : '交给 Selenyx'}
@@ -198,17 +267,72 @@ export function TasksView() {
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                {(selected.status === 'running') && (
+                {isActiveRun(selected.status) && (
                   <button type="button" className="btn" onClick={() => void cancel(selected.id)} style={{ minHeight: 32, fontSize: 12, color: 'var(--danger)' }}>取消</button>
                 )}
                 <button type="button" className="btn" onClick={() => setSelected(null)} aria-label="关闭详情" style={{ minHeight: 32, fontSize: 12 }}>关闭</button>
               </div>
             </div>
 
+            {selected.status === 'waiting_confirm' && (
+              <div
+                role="group"
+                aria-label="计划确认"
+                style={{
+                  margin: '0 0 12px', padding: '12px 14px', border: '1px solid var(--accent)',
+                  borderRadius: 'var(--radius-md)', display: 'grid', gap: 8,
+                }}
+              >
+                <b style={{ fontSize: 13, color: 'var(--text-primary)' }}>计划已出，等你落锤</b>
+                {latestPlan && (
+                  <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 2, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                    {(latestPlan.items ?? []).map((item, i) => <li key={i}>{item}</li>)}
+                  </ol>
+                )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button type="button" className="btn btn-primary" onClick={() => void confirmRun(false)} style={{ minHeight: 34, fontSize: 12.5 }}>
+                    <Icon name="check" size={13} /> 按计划执行
+                  </button>
+                  <input
+                    value={adjustment}
+                    onChange={(e) => setAdjustment(e.target.value)}
+                    placeholder="调整意见（可选）…"
+                    aria-label="调整意见"
+                    style={{ flex: 1, minWidth: 180, minHeight: 34 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => void confirmRun(true)}
+                    disabled={!adjustment.trim()}
+                    style={{ minHeight: 34, fontSize: 12.5 }}
+                  >
+                    调整后执行
+                  </button>
+                </div>
+              </div>
+            )}
+
             <ul className="agent-steps" style={{ margin: '0 0 12px', padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
               {selected.auditLog.map((step, i) => <StepRow key={i} step={step} />)}
               {selected.status === 'running' && <li className="agent-step is-thought"><Icon name="clock" size={13} /><span>Selenyx 正在思考与检索…</span></li>}
             </ul>
+
+            {selected.status === 'running' && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input
+                  value={steerText}
+                  onChange={(e) => setSteerText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void sendSteer(); }}
+                  placeholder="运行中插话：补充方向、纠正重点…"
+                  aria-label="运行中插话"
+                  style={{ flex: 1, minHeight: 36 }}
+                />
+                <button type="button" className="btn" onClick={() => void sendSteer()} disabled={!steerText.trim()} style={{ minHeight: 36, fontSize: 12.5 }}>
+                  <Icon name="send" size={13} /> 插话
+                </button>
+              </div>
+            )}
 
             {selected.outputText && <RunOutput run={selected} />}
           </div>
@@ -227,6 +351,9 @@ export function TasksView() {
         .agent-step.is-plan b { color: var(--text-primary); }
         .agent-step.is-review svg { color: var(--warning); }
         .agent-step.is-subagent svg { color: var(--accent); }
+        .agent-step.is-steer { color: var(--text-primary); }
+        .agent-step.is-steer svg { color: var(--accent); }
+        .agent-step.is-waiting svg { color: var(--accent); }
       `}</style>
     </div>
   );

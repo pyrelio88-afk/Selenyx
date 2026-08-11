@@ -66,6 +66,7 @@ export function NewTaskHome() {
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
+  const [confirmPlan, setConfirmPlan] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
   const [recent, setRecent] = useState<AgentRunSummary[]>([]);
@@ -114,7 +115,7 @@ export function NewTaskHome() {
     if (!text || submitting) return;
     setSubmitting(true);
     try {
-      const { runId } = await agentApi.start(text, projectId || null, review);
+      const { runId } = await agentApi.start(text, projectId || null, review, confirmPlan);
       setGoal('');
       requestRunFocus(runId); // 跳任务详情（任务视图）
     } catch (error) {
@@ -186,6 +187,10 @@ export function NewTaskHome() {
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
             <input type="checkbox" checked={review} onChange={(event) => setReview(event.target.checked)} />
             成稿前批评审查（多 1-2 次模型调用）
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+            <input type="checkbox" checked={confirmPlan} onChange={(event) => setConfirmPlan(event.target.checked)} />
+            计划先给我确认
           </label>
           <button
             type="button"

@@ -47,6 +47,7 @@
   animation: v4-pulse 1.6s ease-in-out infinite;
 }
 .dynamic-dot.is-cancelling { background: var(--warning); }
+.dynamic-dot.is-waiting_confirm { background: var(--accent); animation: none; }
 @keyframes v4-pulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cinnabar) 32%, transparent); }
   50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--cinnabar) 12%, transparent); }

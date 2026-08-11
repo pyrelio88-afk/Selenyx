@@ -14,6 +14,11 @@ const API_BASE = (isMobileTauri()
   ? ''
   : configuredApiBase || (isDesktopTauri() ? 'http://127.0.0.1:8770/api' : '/api')).replace(/\/$/, '');
 
+/** 拼 API 绝对地址（EventSource 等裸连接用，request 之外的场景）。 */
+export function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!API_BASE) {
     throw new Error('The mobile app is offline-first. A paired companion service is not available in this build.');

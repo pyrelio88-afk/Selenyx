@@ -9,10 +9,11 @@ import type { AgentStep } from '@services/agent';
 
 export const STATUS_LABEL: Record<string, string> = {
   running: '运行中', cancelling: '取消中', completed: '已完成', failed: '失败', cancelled: '已取消',
+  waiting_confirm: '待确认计划',
 };
 export const STATUS_COLOR: Record<string, string> = {
   running: 'var(--warning)', cancelling: 'var(--warning)', completed: 'var(--success)',
-  failed: 'var(--danger)', cancelled: 'var(--text-muted)',
+  failed: 'var(--danger)', cancelled: 'var(--text-muted)', waiting_confirm: 'var(--accent)',
 };
 const TOOL_LABEL: Record<string, string> = {
   search_library: '检索文献库', list_references: '列出文献', project_context: '读取项目概况', list_evidence: '读取证据链',
@@ -78,6 +79,22 @@ export function StepRow({ step }: { step: AgentStep }) {
       <li className="agent-step is-observation">
         <Icon name="check" size={13} />
         <span>证据校验：{s.supported ?? 0}/{s.sentences ?? 0} 论断有据，其中 {s.fullyAccepted ?? 0} 条人工已接受</span>
+      </li>
+    );
+  }
+  if (step.kind === 'steer') {
+    return (
+      <li className="agent-step is-steer">
+        <Icon name="editIn" size={13} />
+        <span><b>你的插话</b>：{step.text}</span>
+      </li>
+    );
+  }
+  if (step.kind === 'waiting') {
+    return (
+      <li className="agent-step is-waiting">
+        <Icon name="clock" size={13} />
+        <span>{step.text ?? '等待人工确认'}</span>
       </li>
     );
   }
