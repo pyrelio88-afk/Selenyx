@@ -65,6 +65,10 @@ def init_db() -> None:
                 "status": "TEXT NOT NULL DEFAULT 'pending'",
                 "anchor_id": "TEXT",
             },
+            # V4 模块 B：run 工件清单（write_note / export_artifact 落盘记录）
+            "agent_runs": {
+                "artifacts_json": "TEXT NOT NULL DEFAULT '[]'",
+            },
         }
         evidence_status_was_added = False
         for table, expected in additive_columns.items():

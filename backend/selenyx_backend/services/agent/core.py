@@ -19,6 +19,8 @@ from sqlalchemy import func
 
 from selenyx_backend.models import EvidenceItem, Reference, ResearchProject
 from selenyx_backend.routers.ai import _auth_headers, _completion_content, _completion_url, llm_is_configured
+from selenyx_backend.services.artifacts import list_notes as list_notes_svc
+from selenyx_backend.services.artifacts import read_note as read_note_svc
 from selenyx_backend.services.rag import semantic_search
 from selenyx_backend.settings import get_settings
 
@@ -36,7 +38,7 @@ SYSTEM_PROMPT = """你是 Selenyx 的本机研究 agent。你通过「规划→�
 - 调用工具：{"thought": "本轮推理", "tool": "工具名", "args": {"参数": "值"}}
 - 结束并作答：{"thought": "本轮推理", "final": "给用户的完整中文回答"}
 
-可用工具（只读本机数据 + 落证据卡）：
+可用工具（读本机数据 + 落证据卡 + 写笔记/工件）：
 1. search_library — 在项目文献库做混合语义检索。args: {"query": "检索词", "topK": 6}
 2. list_references — 列出文献标题清单（返回 id/title/year，save_evidence 的 referenceId 用这里的 id）。args: {"limit": 30}
 3. project_context — 查看当前项目概况（阶段、文献数、证据数）。args: {}
@@ -44,9 +46,14 @@ SYSTEM_PROMPT = """你是 Selenyx 的本机研究 agent。你通过「规划→�
 5. ask_expert — 把子问题委托给专家子代理（独立人格与上下文）。args: {"expert": "专家 key 或名称", "question": "子问题"}
 6. save_evidence — 把一条可核验的证据存为证据卡（进人工待裁决队列）。args: {"claim": "论断", "excerpt": "原文摘录", "referenceId": "文献 id（可空）", "page": 页码（可空）, "relation": "supports|contradicts|qualifies"}
 7. list_pending_evidence — 查看当前待人工裁决的证据卡。args: {}
+8. write_note — 把成稿/要点写入本机笔记（.md 落盘）。args: {"title": "标题", "content": "正文"}
+9. export_artifact — 把本次运行的成稿导出为工件文件。args: {"name": "draft.md", "content": "正文"}
+10. list_notes / read_note — 读取本机笔记作为上下文。args: {} / {"name": "笔记文件名"}
 
 原则：计划 2-6 步、量力而行；不编造文献、作者、DOI 或数据；工具没查到的就明说不知道；final 用中文、结构清晰、直给结论。
 证据门：final 中凡引用文献结论，必须先 save_evidence 落卡并附原文摘录；证据卡一律 pending，经人接受才算数。
+成稿标记：final 成稿里每个事实性论断句末必须标注 [^e:证据id]（只能用 save_evidence 返回或 list_evidence 里真实存在的 id）；
+无据断言句末标 [^none]。编造的证据 id 会被后端拒绝并打回修订。
 通常先 project_context 或 search_library 摸底，再按需补查，然后 final 成稿。"""
 
 
@@ -246,6 +253,17 @@ def _tool_list_pending_evidence(session: Session, project_id: str | None, args: 
     }
 
 
+def _tool_list_notes(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    return list_notes_svc()
+
+
+def _tool_read_note(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
+    name = str(args.get("name", "")).strip()
+    if not name:
+        return {"error": "name 不能为空"}
+    return read_note_svc(name)
+
+
 ToolHandler = Callable[..., Any]
 
 TOOLS: dict[str, ToolHandler] = {
@@ -255,6 +273,8 @@ TOOLS: dict[str, ToolHandler] = {
     "list_evidence": _tool_list_evidence,
     "save_evidence": _tool_save_evidence,
     "list_pending_evidence": _tool_list_pending_evidence,
+    "list_notes": _tool_list_notes,
+    "read_note": _tool_read_note,
 }
 
 

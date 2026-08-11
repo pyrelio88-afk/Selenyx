@@ -46,6 +46,10 @@ def _serialize(run: AgentRun, *, with_log: bool) -> dict[str, Any]:
             data["auditLog"] = json.loads(run.audit_log_json or "[]")
         except json.JSONDecodeError:
             data["auditLog"] = []
+        try:
+            data["artifacts"] = json.loads(run.artifacts_json or "[]")
+        except json.JSONDecodeError:
+            data["artifacts"] = []
     return data
 
 

@@ -140,6 +140,7 @@ class AgentRun(SQLModel, table=True):
     input_text: str = ""
     output_text: str = ""
     audit_log_json: str = "[]"
+    artifacts_json: str = "[]"  # V4 模块 B：write_note/export_artifact 落盘工件清单
     tokens_used: int = 0
     started_at: Optional[str] = None
     completed_at: Optional[str] = None

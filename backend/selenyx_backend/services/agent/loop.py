@@ -39,6 +39,13 @@ from selenyx_backend.services.agent.core import (
     truncate as _truncate,
 )
 from selenyx_backend.services.agent.subagents import get_expert, run_subagent
+from selenyx_backend.services.artifacts import write_artifact as _write_artifact
+from selenyx_backend.services.artifacts import write_note as _write_note
+from selenyx_backend.services.citations import (
+    analyze_citations as _analyze_citations,
+    has_evidence_markers as _has_evidence_markers,
+    rejection_message as _rejection_message,
+)
 
 MAX_STEPS = 12
 
@@ -138,9 +145,36 @@ async def _ask_expert(project_id: str | None, args: dict[str, Any], record: Call
     return {"expert": expert_snapshot.name, "answer": _truncate(answer, 2000)}
 
 
-async def _dispatch_tool(project_id: str | None, tool: str, args: dict[str, Any], record: Callable[..., None]) -> Any:
+def _record_artifact(run_id: str, entry: dict[str, Any]) -> None:
+    """把写工具产物追加进 run 的工件清单（读-改-写 artifacts_json）。"""
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        if not run:
+            return
+        try:
+            artifacts = json.loads(run.artifacts_json or "[]")
+        except ValueError:
+            artifacts = []
+        artifacts.append(entry)
+        run.artifacts_json = json.dumps(artifacts, ensure_ascii=False)
+        session.add(run)
+        session.commit()
+
+
+async def _dispatch_tool(run_id: str, project_id: str | None, tool: str, args: dict[str, Any], record: Callable[..., None]) -> Any:
     if tool == "ask_expert":
         return await _ask_expert(project_id, args, record)
+    # 写工具（V4 模块 B）：loop 层处理——需要 run_id 归属工件并落 audit
+    if tool == "write_note":
+        result = _write_note(str(args.get("title", "")), str(args.get("content", "")))
+        if result.get("saved"):
+            _record_artifact(run_id, {"kind": "note", "name": result["name"], "title": result.get("title", "")})
+        return result
+    if tool == "export_artifact":
+        result = _write_artifact(run_id, str(args.get("name", "")), str(args.get("content", "")))
+        if result.get("saved"):
+            _record_artifact(run_id, {"kind": "artifact", "name": result["name"], "path": result["path"]})
+        return result
     with Session(get_engine()) as session:
         return await _run_tool(session, project_id, tool, args)
 
@@ -226,6 +260,7 @@ async def execute_run(
     final_text = ""
     status = "completed"
     reviewed = False
+    citation_bounced = False  # 染色校验打回上限一次，防编造-打回死循环
     try:
         for _ in range(MAX_STEPS):
             timeline.next_step()
@@ -253,6 +288,33 @@ async def execute_run(
 
             if "final" in action:
                 draft = str(action.get("final", "")).strip()
+                # 证据染色校验（V4 模块 C）：带标记的成稿先验真实性——
+                # 编造 [^e:id] 一律打回修订一次；二次仍编造则审计存证、前端染红，不再打回
+                if draft and project_id and _has_evidence_markers(draft):
+                    with Session(get_engine()) as session:
+                        report = _analyze_citations(session, project_id, draft)
+                    timeline.record(
+                        "coverage",
+                        sentences=report.sentences,
+                        supported=report.supported,
+                        fullyAccepted=report.fully_accepted,
+                        unsourced=report.unsourced,
+                        coverage=round(report.coverage, 4),
+                    )
+                    if not report.ok:
+                        message = _rejection_message(report)
+                        if not citation_bounced:
+                            citation_bounced = True
+                            timeline.record("review", critic="证据门校验", text=message, error=True)
+                            messages.append({
+                                "role": "user",
+                                "content": f"{message}\n修订后重新输出最终 JSON 动作（{{\"thought\": ..., \"final\": 修订稿}}）。",
+                            })
+                            continue
+                        timeline.record(
+                            "error",
+                            message=f"成稿仍含未通过校验的引用：{'、'.join(report.invalid_ids)}（已按无据标记展示）",
+                        )
                 if review and not reviewed and draft:
                     reviewed = True
                     try:
@@ -276,7 +338,7 @@ async def execute_run(
             tool = str(action.get("tool", ""))
             args = action.get("args") if isinstance(action.get("args"), dict) else {}
             timeline.record("tool", tool=tool, args=args)
-            observation = await _dispatch_tool(project_id, tool, args, timeline.record)
+            observation = await _dispatch_tool(run_id, project_id, tool, args, timeline.record)
             timeline.record("observation", tool=tool, result=observation)
             messages.append({
                 "role": "user",

@@ -54,6 +54,11 @@ def extract_evidence_refs(text: str) -> list[str]:
     return list(dict.fromkeys(_EVIDENCE_REF_RE.findall(text)))
 
 
+def has_evidence_markers(text: str) -> bool:
+    """文本是否含染色标记（``[^e:id]`` 或 ``[^none]``）——决定是否触发校验。"""
+    return bool(_EVIDENCE_REF_RE.search(text) or _NONE_REF_RE.search(text))
+
+
 def _sentences(text: str) -> list[str]:
     return [seg.strip() for seg in _SENTENCE_SPLIT_RE.split(text) if seg and seg.strip()]
 
