@@ -22,6 +22,7 @@ from selenyx_backend.database import get_engine
 from selenyx_backend.models import AgentRun
 from selenyx_backend.services.agent import events, execute_run, registry
 from selenyx_backend.services.agent.recipes import get_recipe
+from selenyx_backend.services.skills import get_skill
 
 router = APIRouter()
 
@@ -51,6 +52,9 @@ class StartRunBody(BaseModel):
     review: bool = False
     confirm_plan: bool = Field(default=False, alias="confirmPlan")
     recipe: str | None = Field(default=None, max_length=60)
+    # 模块 F：技能名（前端解析 /技能名 传入）与自定义指令注入
+    skill: str | None = Field(default=None, max_length=60)
+    custom_instructions: str | None = Field(default=None, alias="customInstructions", max_length=1500)
 
 
 class SteerBody(BaseModel):
@@ -97,6 +101,18 @@ async def start_run(body: StartRunBody):
     if body.recipe and recipe is None:
         raise HTTPException(422, f"未知流水线：{body.recipe}")
     review = body.review or (recipe.force_review if recipe else False)
+    # 技能（V4 模块 F）：解析 SKILL.md——指令正文注入 system，allowedTools 裁剪白名单
+    skill_directive: str | None = None
+    allowed_tools: set[str] | None = None
+    if body.skill:
+        skill = get_skill(body.skill, body.project_id)
+        if not skill:
+            raise HTTPException(422, f"技能不存在：{body.skill}（先在「专家·技能·连接器」里创建）")
+        if not skill.get("enabled", True):
+            raise HTTPException(422, f"技能「{skill['name']}」未启用。")
+        skill_directive = f"技能「{skill['name']}」：{skill.get('description', '')}\n{skill['instructions']}"
+        if skill.get("allowedTools"):
+            allowed_tools = set(skill["allowedTools"])
     run = AgentRun(
         recipe_id=recipe.key if recipe else "agent-loop",
         project_id=body.project_id or "",
@@ -127,6 +143,9 @@ async def start_run(body: StartRunBody):
                 review=review,
                 controls=controls,
                 recipe_directive=recipe.directive if recipe else None,
+                skill_directive=skill_directive,
+                allowed_tools=allowed_tools,
+                custom_instructions=body.custom_instructions,
             )
         finally:
             registry.finish_run(run.id)

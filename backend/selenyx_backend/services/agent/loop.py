@@ -48,6 +48,11 @@ from selenyx_backend.services.citations import (
     has_evidence_markers as _has_evidence_markers,
     rejection_message as _rejection_message,
 )
+from selenyx_backend.services.memory import (
+    append_memory as _append_memory,
+    memory_digest as _memory_digest,
+    read_memory as _read_memory,
+)
 
 MAX_STEPS = 12
 
@@ -191,6 +196,12 @@ def _record_artifact(run_id: str, entry: dict[str, Any]) -> None:
 async def _dispatch_tool(run_id: str, project_id: str | None, tool: str, args: dict[str, Any], record: Callable[..., None]) -> Any:
     if tool == "ask_expert":
         return await _ask_expert(project_id, args, record)
+    # 记忆工具（V4 模块 F）：有项目归属写项目记忆，否则写全局
+    if tool == "read_memory":
+        return {"memory": _read_memory(project_id) or "（暂无记忆）", "globalMemory": _read_memory(None) or "（暂无全局记忆）"}
+    if tool == "write_memory":
+        result = _append_memory(str(args.get("content", "")), project_id)
+        return result
     # 写工具（V4 模块 B）：loop 层处理——需要 run_id 归属工件并落 audit
     if tool == "write_note":
         result = _write_note(str(args.get("title", "")), str(args.get("content", "")))
@@ -274,6 +285,9 @@ async def execute_run(
     review: bool = False,
     controls: RunControls | None = None,
     recipe_directive: str | None = None,
+    skill_directive: str | None = None,
+    allowed_tools: set[str] | None = None,
+    custom_instructions: str | None = None,
 ) -> None:
     """执行一个 agent run：自循环直到 final / 达到步数上限 / 被取消 / 出错。
 
@@ -285,13 +299,25 @@ async def execute_run(
     即刻中断在飞的 LLM 调用。缺省时行为与旧路径完全一致。
 
     recipe_directive（V4 模块 E）：流水线的角色接力指令，随目标消息注入。
+
+    模块 F 注入面：启动时自动附上两层记忆摘要（永不外发，只进 prompt）；
+    skill_directive 注入技能指令正文，allowed_tools 裁剪本 run 的工具白名单；
+    custom_instructions 为用户在设置里写的全局自定义指令。
     """
     timeline = _RunTimeline(run_id, emit)
+    system_content = SYSTEM_PROMPT
+    digest = _memory_digest(project_id)
+    if digest:
+        system_content += f"\n\n# 本机记忆（上下文参考，勿外发）\n{digest}"
+    if custom_instructions:
+        system_content += f"\n\n# 用户自定义指令\n{custom_instructions.strip()[:1500]}"
+    if skill_directive:
+        system_content += f"\n\n# 技能约束（本任务必须遵守）\n{skill_directive}"
     goal_message = f"我的目标：{goal}"
     if recipe_directive:
         goal_message = f"{goal_message}\n\n{recipe_directive}"
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_content},
         {"role": "user", "content": goal_message},
     ]
 
@@ -406,7 +432,14 @@ async def execute_run(
             tool = str(action.get("tool", ""))
             args = action.get("args") if isinstance(action.get("args"), dict) else {}
             timeline.record("tool", tool=tool, args=args)
-            observation = await _dispatch_tool(run_id, project_id, tool, args, timeline.record)
+            # 技能白名单（V4 模块 F）：越界工具不执行，观察里说明可用清单
+            if allowed_tools is not None and tool not in allowed_tools:
+                observation = {
+                    "error": f"当前技能不允许使用工具 {tool}",
+                    "allowedTools": sorted(allowed_tools),
+                }
+            else:
+                observation = await _dispatch_tool(run_id, project_id, tool, args, timeline.record)
             timeline.record("observation", tool=tool, result=observation)
             messages.append({
                 "role": "user",

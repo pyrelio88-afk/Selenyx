@@ -49,6 +49,8 @@ SYSTEM_PROMPT = """你是 Selenyx 的本机研究 agent。你通过「规划→�
 8. write_note — 把成稿/要点写入本机笔记（.md 落盘）。args: {"title": "标题", "content": "正文"}
 9. export_artifact — 把本次运行的成稿导出为工件文件。args: {"name": "draft.md", "content": "正文"}
 10. list_notes / read_note — 读取本机笔记作为上下文。args: {} / {"name": "笔记文件名"}
+11. read_memory — 读取本机记忆（项目 + 全局）。args: {}
+12. write_memory — 把值得长期记住的要点追加进记忆（有项目归属写项目记忆）。args: {"content": "要点"}
 
 原则：计划 2-6 步、量力而行；不编造文献、作者、DOI 或数据；工具没查到的就明说不知道；final 用中文、结构清晰、直给结论。
 证据门：final 中凡引用文献结论，必须先 save_evidence 落卡并附原文摘录；证据卡一律 pending，经人接受才算数。

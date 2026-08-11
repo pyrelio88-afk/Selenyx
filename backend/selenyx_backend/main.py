@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from selenyx_backend.database import init_db
-from selenyx_backend.routers import agent, ai, automations, citations, clinical, connectors, evidence, experts, projects, references, search, zotero
+from selenyx_backend.routers import agent, ai, automations, citations, clinical, connectors, evidence, experts, memory, projects, references, search, skills, zotero
 from selenyx_backend.services.agent import registry
 from selenyx_backend.services.embeddings import embedding_runtime_summary
 from selenyx_backend.services.scheduler import scheduler_loop
@@ -60,6 +60,8 @@ app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(experts.router, prefix="/api/experts", tags=["experts"])
 app.include_router(automations.router, prefix="/api/automations", tags=["automations"])
 app.include_router(connectors.router, prefix="/api/connectors", tags=["connectors"])
+app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
+app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
 
 
 @app.get("/api/health")
