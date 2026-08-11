@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable
 from datetime import datetime
@@ -38,6 +39,7 @@ from selenyx_backend.services.agent.core import (
     run_tool as _run_tool,
     truncate as _truncate,
 )
+from selenyx_backend.services.agent.registry import PLAN_CONFIRM_TIMEOUT_S, RunControls
 from selenyx_backend.services.agent.subagents import get_expert, run_subagent
 from selenyx_backend.services.artifacts import write_artifact as _write_artifact
 from selenyx_backend.services.artifacts import write_note as _write_note
@@ -61,6 +63,31 @@ _WRAP_UP_FALLBACK = "已达到最大步数，本次任务未能成稿；已完�
 
 Emit = Callable[[dict[str, Any]], None]
 CancelCheck = Callable[[], bool]
+
+
+class _RunCancelled(Exception):
+    """取消事件触发的即时中断（LLM 调用进行中被取消时抛出）。"""
+
+
+async def _complete_cancellable(messages: list[dict[str, str]], controls: RunControls | None) -> str:
+    """LLM 调用包可取消 task：取消事件一置位立刻中断在飞的 HTTP 请求。
+
+    controls 缺省（测试/调度旧路径）时保持原样——逐步顶部的取消检查兜底。
+    """
+    if controls is None:
+        return await _complete(messages)
+    llm_task = asyncio.ensure_future(_complete(messages))
+    cancel_watcher = asyncio.ensure_future(controls.cancel_event.wait())
+    try:
+        done, _pending = await asyncio.wait(
+            {llm_task, cancel_watcher}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if cancel_watcher in done:
+            llm_task.cancel()
+            raise _RunCancelled()
+        return llm_task.result()
+    finally:
+        cancel_watcher.cancel()
 
 
 def _persist(run_id: str, **fields: Any) -> None:
@@ -202,7 +229,7 @@ _REVIEW_INSTRUCTION = (
 )
 
 
-async def _review_draft(draft: str) -> tuple[str, str]:
+async def _review_draft(draft: str, controls: RunControls | None = None) -> tuple[str, str]:
     """让批评员审一遍 final 草稿，返回 (批评员名, 意见)。失败抛 HTTPException。"""
     snapshot = _critic_snapshot()
     if not snapshot:
@@ -215,17 +242,17 @@ async def _review_draft(draft: str) -> tuple[str, str]:
             "content": f"{_REVIEW_INSTRUCTION}{_truncate(draft, 6000)}",
         },
     ]
-    return name, await _complete(messages)
+    return name, await _complete_cancellable(messages, controls)
 
 
-async def _wrap_up(messages: list[dict[str, str]], timeline: _RunTimeline) -> str:
+async def _wrap_up(messages: list[dict[str, str]], timeline: _RunTimeline, controls: RunControls | None = None) -> str:
     """步数耗尽：强制模型基于已收集信息收尾一次；收尾失败落兜底文案。"""
     timeline.next_step()
     _fold_observations(messages)
     messages.append({"role": "user", "content": _WRAP_UP_PROMPT})
     draft = ""
     try:
-        reply = await _complete(messages)
+        reply = await _complete_cancellable(messages, controls)
         action = _extract_action(reply)
         thought = str(action.get("thought", "")).strip()
         if thought:
@@ -245,11 +272,16 @@ async def execute_run(
     emit: Emit,
     is_cancelled: CancelCheck,
     review: bool = False,
+    controls: RunControls | None = None,
 ) -> None:
     """执行一个 agent run：自循环直到 final / 达到步数上限 / 被取消 / 出错。
 
     review=True 时启用 finalize 批评审查门：首个 final 先送批评员审一轮，
     意见回灌修订一次后再收尾（reviewed 标志防循环）。
+
+    controls（V4 模块 D）挂载运行中干预面：steer 插话在每步顶部消费、
+    confirm_plan=True 时首个计划在 plan_gate 等待人工确认、取消事件
+    即刻中断在飞的 LLM 调用。缺省时行为与旧路径完全一致。
     """
     timeline = _RunTimeline(run_id, emit)
     messages = [
@@ -261,15 +293,24 @@ async def execute_run(
     status = "completed"
     reviewed = False
     citation_bounced = False  # 染色校验打回上限一次，防编造-打回死循环
+    plan_confirmed = False  # plan 确认门只拦首个计划
     try:
         for _ in range(MAX_STEPS):
             timeline.next_step()
-            if is_cancelled():
+            if is_cancelled() or (controls is not None and controls.cancelled):
                 status = "cancelled"
                 timeline.record("error", message="已被用户取消")
                 break
+            # steer（V4 模块 D）：用户运行中插话，下一步顶部消费，时间线可见
+            if controls is not None:
+                for steer_text in controls.drain_steer():
+                    timeline.record("steer", text=_truncate(steer_text, 600))
+                    messages.append({
+                        "role": "user",
+                        "content": f"用户插话（请务必纳入后续行动与成稿）：{steer_text}",
+                    })
             _fold_observations(messages)
-            reply = await _complete(messages)
+            reply = await _complete_cancellable(messages, controls)
             action = _extract_action(reply)
             thought = str(action.get("thought", "")).strip()
             if thought:
@@ -280,6 +321,27 @@ async def execute_run(
             if "plan" in action and "final" not in action and "tool" not in action:
                 items = _plan_items(action)
                 timeline.record("plan", items=items)
+                # plan 确认门（V4 模块 D）：waiting_confirm → 人工放行/调整/取消
+                if controls is not None and controls.confirm_plan and not plan_confirmed:
+                    plan_confirmed = True
+                    _persist(run_id, status="waiting_confirm")
+                    timeline.record("waiting", text="等待人工确认计划")
+                    try:
+                        await asyncio.wait_for(controls.plan_gate.wait(), timeout=PLAN_CONFIRM_TIMEOUT_S)
+                    except asyncio.TimeoutError:
+                        timeline.record("error", message="计划确认超时（30 分钟），按计划继续执行")
+                    if controls.cancelled:
+                        status = "cancelled"
+                        timeline.record("error", message="已被用户取消")
+                        break
+                    _persist(run_id, status="running")
+                    if controls.plan_adjustment:
+                        timeline.record("steer", text=_truncate(controls.plan_adjustment, 600))
+                        messages.append({
+                            "role": "user",
+                            "content": f"用户调整了计划（请按调整后的方向执行）：{controls.plan_adjustment}",
+                        })
+                        continue
                 messages.append({
                     "role": "user",
                     "content": f"已收到你的计划（{len(items)} 步）。请按计划执行，输出下一个 JSON 动作。",
@@ -318,7 +380,7 @@ async def execute_run(
                 if review and not reviewed and draft:
                     reviewed = True
                     try:
-                        critic_name, critique = await _review_draft(draft)
+                        critic_name, critique = await _review_draft(draft, controls)
                         timeline.record("review", critic=critic_name, text=_truncate(critique, _REVIEW_TEXT_CHARS))
                         messages.append({
                             "role": "user",
@@ -346,7 +408,10 @@ async def execute_run(
             })
         else:
             # 步数耗尽（非取消、非 final）：强制收尾一次，失败落兜底文案
-            final_text = await _wrap_up(messages, timeline)
+            final_text = await _wrap_up(messages, timeline, controls)
+    except _RunCancelled:
+        status = "cancelled"
+        timeline.record("error", message="已被用户取消")
     except HTTPException as exc:
         status = "failed"
         timeline.record("error", message=str(exc.detail))

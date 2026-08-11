@@ -77,9 +77,9 @@ def launch_automation_run(task_id: str, *, touch_last_run: bool = True) -> str:
 
 
 async def _execute_automation(task_id: str, run_id: str, prompt: str, project_id: str | None) -> None:
-    state = register_run(run_id)
+    controls = register_run(run_id)
     try:
-        await execute_run(run_id, prompt, project_id, lambda event: None, lambda: state["cancelled"])
+        await execute_run(run_id, prompt, project_id, lambda event: None, lambda: controls.cancelled)
     except Exception:
         # 调度路径上的异常绝不能击穿 lifespan；run 状态由 execute_run 自身兜底
         pass

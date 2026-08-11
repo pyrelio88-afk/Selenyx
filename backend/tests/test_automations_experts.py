@@ -170,7 +170,7 @@ def test_automation_run_cancellable(tmp_path, monkeypatch):
     state = registry.register_run("run-x")
     assert registry.is_live("run-x")
     assert registry.cancel_run("run-x") is True
-    assert state["cancelled"] is True
+    assert state.cancelled is True
     registry.finish_run("run-x")
     assert not registry.is_live("run-x")
     assert registry.cancel_run("run-x") is False

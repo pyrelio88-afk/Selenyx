@@ -1,8 +1,9 @@
-"""Agent 运行管理：启动自循环任务、查询运行记录、取消。
+"""Agent 运行管理：启动自循环任务、查询运行记录、SSE 事件流、运行中干预。
 
 单进程 sidecar 语义：运行状态登记在 SQLite（AgentRun），audit_log 每步
-增量落库，前端轮询详情即可看到实时步骤；进行中的取消标志保存在
-services/agent/registry.py（进程重启后由 stale 清理收敛）。
+增量落库；实时事件经 services/agent/events.py 广播给 SSE 订阅者
+（事件名对齐 go-claw：thought/tool_call/tool_result/plan/review/final/error）；
+运行中干预（取消/插话/计划确认）的易失控制面在 services/agent/registry.py。
 """
 
 from __future__ import annotations
@@ -13,14 +14,32 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
 
 from selenyx_backend.database import get_engine
 from selenyx_backend.models import AgentRun
-from selenyx_backend.services.agent import execute_run, registry
+from selenyx_backend.services.agent import events, execute_run, registry
 
 router = APIRouter()
+
+_ACTIVE_STATUSES = ("running", "cancelling", "waiting_confirm")
+
+# SSE 事件名映射（对齐 go-claw 事件类型）：时间线 kind -> wire 事件名
+_SSE_EVENT_NAME = {
+    "thought": "thought",
+    "tool": "tool_call",
+    "observation": "tool_result",
+    "plan": "plan",
+    "review": "review",
+    "final": "final",
+    "error": "error",
+    "coverage": "coverage",
+    "subagent": "subagent",
+    "steer": "steer",
+    "waiting": "waiting",
+}
 
 
 class StartRunBody(BaseModel):
@@ -29,6 +48,19 @@ class StartRunBody(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
     project_id: str | None = Field(default=None, alias="projectId")
     review: bool = False
+    confirm_plan: bool = Field(default=False, alias="confirmPlan")
+
+
+class SteerBody(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class ConfirmBody(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    adjustment: str | None = Field(default=None, max_length=2000)
 
 
 def _serialize(run: AgentRun, *, with_log: bool) -> dict[str, Any]:
@@ -70,15 +102,24 @@ async def start_run(body: StartRunBody):
         session.commit()
         session.refresh(run)
 
-    state = registry.register_run(run.id)
+    controls = registry.register_run(run.id)
+    controls.confirm_plan = body.confirm_plan
 
     def emit(event: dict[str, Any]) -> None:
-        # 事件流已由 audit_log 增量落库承载；保留 emit 签名供测试断言
-        _ = event
+        # 实时事件广播给 SSE 订阅者；audit_log 增量落库仍是真相源（重启不丢）
+        events.publish(run.id, event)
 
     async def runner() -> None:
         try:
-            await execute_run(run.id, goal, body.project_id, emit, lambda: state["cancelled"], review=body.review)
+            await execute_run(
+                run.id,
+                goal,
+                body.project_id,
+                emit,
+                lambda: controls.cancelled,
+                review=body.review,
+                controls=controls,
+            )
         finally:
             registry.finish_run(run.id)
 
@@ -108,7 +149,87 @@ def cancel_run(run_id: str):
         run = session.get(AgentRun, run_id)
         if not run:
             raise HTTPException(404, "运行记录不存在。")
-        if run.status != "running":
+        if run.status not in _ACTIVE_STATUSES:
             return {"runId": run_id, "status": run.status}
     marked = registry.cancel_run(run_id)
     return {"runId": run_id, "status": "cancelling" if marked else "running"}
+
+
+@router.post("/runs/{run_id}/steer")
+def steer_run(run_id: str, body: SteerBody):
+    """运行中插话（V4 模块 D）：loop 在下一步顶部消费，时间线显示为用户插话。"""
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        if not run:
+            raise HTTPException(404, "运行记录不存在。")
+        if run.status not in _ACTIVE_STATUSES:
+            raise HTTPException(409, f"任务已结束（{run.status}），无法插话。")
+    controls = registry.get_controls(run_id)
+    if controls is None or not controls.add_steer(body.text.strip()):
+        raise HTTPException(409, "插话队列已满或任务不在进行中，请稍后再试。")
+    return {"runId": run_id, "queued": True}
+
+
+@router.post("/runs/{run_id}/confirm")
+def confirm_run(run_id: str, body: ConfirmBody):
+    """plan 确认门放行（V4 模块 D）：按计划执行，或带调整意见执行。"""
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        if not run:
+            raise HTTPException(404, "运行记录不存在。")
+        if run.status != "waiting_confirm":
+            raise HTTPException(409, f"任务不在等待确认状态（{run.status}）。")
+        run.status = "running"
+        session.add(run)
+        session.commit()
+    controls = registry.get_controls(run_id)
+    if controls is None:
+        raise HTTPException(409, "任务控制面不存在（可能进程已重启）。")
+    controls.confirm(body.adjustment)
+    return {"runId": run_id, "status": "running"}
+
+
+def _sse_frame(event_name: str, payload: dict[str, Any]) -> str:
+    return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@router.get("/runs/{run_id}/events")
+async def run_events(run_id: str):
+    """SSE 事件流（V4 模块 D）：snapshot 先行（迟到者补齐），随后实时推送。
+
+    前端 EventSource 优先、轮询兜底；run 结束（status 事件）后流关闭，
+    订阅队列随即注销。
+    """
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        if not run:
+            raise HTTPException(404, "运行记录不存在。")
+        snapshot = _serialize(run, with_log=True)
+    queue = events.subscribe(run_id)
+
+    async def stream():
+        try:
+            yield _sse_frame("snapshot", snapshot)
+            if snapshot["status"] not in _ACTIVE_STATUSES:
+                # 订阅时 run 已结束：快照即全集，补终态事件后关流
+                yield _sse_frame("status", {"status": snapshot["status"], "output": snapshot.get("outputText", "")})
+                return
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"  # 心跳保活（穿透代理 idle 超时）
+                    continue
+                if event.get("type") == "status":
+                    yield _sse_frame("status", event)
+                    return
+                name = _SSE_EVENT_NAME.get(str(event.get("kind", "")), "step")
+                yield _sse_frame(name, event)
+        finally:
+            events.unsubscribe(run_id, queue)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
