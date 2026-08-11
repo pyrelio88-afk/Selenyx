@@ -18,7 +18,7 @@ export interface AgentRunSummary {
 
 export interface AgentStep {
   step: number;
-  kind: 'plan' | 'thought' | 'tool' | 'observation' | 'subagent' | 'review' | 'final' | 'error';
+  kind: 'plan' | 'thought' | 'tool' | 'observation' | 'subagent' | 'review' | 'final' | 'error' | 'coverage';
   ts: string;
   text?: string;
   tool?: string;
@@ -31,9 +31,17 @@ export interface AgentStep {
   error?: boolean;
 }
 
+export interface RunArtifact {
+  kind: 'note' | 'artifact';
+  name: string;
+  title?: string;
+  path?: string;
+}
+
 export interface AgentRunDetail extends AgentRunSummary {
   outputText: string;
   auditLog: AgentStep[];
+  artifacts?: RunArtifact[];
 }
 
 export const agentApi = {

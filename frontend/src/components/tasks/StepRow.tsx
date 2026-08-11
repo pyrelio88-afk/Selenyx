@@ -16,6 +16,8 @@ export const STATUS_COLOR: Record<string, string> = {
 };
 const TOOL_LABEL: Record<string, string> = {
   search_library: '检索文献库', list_references: '列出文献', project_context: '读取项目概况', list_evidence: '读取证据链',
+  save_evidence: '落证据卡', list_pending_evidence: '查看待裁决证据', ask_expert: '委托专家',
+  write_note: '写入笔记', export_artifact: '导出工件', list_notes: '读取笔记列表', read_note: '读取笔记',
 };
 
 export function StepRow({ step }: { step: AgentStep }) {
@@ -62,11 +64,20 @@ export function StepRow({ step }: { step: AgentStep }) {
     );
   }
   if (step.kind === 'observation') {
-    const result = step.result as { count?: number; error?: string } | undefined;
+    const result = step.result as { count?: number; error?: string; saved?: boolean; message?: string } | undefined;
     return (
       <li className="agent-step is-observation">
         <Icon name="check" size={13} />
-        <span>{result?.error ? `工具返回：${result.error}` : `观察到 ${result?.count ?? '若干'} 条结果`}</span>
+        <span>{result?.error ? `工具返回：${result.error}` : result?.saved ? `已保存${result.message ? `：${result.message}` : ''}` : `观察到 ${result?.count ?? '若干'} 条结果`}</span>
+      </li>
+    );
+  }
+  if (step.kind === 'coverage') {
+    const s = step as unknown as { sentences?: number; supported?: number; fullyAccepted?: number };
+    return (
+      <li className="agent-step is-observation">
+        <Icon name="check" size={13} />
+        <span>证据校验：{s.supported ?? 0}/{s.sentences ?? 0} 论断有据，其中 {s.fullyAccepted ?? 0} 条人工已接受</span>
       </li>
     );
   }

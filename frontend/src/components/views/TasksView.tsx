@@ -8,8 +8,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
-import { MarkdownView } from '@components/chat/MarkdownView';
 import { STATUS_COLOR, STATUS_LABEL, StepRow } from '@components/tasks/StepRow';
+import { RunOutput } from '@components/tasks/RunOutput';
 import { agentApi, type AgentRunDetail, type AgentRunSummary } from '@services/agent';
 
 export function TasksView() {
@@ -210,12 +210,7 @@ export function TasksView() {
               {selected.status === 'running' && <li className="agent-step is-thought"><Icon name="clock" size={13} /><span>Selenyx 正在思考与检索…</span></li>}
             </ul>
 
-            {selected.outputText && (
-              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                <h3 style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--text-muted)' }}>产出</h3>
-                <MarkdownView content={selected.outputText} />
-              </div>
-            )}
+            {selected.outputText && <RunOutput run={selected} />}
           </div>
         )}
       </div>
