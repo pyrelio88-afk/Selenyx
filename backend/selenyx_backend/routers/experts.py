@@ -1,15 +1,23 @@
-"""专家（角色化 subagent 人格）CRUD + 内置专家播种。"""
+"""专家（角色化 subagent 人格）CRUD + 内置专家播种 + 人格对话与委托记录（V4 模块 E）。"""
 
 from __future__ import annotations
+
+import json
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
 
 from selenyx_backend.database import get_engine
-from selenyx_backend.models import Expert
+from selenyx_backend.models import AgentRun, Expert
+from selenyx_backend.services.agent.core import TOOLS, complete
 
 router = APIRouter()
+
+# 子代理工具边界：core 只读工具 + 落证据卡；ask_expert 禁嵌套、写工具只属主 loop
+SUBAGENT_TOOL_BOUNDARY: list[str] = sorted(TOOLS.keys())
+_MAX_DELEGATIONS = 20
 
 BUILTIN_EXPERTS: list[dict[str, str]] = [
     {
@@ -66,6 +74,8 @@ def _serialize(expert: Expert) -> dict:
         "tagline": expert.tagline,
         "systemPrompt": expert.system_prompt,
         "builtin": expert.builtin,
+        # 被委托为 subagent 时的工具边界（V4 模块 E 专家详情）
+        "toolBoundary": SUBAGENT_TOOL_BOUNDARY,
     }
 
 
@@ -114,3 +124,66 @@ def delete_expert(expert_id: str):
         session.delete(expert)
         session.commit()
     return {"deleted": expert_id}
+
+
+class ExpertChatBody(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    message: str = Field(min_length=1, max_length=4000)
+    # 前端自持会话历史（专家对话无状态，不落库——本地优先且轻量）
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=40)
+
+
+@router.post("/{expert_id}/chat")
+async def chat_with_expert(expert_id: str, body: ExpertChatBody):
+    """专家人格会话（V4 模块 E）：以专家 system prompt 单轮应答，历史由前端回传。"""
+    with Session(get_engine()) as session:
+        expert = session.get(Expert, expert_id)
+        if not expert:
+            raise HTTPException(404, "专家不存在。")
+        persona = expert.system_prompt
+    messages: list[dict[str, str]] = [{"role": "system", "content": persona}]
+    for item in body.history[-40:]:
+        role = item.get("role")
+        content = str(item.get("content", ""))[:4000]
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": body.message.strip()})
+    reply = await complete(messages)
+    return {"reply": reply}
+
+
+@router.get("/{expert_id}/delegations")
+def expert_delegations(expert_id: str):
+    """被委托记录（V4 模块 E）：审计时间线里该专家作为 subagent 出现的 run 列表。"""
+    with Session(get_engine()) as session:
+        expert = session.get(Expert, expert_id)
+        if not expert:
+            raise HTTPException(404, "专家不存在。")
+        # audit_log_json 含专家名做粗筛，再解析精配（数据量小，可接受）
+        candidates = list(
+            session.exec(
+                select(AgentRun)
+                .where(AgentRun.audit_log_json.contains(f'"expert": "{expert.name}"'))
+                .order_by(AgentRun.started_at.desc())
+            ).all()
+        )[:50]
+        delegations: list[dict[str, Any]] = []
+        for run in candidates:
+            try:
+                log = json.loads(run.audit_log_json or "[]")
+            except json.JSONDecodeError:
+                continue
+            calls = [e for e in log if e.get("kind") == "subagent" and e.get("expert") == expert.name]
+            if not calls:
+                continue
+            delegations.append({
+                "runId": run.id,
+                "goal": run.input_text[:80],
+                "status": run.status,
+                "startedAt": run.started_at,
+                "steps": len(calls),
+            })
+            if len(delegations) >= _MAX_DELEGATIONS:
+                break
+    return {"delegations": delegations}

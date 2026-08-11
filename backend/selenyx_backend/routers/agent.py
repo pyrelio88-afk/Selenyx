@@ -21,6 +21,7 @@ from sqlmodel import Session, select
 from selenyx_backend.database import get_engine
 from selenyx_backend.models import AgentRun
 from selenyx_backend.services.agent import events, execute_run, registry
+from selenyx_backend.services.agent.recipes import get_recipe
 
 router = APIRouter()
 
@@ -49,6 +50,7 @@ class StartRunBody(BaseModel):
     project_id: str | None = Field(default=None, alias="projectId")
     review: bool = False
     confirm_plan: bool = Field(default=False, alias="confirmPlan")
+    recipe: str | None = Field(default=None, max_length=60)
 
 
 class SteerBody(BaseModel):
@@ -90,8 +92,13 @@ async def start_run(body: StartRunBody):
     goal = body.goal.strip()
     if not goal:
         raise HTTPException(422, "任务目标不能为空。")
+    # 流水线 recipe（V4 模块 E）：先校验再建行，避免孤儿 run；综述流水线强制开启批评审查门
+    recipe = get_recipe(body.recipe)
+    if body.recipe and recipe is None:
+        raise HTTPException(422, f"未知流水线：{body.recipe}")
+    review = body.review or (recipe.force_review if recipe else False)
     run = AgentRun(
-        recipe_id="agent-loop",
+        recipe_id=recipe.key if recipe else "agent-loop",
         project_id=body.project_id or "",
         status="running",
         input_text=goal,
@@ -117,8 +124,9 @@ async def start_run(body: StartRunBody):
                 body.project_id,
                 emit,
                 lambda: controls.cancelled,
-                review=body.review,
+                review=review,
                 controls=controls,
+                recipe_directive=recipe.directive if recipe else None,
             )
         finally:
             registry.finish_run(run.id)

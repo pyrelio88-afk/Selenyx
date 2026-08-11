@@ -273,6 +273,7 @@ async def execute_run(
     is_cancelled: CancelCheck,
     review: bool = False,
     controls: RunControls | None = None,
+    recipe_directive: str | None = None,
 ) -> None:
     """执行一个 agent run：自循环直到 final / 达到步数上限 / 被取消 / 出错。
 
@@ -282,11 +283,16 @@ async def execute_run(
     controls（V4 模块 D）挂载运行中干预面：steer 插话在每步顶部消费、
     confirm_plan=True 时首个计划在 plan_gate 等待人工确认、取消事件
     即刻中断在飞的 LLM 调用。缺省时行为与旧路径完全一致。
+
+    recipe_directive（V4 模块 E）：流水线的角色接力指令，随目标消息注入。
     """
     timeline = _RunTimeline(run_id, emit)
+    goal_message = f"我的目标：{goal}"
+    if recipe_directive:
+        goal_message = f"{goal_message}\n\n{recipe_directive}"
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"我的目标：{goal}"},
+        {"role": "user", "content": goal_message},
     ]
 
     final_text = ""
