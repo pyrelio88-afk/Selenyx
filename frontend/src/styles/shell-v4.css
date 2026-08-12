@@ -14,6 +14,25 @@
   color: var(--text-muted); cursor: pointer;
 }
 .v4-brand-actions .icon-btn:hover { color: var(--accent); border-color: var(--border); background: var(--bg-surface); }
+.workspace-brand-mark img { width: 46px; height: 46px; object-fit: contain; }
+
+/* ---------- 搜索行（设计稿：搜索占位 + K 键帽） ---------- */
+.sidebar-search {
+  display: flex; align-items: center; gap: 8px;
+  margin: 2px 0 8px; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-surface); color: var(--text-muted);
+  font: inherit; font-size: 12.5px; cursor: pointer; text-align: left;
+}
+.sidebar-search:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text-secondary); }
+.sidebar-search .sidebar-search-label { flex: 1; min-width: 0; }
+.sidebar-search kbd {
+  padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--bg-canvas); color: var(--text-muted);
+  font-family: var(--font-mono); font-size: 10.5px;
+}
+.nav-item-trail { margin-left: auto; display: inline-flex; color: var(--text-muted); }
+.nav-item.active .nav-item-trail { color: var(--accent); }
 
 /* ---------- 侧栏折叠态 ---------- */
 .workspace-sidebar.is-collapsed { width: 60px; min-width: 60px; padding-left: 6px; padding-right: 6px; }
@@ -26,7 +45,7 @@
 .sidebar-dynamic {
   margin-top: 10px; padding-top: 10px;
   border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+  display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; gap: 10px; overflow-y: auto;
 }
 .dynamic-section { display: flex; flex-direction: column; gap: 2px; }
 .dynamic-item {
@@ -53,31 +72,77 @@
   50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--cinnabar) 12%, transparent); }
 }
 
-/* ---------- D. 底部用户区 ---------- */
-.v4-footer { flex-direction: column; align-items: stretch; gap: 8px; }
-.v4-footer .workspace-local-status { padding-left: 10px; }
-.user-panel { position: relative; }
+/* ---------- D. 底部身份区 ---------- */
+.v4-footer {
+  position: relative;
+  display: block;
+  min-height: 62px;
+  padding: 8px 0 0;
+}
+/* Keep backend state available to assistive tech without consuming a second
+   visible footer row. The small dot sits beside the identity mark instead. */
+.v4-footer .workspace-local-status {
+  position: absolute;
+  z-index: 1;
+  left: 40px;
+  bottom: 8px;
+  width: 7px;
+  height: 7px;
+  min-width: 0;
+  padding: 0;
+  pointer-events: none;
+}
+.v4-footer .workspace-local-status-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.v4-footer .workspace-status-dot { width: 6px; height: 6px; flex-basis: 6px; }
+.skip-to-content {
+  position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; border: 0; z-index: var(--z-toast);
+}
+.skip-to-content:focus-visible {
+  top: 12px; left: 12px; width: auto; height: auto; margin: 0; padding: 9px 12px;
+  overflow: visible; clip: auto; clip-path: none; border: 1px solid var(--accent);
+  border-radius: 8px; background: var(--bg-surface); color: var(--text-primary);
+  box-shadow: 0 4px 16px color-mix(in srgb, #000 20%, transparent); outline: 2px solid var(--accent);
+}
+
+.user-panel { position: relative; width: 100%; }
 .user-trigger {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  min-height: 38px; padding: 5px 10px;
-  border: 1px solid var(--border); border-radius: 9px;
-  background: color-mix(in srgb, var(--bg-surface) 76%, transparent);
+  min-height: 54px; padding: 3px 8px;
+  border: 1px solid transparent; border-radius: 10px;
+  background: transparent;
   font: inherit; font-size: 12.5px; color: var(--text-primary); cursor: pointer; text-align: left;
 }
-.user-trigger:hover { background: var(--bg-surface); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.user-trigger:hover, .user-trigger:focus-visible { background: color-mix(in srgb, var(--bg-surface) 76%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); outline: none; }
 .user-avatar {
   display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; flex-shrink: 0;
   border-radius: 8px; background: var(--accent-light); color: var(--cinnabar);
 }
+.user-trigger .user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-light) 68%, transparent);
+}
 .user-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .user-popover {
-  position: absolute; bottom: calc(100% + 8px); left: 0;
-  width: 232px; z-index: 60;
+  z-index: var(--z-toast);
   display: flex; flex-direction: column; gap: 2px;
   padding: 8px;
   border: 1px solid var(--border); border-radius: 12px;
   background: var(--bg-surface);
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  box-shadow: 0 2px 10px color-mix(in srgb, #000 10%, transparent);
 }
 .user-popover-header {
   display: flex; align-items: center; gap: 8px;
@@ -92,14 +157,15 @@
 .user-nickname:hover, .user-nickname:focus { border-bottom-color: var(--border); outline: none; }
 .user-popover-row {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 6px 8px; font-size: 12.5px; color: var(--text-secondary);
+  min-width: 0; padding: 6px 8px; font-size: 12.5px; color: var(--text-secondary);
+  word-break: keep-all; overflow-wrap: normal;
 }
 .user-popover-divider { height: 1px; margin: 4px 2px; background: color-mix(in srgb, var(--border) 78%, transparent); }
 .user-popover-item {
   display: flex; align-items: center; gap: 8px;
-  padding: 7px 8px; border: none; border-radius: 7px; background: transparent;
+  min-width: 0; padding: 7px 8px; border: none; border-radius: 7px; background: transparent;
   font: inherit; font-size: 12.5px; color: var(--text-secondary);
-  cursor: pointer; text-align: left; text-decoration: none;
+  cursor: pointer; text-align: left; text-decoration: none; white-space: nowrap;
 }
 .user-popover-item:hover { background: color-mix(in srgb, var(--accent-light) 60%, transparent); color: var(--text-primary); }
 .user-popover-item kbd {
@@ -124,6 +190,26 @@
   font: inherit; font-size: 12px; color: var(--text-secondary); cursor: pointer;
 }
 .v4-segmented button.active { background: var(--accent); color: #fff; }
+
+/* Compact desktop sidebars must not split short Chinese navigation labels into
+   individual glyphs. Long prose remains free to wrap in content areas. */
+.workspace-sidebar .nav-item-label,
+.workspace-sidebar .workspace-brand-name,
+.workspace-sidebar .user-name {
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+/* Desktop navigation keeps its identity/footer stable while only the dynamic
+   task/project section scrolls. This also prevents a long project list from
+   clipping the account trigger. */
+.workspace-sidebar { overflow: hidden; }
+.workspace-sidebar .workspace-sidebar-footer { flex: 0 0 auto; background: var(--sidebar-bg); }
+.workspace-sidebar .workspace-brand-mark { width: 48px; height: 48px; border-radius: 0; background: transparent; }
+.workspace-sidebar.is-collapsed .v4-footer { min-height: 48px; padding-top: 6px; }
+.workspace-sidebar.is-collapsed .user-trigger { width: 48px; min-height: 48px; padding: 0; justify-content: center; }
+.workspace-sidebar.is-collapsed .user-trigger .user-avatar,
+.workspace-sidebar.is-collapsed .user-trigger .user-avatar img { width: 42px; height: 42px; }
 
 /* ---------- 设置弹窗 ---------- */
 .settings-overlay {
@@ -163,9 +249,9 @@
 }
 
 /* ---------- 新建任务主页 ---------- */
-.newtask-home { display: grid; gap: 18px; align-content: start; max-width: 860px; margin: 0 auto; padding-top: 4vh; }
-.newtask-hero h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: .2px; }
-.newtask-hero p { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); }
+.newtask-home { position: relative; display: grid; gap: 18px; align-content: start; max-width: 860px; margin: 0 auto; padding-top: 4vh; }
+.newtask-hero h1 { margin: 0; font-family: var(--font-serif); font-size: 32px; font-weight: 700; letter-spacing: .5px; }
+.newtask-hero p { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
 .newtask-templates { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .newtask-template {
   display: grid; gap: 5px; justify-items: start;
@@ -174,14 +260,86 @@
   transition: border-color .15s ease;
 }
 .newtask-template:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
-.newtask-template-icon {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 9px;
-  background: var(--accent-light); color: var(--cinnabar);
-}
+.newtask-template-icon { display: inline-flex; color: var(--text-secondary); }
 .newtask-template-title { font-size: 13.5px; font-weight: 650; color: var(--text-primary); }
 .newtask-template-desc { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
-.newtask-composer { padding: 14px; }
+.newtask-template-arrow { justify-self: end; color: var(--text-muted); }
+.newtask-workflow h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--text-secondary); }
+
+/* 设计稿：仙鹤伏在输入框上沿右侧（上方留白容纳仙鹤） */
+.newtask-composer-stage { position: relative; margin-top: 58px; }
+.newtask-composer-crane {
+  position: absolute; right: 22px; top: -76px; height: 84px; width: auto;
+  pointer-events: none; user-select: none; z-index: 1;
+}
+.newtask-composer {
+  position: relative; padding: 12px 14px 10px;
+  border: 1px solid var(--border); border-radius: 16px; background: var(--bg-surface);
+  display: grid; gap: 10px;
+}
+.newtask-composer:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.newtask-composer-input-row { display: flex; gap: 8px; }
+.newtask-composer-textarea {
+  flex: 1; width: 100%; border: none; outline: none; resize: none;
+  background: transparent; color: var(--text-primary);
+  font: inherit; font-size: 14px; line-height: 1.65;
+}
+.newtask-composer-textarea::placeholder { color: var(--text-muted); }
+.newtask-composer-controls {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.newtask-composer-settings { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.newtask-project-control {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: 99px;
+  color: var(--text-secondary); font-size: 12px; cursor: pointer; overflow: hidden;
+}
+.newtask-project-control:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text-primary); }
+.newtask-project-control select {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; font: inherit;
+}
+.newtask-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: 99px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer;
+}
+.newtask-chip:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text-primary); }
+.newtask-chip.is-on { border-color: var(--accent); color: var(--accent-hover); background: var(--accent-light); font-weight: 600; }
+.newtask-recipe-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border: 1px dashed color-mix(in srgb, var(--cinnabar) 55%, var(--border));
+  border-radius: 99px; color: var(--cinnabar); font-size: 11.5px;
+}
+.newtask-recipe-chip button { border: none; background: transparent; color: inherit; cursor: pointer; font-size: 13px; padding: 0 2px; }
+.newtask-composer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.newtask-model-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: 99px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer;
+}
+.newtask-model-chip:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text-primary); }
+.newtask-attach {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 8px;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+}
+.newtask-attach:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.newtask-submit {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border: none; border-radius: 9px;
+  background: color-mix(in srgb, var(--accent-hover) 80%, #1f2e1c); color: #fdfcf8;
+  font: inherit; font-size: 13px; font-weight: 650; cursor: pointer;
+}
+.newtask-submit:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-hover) 68%, #1f2e1c); }
+.newtask-submit:disabled { opacity: .55; cursor: not-allowed; }
+.newtask-backend-alert {
+  padding: 10px 14px; border-left: 3px solid var(--warning); border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
+}
+.newtask-backend-alert code { font-family: var(--font-mono); font-size: 11.5px; }
 .newtask-recent h2 { margin: 0 0 8px; font-size: 14px; color: var(--text-muted); font-weight: 600; }
 .newtask-recent-list { display: grid; gap: 6px; }
 .newtask-recent-item {
@@ -251,11 +409,12 @@
 .evidence-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .evidence-card-actions { display: flex; gap: 8px; }
 
-/* ---------- 证据门待裁决角标（朱砂点睛） ---------- */
+/* ---------- 证据门待裁决角标（朱砂点睛，设计稿位于主页右上） ---------- */
 .evidence-pending-badge {
+  position: absolute; top: 0; right: 0; z-index: 2;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 12px; border-radius: 99px;
-  border: 1px solid var(--cinnabar); background: transparent;
+  border: 1px solid var(--cinnabar); background: var(--bg-surface);
   color: var(--cinnabar); font-size: 12px; font-weight: 700;
   cursor: pointer; font-family: inherit;
 }

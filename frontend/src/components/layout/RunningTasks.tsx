@@ -80,6 +80,7 @@ export function RunningTasks() {
             >
               <span className="icon"><Icon name="projects" size={14} /></span>
               <span className="dynamic-item-text">{project.name}</span>
+              <span className="dynamic-item-time">{relativeTime(project.updatedAt)}</span>
             </button>
           ))}
         </section>

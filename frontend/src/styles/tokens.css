@@ -85,7 +85,7 @@
   --space-row-pad: 10px;
   --space-section-gap: var(--space-6);
   --space-view-pad: 24px 32px;
-  --sidebar-width: 220px;
+  --sidebar-width: 248px;
   --density-font-scale: 1;
 }
 :root[data-density="compact"] {
@@ -106,7 +106,7 @@
 }
 
 /* 默认 comfortable（放最后但特异性低于 :root[data-density]，仅作未设置时的兜底） */
-:root { --space-card-pad: var(--space-5); --space-row-pad: 10px; --space-section-gap: var(--space-6); --space-view-pad: 24px 32px; --sidebar-width: 220px; --density-font-scale: 1; }
+:root { --space-card-pad: var(--space-5); --space-row-pad: 10px; --space-section-gap: var(--space-6); --space-view-pad: 24px 32px; --sidebar-width: 248px; --density-font-scale: 1; }
 
 /* ===== 动效规范（功能性，≤300ms，可被 prefers-reduced-motion 全局关闭） ===== */
 :root {

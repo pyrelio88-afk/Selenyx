@@ -6,13 +6,14 @@
  * 侧边栏不再设「任务」一级项——本页即任务入口。
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
 import { agentApi, type AgentRunSummary } from '@services/agent';
 import { parseSkillPrefix } from '@services/skills';
 import { evidenceApi } from '@services/api';
+import { Composer } from '@components/assistant/Composer';
 
 interface TaskTemplate {
   icon: IconName;
@@ -28,7 +29,7 @@ const TEMPLATES: TaskTemplate[] = [
   {
     icon: 'stageLiterature',
     title: '文献综述',
-    desc: '综述流水线：综述员起草→批评员审→证据染色成稿',
+    desc: '系统检索与评估，梳理领域研究现状与证据。',
     prompt: '帮我梳理这个项目文献库的核心证据，产出一份结构化综述提纲（含研究缺口）。',
     review: true,
     recipe: 'review-pipeline',
@@ -36,21 +37,21 @@ const TEMPLATES: TaskTemplate[] = [
   {
     icon: 'stageEvidence',
     title: '证据梳理',
-    desc: '盘点证据链，找出支撑不足的主张',
+    desc: '提取关键证据，建立结构化证据表格。',
     prompt: '盘点当前项目的证据链：哪些主张证据充分，哪些还缺支撑？给出补强建议。',
     review: false,
   },
   {
     icon: 'stageWriting',
     title: '论文提纲',
-    desc: '按标准结构生成章节提纲与要点',
+    desc: '构建论文结构与论点，形成写作提纲。',
     prompt: '基于项目资料生成论文提纲：背景、方法、结果、讨论，每节列出要点与所需证据。',
     review: true,
   },
   {
     icon: 'chart',
     title: '数据解读',
-    desc: '提炼可写进结果部分的发现',
+    desc: '分析数据与可视化，提炼结论与洞察。',
     prompt: '解读项目数据表中的关键结果：主要发现、异常值、可以写进论文的结论。',
     review: false,
   },
@@ -66,8 +67,9 @@ function greeting(): string {
 }
 
 export function NewTaskHome() {
-  const { projects, currentProjectId, nickname, requestRunFocus, setView, setLibraryTab, customInstructions } = useAppStore();
+  const { projects, currentProjectId, nickname, requestRunFocus, setView, setLibraryTab, customInstructions, llmConfig, openSettings } = useAppStore();
   const [goal, setGoal] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
   const [confirmPlan, setConfirmPlan] = useState(false);
@@ -76,6 +78,7 @@ export function NewTaskHome() {
   const [backendOffline, setBackendOffline] = useState(false);
   const [recent, setRecent] = useState<AgentRunSummary[]>([]);
   const [pendingEvidence, setPendingEvidence] = useState(0);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   const activeProjects = projects.filter((p) => p.status !== 'archived');
 
@@ -112,8 +115,35 @@ export function NewTaskHome() {
 
   const applyTemplate = (template: TaskTemplate) => {
     setGoal(template.prompt);
+    setSelectedTemplate(template.title);
     setReview(template.review);
     setRecipe(template.recipe);
+  };
+
+  const updateGoal = (nextGoal: string) => {
+    setGoal(nextGoal);
+    if (selectedTemplate && nextGoal !== TEMPLATES.find((template) => template.title === selectedTemplate)?.prompt) {
+      setSelectedTemplate(null);
+    }
+  };
+
+  /* 附件（设计稿 📎）：文本类材料读入本地并附进任务目标，不出本机 */
+  const ATTACH_MAX_CHARS = 8000;
+  const attachFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === 'string' ? reader.result : '';
+      const truncated = raw.length > ATTACH_MAX_CHARS;
+      const excerpt = raw.slice(0, ATTACH_MAX_CHARS).trim();
+      if (!excerpt) {
+        alert(`「${file.name}」没有可读取的文本内容。`);
+        return;
+      }
+      const block = `\n\n【附加材料：${file.name}】\n${excerpt}${truncated ? '\n…（材料较长，已截取前 8000 字）' : ''}`;
+      updateGoal(`${goal.trimEnd()}${block}`);
+    };
+    reader.onerror = () => alert(`读取「${file.name}」失败，请确认是可读文本文件。`);
+    reader.readAsText(file);
   };
 
   const submit = async () => {
@@ -142,86 +172,150 @@ export function NewTaskHome() {
 
   return (
     <div className="newtask-home">
+      {pendingEvidence > 0 && (
+        <button
+          type="button"
+          className="evidence-pending-badge"
+          onClick={openEvidenceQueue}
+          title="前往证据卡队列裁决"
+        >
+          <span className="dot" aria-hidden="true" /> 待证据梳理 {pendingEvidence}
+          <Icon name="chevronRight" size={13} />
+        </button>
+      )}
+
       <header className="newtask-hero">
         <h1>{greeting()}，{nickname || '研究者'}</h1>
-        <p>把研究目标交给 Selenyx：规划 → 检索 → 执行 → 成稿，全程步骤可审计。</p>
-        {pendingEvidence > 0 && (
-          <button type="button" className="evidence-pending-badge" onClick={openEvidenceQueue} title="前往证据卡队列裁决">
-            <span className="dot" aria-hidden="true" /> 证据门待裁决 {pendingEvidence}
-          </button>
-        )}
+        <p>从一个可信的研究问题开始，让每个结论都能回到证据。</p>
       </header>
 
       {backendOffline && (
-        <div role="alert" style={{ padding: '10px 14px', border: '1px solid var(--warning)', borderRadius: 'var(--radius-md)', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+        <div role="alert" className="newtask-backend-alert">
           本机后端未连接：桌面版会自动启动；开发环境请运行 <code>npm run dev:local</code>。agent 任务依赖后端执行。
         </div>
       )}
 
-      <div className="newtask-templates">
-        {TEMPLATES.map((template) => (
-          <button
-            key={template.title}
-            type="button"
-            className="newtask-template"
-            onClick={() => applyTemplate(template)}
-          >
-            <span className="newtask-template-icon"><Icon name={template.icon} size={18} /></span>
-            <span className="newtask-template-title">{template.title}</span>
-            <span className="newtask-template-desc">{template.desc}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="card newtask-composer">
-        <textarea
-          value={goal}
-          onChange={(event) => setGoal(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-          placeholder="一句话开始干活，例如：帮我梳理这个项目文献库里关于「谵妄预防」的证据…（可用 /技能名 开头调用技能）"
-          rows={3}
-          style={{ width: '100%', resize: 'vertical' }}
-          aria-label="任务目标"
-        />
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-            项目
-            <select value={projectId} onChange={(event) => setProjectId(event.target.value)} style={{ minHeight: 36 }}>
-              <option value="">不关联项目</option>
-              {activeProjects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-            <input type="checkbox" checked={review} onChange={(event) => setReview(event.target.checked)} />
-            成稿前批评审查（多 1-2 次模型调用）
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-            <input type="checkbox" checked={confirmPlan} onChange={(event) => setConfirmPlan(event.target.checked)} />
-            计划先给我确认
-          </label>
-          {recipe && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, padding: '3px 10px', borderRadius: 999, border: '1px solid var(--cinnabar)', color: 'var(--cinnabar)' }}>
-              流水线：综述流水线
-              <button type="button" onClick={() => setRecipe(undefined)} aria-label="移除流水线" style={{ border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0, font: 'inherit' }}>×</button>
-            </span>
-          )}
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void submit()}
-            disabled={!goal.trim() || submitting || backendOffline}
-            style={{ marginLeft: 'auto' }}
-          >
-            <Icon name="send" size={15} /> {submitting ? '创建中…' : '交给 Selenyx'}
-          </button>
+      <section className="newtask-workflow" aria-labelledby="newtask-workflow-heading">
+        <h2 id="newtask-workflow-heading">从常用研究任务开始</h2>
+        <div className="newtask-templates">
+          {TEMPLATES.map((template) => (
+            <button
+              key={template.title}
+              type="button"
+              className={`newtask-template ${selectedTemplate === template.title ? 'is-selected' : ''}`}
+              onClick={() => applyTemplate(template)}
+              aria-pressed={selectedTemplate === template.title}
+            >
+              <span className="newtask-template-icon"><Icon name={template.icon} size={28} /></span>
+              <span className="newtask-template-title">{template.title}</span>
+              <span className="newtask-template-desc">{template.desc}</span>
+              <span className="newtask-template-arrow" aria-hidden="true"><Icon name="arrowRight" size={18} /></span>
+            </button>
+          ))}
         </div>
+      </section>
+
+      <div className="newtask-composer-stage">
+        <img
+          className="newtask-composer-crane"
+          src="/brand-crane-cloud-512-v1.png"
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+        />
+        <Composer
+          value={goal}
+          onChange={updateGoal}
+          onSubmit={() => void submit()}
+          ariaLabel="任务目标"
+          placeholder="一句话开始干活，例如：帮我梳理这个项目文献库里关于谵妄预防的证据"
+          rows={5}
+          className="newtask-composer"
+          inputWrapClassName="newtask-composer-input-wrap"
+          inputRowClassName="newtask-composer-input-row"
+          textareaClassName="newtask-composer-textarea"
+          controls={(
+            <div className="newtask-composer-controls" aria-label="任务配置">
+              <div className="newtask-composer-settings">
+                <label className="newtask-project-control">
+                  <Icon name="projects" size={16} />
+                  <span>选择项目</span>
+                  <select value={projectId} onChange={(event) => setProjectId(event.target.value)} aria-label="选择项目">
+                    <option value="">不关联项目</option>
+                    {activeProjects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className={`newtask-chip ${review ? 'is-on' : ''}`}
+                  onClick={() => setReview(!review)}
+                  aria-pressed={review}
+                  title="成稿前由批评员审查（多 1-2 次模型调用）"
+                >
+                  {review && <Icon name="check" size={13} />}
+                  <span>成稿前批评审查</span>
+                </button>
+                <button
+                  type="button"
+                  className={`newtask-chip ${confirmPlan ? 'is-on' : ''}`}
+                  onClick={() => setConfirmPlan(!confirmPlan)}
+                  aria-pressed={confirmPlan}
+                  title="计划产出后先给你确认，再开始执行"
+                >
+                  {confirmPlan && <Icon name="check" size={13} />}
+                  <span>计划先给我确认</span>
+                </button>
+                {recipe ? (
+                  <span className="newtask-recipe-chip">
+                    <Icon name="stageLiterature" size={14} /> 流水线：综述流水线
+                    <button type="button" onClick={() => setRecipe(undefined)} aria-label="移除流水线">×</button>
+                  </span>
+                ) : null}
+              </div>
+              <div className="newtask-composer-actions">
+                <button
+                  type="button"
+                  className="newtask-model-chip"
+                  onClick={() => openSettings('model')}
+                  title={llmConfig ? `当前模型 ${llmConfig.provider} / ${llmConfig.model}，前往设置调整` : '尚未配置模型，前往设置（BYOK）'}
+                >
+                  <span>{llmConfig?.model || '未配置模型'}</span>
+                  <Icon name="chevronDown" size={12} />
+                </button>
+                <button
+                  type="button"
+                  className="newtask-attach"
+                  onClick={() => attachInputRef.current?.click()}
+                  aria-label="附加文本材料"
+                  title="附加文本材料（.txt/.md/.csv，截取前 8000 字，不离开本机）"
+                >
+                  <Icon name="paperclip" size={16} />
+                </button>
+                <input
+                  ref={attachInputRef}
+                  type="file"
+                  accept=".txt,.md,.markdown,.csv,.tsv,.json,text/plain,text/markdown,text/csv,application/json"
+                  style={{ display: 'none' }}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) attachFile(file);
+                    event.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  className="newtask-submit"
+                  onClick={() => void submit()}
+                  disabled={!goal.trim() || submitting || backendOffline}
+                >
+                  <Icon name="send" size={17} /> {submitting ? '创建中…' : '交给 Selenyx'}
+                </button>
+              </div>
+            </div>
+          )}
+        />
       </div>
 
       {recent.length > 0 && (

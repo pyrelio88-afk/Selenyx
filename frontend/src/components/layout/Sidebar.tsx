@@ -1,6 +1,5 @@
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { Icon, NAV_ICONS } from '@components/ui/Icon';
-import { Crane } from '@components/ui/Crane';
 import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 import { RunningTasks } from '@components/layout/RunningTasks';
 import { UserPanel } from '@components/layout/UserPanel';
@@ -30,24 +29,15 @@ export function Sidebar() {
     <aside className={`sidebar workspace-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`} aria-label="Selenyx 侧栏">
       <div className="workspace-brand v4-brand">
         <div className="workspace-brand-mark" aria-hidden="true">
-          <Crane size={28} />
+          <img src="/brand-crane-cloud-512-v1.png" alt="" />
         </div>
         {!sidebarCollapsed && (
           <div className="v4-brand-copy">
             <div className="workspace-brand-name">Selenyx</div>
-            <div className="workspace-brand-subtitle">v0.1.0</div>
+            <div className="workspace-brand-subtitle">v0.2.0</div>
           </div>
         )}
         <div className="v4-brand-actions">
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => setView('references')}
-            aria-label="检索文献库"
-            title="检索文献库"
-          >
-            <Icon name="search" size={16} />
-          </button>
           <button
             type="button"
             className="icon-btn"
@@ -59,6 +49,19 @@ export function Sidebar() {
           </button>
         </div>
       </div>
+
+      {!sidebarCollapsed && (
+        <button
+          type="button"
+          className="sidebar-search"
+          onClick={() => setView('references')}
+          title="检索知识库（快捷键 K）"
+        >
+          <Icon name="search" size={15} />
+          <span className="sidebar-search-label">搜索</span>
+          <kbd>K</kbd>
+        </button>
+      )}
 
       <nav className="sidebar-nav" aria-label="主导航">
         {NAV_ITEMS.map((item) => (
@@ -74,6 +77,9 @@ export function Sidebar() {
               <Icon name={NAV_ICONS[item.key]} size={18} />
             </span>
             {!sidebarCollapsed && <span className="nav-item-label">{item.label}</span>}
+            {!sidebarCollapsed && item.key === 'newTask' && (
+              <span className="nav-item-trail" aria-hidden="true"><Icon name="plus" size={14} /></span>
+            )}
           </button>
         ))}
       </nav>
