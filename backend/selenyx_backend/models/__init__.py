@@ -141,6 +141,11 @@ class AgentRun(SQLModel, table=True):
     output_text: str = ""
     audit_log_json: str = "[]"
     artifacts_json: str = "[]"  # V4 模块 B：write_note/export_artifact 落盘工件清单
+    # V4 模块 H：opaque browser-local chat origin. These identifiers carry no
+    # conversation content; the frontend uses them to return the real output
+    # to the session that started the run.
+    source_session_id: str = ""
+    source_session_scope: str = ""
     tokens_used: int = 0
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
@@ -166,13 +171,47 @@ class AutomationTask(SQLModel, table=True):
     id: str = Field(default_factory=gen_id, primary_key=True)
     name: str = ""
     prompt: str = ""
-    schedule_type: str = "daily"  # interval | daily
+    schedule_type: str = "daily"  # interval | daily | cron
     interval_min: int = 60
     daily_hhmm: str = "08:00"
+    cron_expr: str = ""  # V4 模块 G：五字段 cron（schedule_type=cron 时生效）
+    catch_up: bool = True  # 停机/休眠错过的触发是否补跑一次
+    retry_count: int = 0  # 连续失败已重试次数（指数退避 ×3）
+    next_retry_at: Optional[str] = None  # 下一次重试时刻（ISO）
     project_id: str = ""
     enabled: bool = True
     last_run_at: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class McpServer(SQLModel, table=True):
+    """用户明确配置的本机 MCP 连接器。
+
+    配置只保存在本地 SQLite。stdio 命令与参数分列保存，服务层始终以
+    ``create_subprocess_exec`` 调用，绝不交给 shell 解释；SSE/HTTP 端点
+    不存自定义请求头，避免把令牌复制进配置或日志。
+    """
+
+    __tablename__ = "mcp_servers"
+
+    id: str = Field(default_factory=gen_id, primary_key=True)
+    name: str = ""
+    transport: str = "stdio"  # stdio | sse（Streamable HTTP / SSE 响应）
+    command: str = ""
+    args_json: str = "[]"
+    url: str = ""
+    timeout_seconds: float = 10.0
+    enabled: bool = True
+    # 最后一次显式探测的可调用工具快照。动态 agent 白名单只信任此快照，
+    # 不会为了列工具而在后台偷偷联网或起进程。
+    capabilities_json: str = "[]"
+    protocol_version: str = ""
+    server_info_json: str = "{}"
+    last_status: str = "unknown"  # unknown | ok | error | disabled
+    last_error: str = ""
+    last_checked_at: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
 class DocumentChunk(SQLModel, table=True):

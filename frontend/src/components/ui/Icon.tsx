@@ -12,13 +12,13 @@ import type { ReactNode } from 'react';
 
 export type IconName =
   // 导航
-  | 'dashboard' | 'references' | 'pipeline' | 'projects'
+  | 'dashboard' | 'references' | 'pipeline' | 'projects' | 'taskDraft' | 'connector' | 'automation'
   | 'tables' | 'statTools' | 'clinicalData' | 'aiChat' | 'settings' | 'skills'
   | 'notes'
   // 模式切换（手绘日/月，非 emoji）
   | 'sun' | 'moon'
   // 操作
-  | 'plus' | 'search' | 'import' | 'download' | 'close' | 'check' | 'chevronRight'
+  | 'plus' | 'search' | 'import' | 'download' | 'close' | 'check' | 'chevronRight' | 'arrowRight'
   | 'filter' | 'sort' | 'more'
   | 'menu'
   | 'warning'
@@ -31,7 +31,8 @@ export type IconName =
   | 'globe' | 'quote' | 'grant' | 'count' | 'shield' | 'target' | 'blueprint' | 'chip' | 'chart'
   // R109 AI 助手动作图标
   | 'copy' | 'pencil' | 'retry' | 'branch' | 'pin' | 'trash' | 'send' | 'stop'
-  | 'sparkles' | 'chevronDown' | 'chevronLeft' | 'clock' | 'editIn' | 'list';
+  | 'sparkles' | 'chevronDown' | 'chevronLeft' | 'clock' | 'editIn' | 'list'
+  | 'paperclip';
 
 const PATHS: Record<IconName, ReactNode> = {
   // 导航 —— 视觉重量统一，区分度高
@@ -39,6 +40,10 @@ const PATHS: Record<IconName, ReactNode> = {
   references: (<><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15.5H5.5A1.5 1.5 0 0 1 4 18z" /><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15.5h5.5a1.5 1.5 0 0 0 1.5-1.5z" /><path d="M11 4v15.5" /></>),
   pipeline: (<><path d="M9 9h6" /><path d="M9 15h6" /><rect x="4" y="6" width="5" height="5" rx="1" /><rect x="15" y="6" width="5" height="5" rx="1" /><rect x="4" y="13" width="5" height="5" rx="1" /><rect x="15" y="13" width="5" height="5" rx="1" /></>),
   projects: (<><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9A1.5 1.5 0 0 1 20.5 9.5v8A1.5 1.5 0 0 1 19 19H4.5A1.5 1.5 0 0 1 3 17.5z" /><path d="M3 10h18" /></>),
+  // Selenyx 工作台导航：任务草稿、连接器节点、计划时钟；均为独立语义，不复用参考产品的路径。
+  taskDraft: (<><path d="M6 3.5h8l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20z" /><path d="M14 3.5V8h4" /><path d="M9 14h6M12 11v6" /></>),
+  connector: (<><circle cx="6" cy="12" r="2.3" /><circle cx="18" cy="6" r="2.3" /><circle cx="18" cy="18" r="2.3" /><path d="M8.1 11.1l7.7-4M8.1 12.9l7.7 4" /></>),
+  automation: (<><circle cx="12" cy="12" r="7.5" /><path d="M12 8v4l2.8 1.8" /><path d="M5.4 5.8 4.2 3.7M18.6 5.8l1.2-2.1" /><path d="M4.5 17.2h3.1l-1.2 2.1" /></>),
   tables: (<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18" /><path d="M9 4v16" /><path d="M15 4v16" /></>),
   statTools: (<><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M3 20h18" /></>),
   clinicalData: (<><path d="M12 4v16" /><path d="M4 12h16" /><path d="M7 7c0 2.5 2.2 5 5 5s5-2.5 5-5" /><path d="M12 4a3 3 0 0 0-3 3" /><path d="M12 4a3 3 0 0 1 3 3" /></>),
@@ -60,11 +65,13 @@ const PATHS: Record<IconName, ReactNode> = {
   close: (<><path d="M6 6l12 12M18 6L6 18" /></>),
   check: (<><path d="M5 12.5l4.5 4.5L19 7" /></>),
   chevronRight: (<><path d="M9 5l7 7-7 7" /></>),
+  arrowRight: (<><path d="M4 12h15" /><path d="m14 6 6 6-6 6" /></>),
   filter: (<><path d="M4 6h16l-6 7v5l-4 2v-7z" /></>),
   sort: (<><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3" /></>),
   more: (<><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></>),
   menu: (<><rect x="3" y="4" width="18" height="2.4" rx="1.2" /><rect x="3" y="10.8" width="18" height="2.4" rx="1.2" /><rect x="3" y="17.6" width="12" height="2.4" rx="1.2" /></>),
   warning: (<><path d="M12 4L2.5 20h19L12 4z" /><path d="M12 10v4.5" /><circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none" /></>),
+  paperclip: (<><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7-7l8.4-8.4a3.4 3.4 0 0 1 4.8 4.8l-8.4 8.4a1.8 1.8 0 0 1-2.6-2.6l7.6-7.6" /></>),
 
   // 流水线阶段 —— 每阶段独立意象，非统一方块
   stageProblem: (<><circle cx="12" cy="12" r="8.5" /><path d="M9.2 9.2a2.8 2.8 0 0 1 5.3 1c0 1.8-2.5 2-2.5 3.5" /><circle cx="12" cy="16.8" r="0.6" fill="currentColor" stroke="none" /></>),
@@ -162,12 +169,12 @@ export const STAGE_ICONS: Record<string, IconName> = {
 /** 导航 key → 图标名映射 */
 export const NAV_ICONS: Record<string, IconName> = {
   // v4 主导航
-  newTask: 'plus',
+  newTask: 'taskDraft',
   assistant: 'aiChat',
   projects: 'projects',
   library: 'references',
-  extensions: 'sparkles',
-  automations: 'clock',
+  extensions: 'connector',
+  automations: 'automation',
   more: 'more',
   // 旧 key（容器 tab / 深链兜底）
   dashboard: 'dashboard',

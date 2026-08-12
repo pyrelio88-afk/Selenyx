@@ -68,6 +68,16 @@ def init_db() -> None:
             # V4 模块 B：run 工件清单（write_note / export_artifact 落盘记录）
             "agent_runs": {
                 "artifacts_json": "TEXT NOT NULL DEFAULT '[]'",
+                # V4 模块 H：run 完成后回贴浏览器本地来源会话的 opaque 标识。
+                "source_session_id": "TEXT NOT NULL DEFAULT ''",
+                "source_session_scope": "TEXT NOT NULL DEFAULT ''",
+            },
+            # V4 模块 G：cron 表达式 / 停机补偿 / 失败指数退避重试
+            "automation_tasks": {
+                "cron_expr": "TEXT NOT NULL DEFAULT ''",
+                "catch_up": "INTEGER NOT NULL DEFAULT 1",
+                "retry_count": "INTEGER NOT NULL DEFAULT 0",
+                "next_retry_at": "TEXT",
             },
         }
         evidence_status_was_added = False

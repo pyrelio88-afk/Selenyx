@@ -53,9 +53,14 @@ export interface AutomationDef {
   id: string;
   name: string;
   prompt: string;
-  scheduleType: 'interval' | 'daily';
+  scheduleType: 'interval' | 'daily' | 'cron';
   intervalMin: number;
   dailyHhmm: string;
+  /** V4 模块 G：五字段 cron 表达式 / 停机补偿开关 / 重试状态 */
+  cronExpr: string;
+  catchUp: boolean;
+  retryCount: number;
+  nextRetryAt: string | null;
   projectId: string | null;
   enabled: boolean;
   lastRunAt: string | null;
@@ -64,11 +69,20 @@ export interface AutomationDef {
 export interface AutomationBody {
   name: string;
   prompt: string;
-  scheduleType: 'interval' | 'daily';
+  scheduleType: 'interval' | 'daily' | 'cron';
   intervalMin: number;
   dailyHhmm: string;
+  cronExpr: string;
+  catchUp: boolean;
   projectId: string | null;
   enabled: boolean;
+}
+
+export interface AutomationRunEntry {
+  runId: string;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
 }
 
 export const automationsApi = {
@@ -80,4 +94,6 @@ export const automationsApi = {
   toggle: (id: string) => request<AutomationDef>(`/automations/${id}/toggle`, { method: 'POST' }),
   remove: (id: string) => request<{ deleted: string }>(`/automations/${id}`, { method: 'DELETE' }),
   runNow: (id: string) => request<{ runId: string; status: string }>(`/automations/${id}/run`, { method: 'POST' }),
+  /** 运行历史（V4 模块 G）：该任务触发的 run 列表，可跳详情 */
+  history: (id: string) => request<{ runs: AutomationRunEntry[] }>(`/automations/${id}/runs`),
 };

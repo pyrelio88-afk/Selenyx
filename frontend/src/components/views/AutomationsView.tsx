@@ -9,22 +9,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
-import { automationsApi, type AutomationDef } from '@services/extensions';
+import { automationsApi, type AutomationDef, type AutomationRunEntry } from '@services/extensions';
+import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
+import { validateCronExpression } from '@services/cron';
 
 export function AutomationsView() {
   const projects = useAppStore((s) => s.projects);
   const setView = useAppStore((s) => s.setView);
+  const requestRunFocus = useAppStore((s) => s.requestRunFocus);
   const [items, setItems] = useState<AutomationDef[]>([]);
   const [offline, setOffline] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [scheduleType, setScheduleType] = useState<'interval' | 'daily'>('daily');
+  const [scheduleType, setScheduleType] = useState<'interval' | 'daily' | 'cron'>('daily');
   const [intervalMin, setIntervalMin] = useState(60);
   const [dailyTime, setDailyTime] = useState('08:00');
+  const [cronExpr, setCronExpr] = useState('0 8 * * *');
+  const [catchUp, setCatchUp] = useState(true);
   const [projectId, setProjectId] = useState<string>('');
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const [history, setHistory] = useState<Record<string, AutomationRunEntry[]>>({});
 
   const activeProjects = projects.filter((p) => p.status !== 'archived');
+  // Derived during render rather than synchronized through another effect.
+  const cronError = scheduleType === 'cron' ? validateCronExpression(cronExpr) : null;
 
   const refresh = useCallback(async () => {
     try {
@@ -41,10 +50,11 @@ export function AutomationsView() {
   }, [refresh]);
 
   const add = async () => {
-    if (!name.trim() || !prompt.trim()) return;
+    if (!name.trim() || !prompt.trim() || cronError) return;
     const body = {
       name: name.trim(), prompt: prompt.trim(), scheduleType,
-      intervalMin, dailyHhmm: dailyTime, projectId: projectId || null, enabled: true,
+      intervalMin, dailyHhmm: dailyTime, cronExpr: cronExpr.trim(), catchUp,
+      projectId: projectId || null, enabled: true,
     };
     try {
       if (editingId) {
@@ -67,7 +77,23 @@ export function AutomationsView() {
     setScheduleType(item.scheduleType);
     setIntervalMin(item.intervalMin);
     setDailyTime(item.dailyHhmm);
+    setCronExpr(item.cronExpr || '0 8 * * *');
+    setCatchUp(item.catchUp);
     setProjectId(item.projectId ?? '');
+  };
+
+  /* 运行历史展开（V4 模块 G）：关联 run 可跳任务详情 */
+  const toggleHistory = async (item: AutomationDef) => {
+    const next = historyFor === item.id ? null : item.id;
+    setHistoryFor(next);
+    if (next && !history[next]) {
+      try {
+        const { runs } = await automationsApi.history(next);
+        setHistory((prev) => ({ ...prev, [next]: runs }));
+      } catch {
+        setHistory((prev) => ({ ...prev, [next]: [] }));
+      }
+    }
   };
 
   const cancelEdit = () => {
@@ -123,20 +149,37 @@ export function AutomationsView() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, color: 'var(--text-secondary)' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             节奏
-            <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as 'interval' | 'daily')} style={{ minHeight: 36 }}>
+            <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as 'interval' | 'daily' | 'cron')} style={{ minHeight: 36 }}>
               <option value="daily">每天定时</option>
               <option value="interval">按间隔</option>
+              <option value="cron">cron 表达式</option>
             </select>
           </label>
-          {scheduleType === 'daily' ? (
+          {scheduleType === 'daily' && (
             <input type="time" value={dailyTime} onChange={(e) => setDailyTime(e.target.value)} aria-label="每天时间" style={{ minHeight: 36 }} />
-          ) : (
+          )}
+          {scheduleType === 'interval' && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               每
               <input type="number" min={5} value={intervalMin} onChange={(e) => setIntervalMin(Math.max(5, Number(e.target.value) || 60))} aria-label="间隔分钟" style={{ width: 80, minHeight: 36 }} />
               分钟
             </label>
           )}
+          {scheduleType === 'cron' && (
+            <input
+              value={cronExpr}
+              onChange={(e) => setCronExpr(e.target.value)}
+              placeholder="分 时 日 月 星期，如 0 8 * * 1-5"
+              aria-label="cron 表达式"
+              aria-invalid={Boolean(cronError)}
+              aria-describedby={cronError ? 'cron-expression-help' : undefined}
+              style={{ minHeight: 36, width: 200, fontFamily: 'monospace' }}
+            />
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="停机/休眠期间错过的触发，开机后补跑一次">
+            <input type="checkbox" checked={catchUp} onChange={(e) => setCatchUp(e.target.checked)} />
+            错过补跑
+          </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             项目
             <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={{ minHeight: 36 }}>
@@ -146,13 +189,14 @@ export function AutomationsView() {
               ))}
             </select>
           </label>
-          <button type="button" className="btn btn-primary" onClick={() => void add()} disabled={!name.trim() || !prompt.trim() || offline}>
+          <button type="button" className="btn btn-primary" onClick={() => void add()} disabled={!name.trim() || !prompt.trim() || Boolean(cronError) || offline}>
             <Icon name="plus" size={15} /> {editingId ? '保存' : '创建'}
           </button>
           {editingId && (
             <button type="button" className="btn" onClick={cancelEdit}>取消编辑</button>
           )}
         </div>
+        {cronError && <p id="cron-expression-help" role="alert" style={{ margin: 0, fontSize: 12, color: 'var(--danger)' }}>{cronError}</p>}
       </div>
 
       <div className="card" style={{ padding: 16 }}>
@@ -162,21 +206,64 @@ export function AutomationsView() {
         ) : (
           <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
             {items.map((a) => (
-              <li key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
-                <Icon name="clock" size={15} />
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{a.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {a.scheduleType === 'daily' ? `每天 ${a.dailyHhmm}` : `每 ${a.intervalMin} 分钟`}
-                    {' · '}{activeProjects.find((p) => p.id === a.projectId)?.name ?? '全局'}
-                    {' · '}{a.enabled ? '已启用' : '已暂停'}
-                    {a.lastRunAt ? ` · 上次 ${new Date(a.lastRunAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+              <li key={a.id} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <Icon name="clock" size={15} />
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{a.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {a.scheduleType === 'daily' ? `每天 ${a.dailyHhmm}` : a.scheduleType === 'cron' ? `cron: ${a.cronExpr}` : `每 ${a.intervalMin} 分钟`}
+                      {!a.catchUp && ' · 不补跑'}
+                      {' · '}{activeProjects.find((p) => p.id === a.projectId)?.name ?? '全局'}
+                      {' · '}{a.enabled ? '已启用' : '已暂停'}
+                      {a.lastRunAt ? ` · 上次 ${new Date(a.lastRunAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                      {a.nextRetryAt && (
+                        <span style={{ color: 'var(--danger)' }}>
+                          {' · '}第 {a.retryCount}/3 次重试将于 {new Date(a.nextRetryAt).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                      {!a.nextRetryAt && a.retryCount >= 3 && (
+                        <span style={{ color: 'var(--danger)' }}>{' · '}已重试 3 次仍失败</span>
+                      )}
+                    </div>
                   </div>
+                  <button type="button" className="btn" onClick={() => void toggleHistory(a)} aria-expanded={historyFor === a.id} style={{ minHeight: 32, fontSize: 12 }}>历史</button>
+                  <button type="button" className="btn" onClick={() => void runNow(a)} style={{ minHeight: 32, fontSize: 12 }}>立即运行</button>
+                  <button type="button" className="btn" onClick={() => startEdit(a)} style={{ minHeight: 32, fontSize: 12 }}>编辑</button>
+                  <button type="button" className="btn" onClick={() => void toggle(a.id)} style={{ minHeight: 32, fontSize: 12 }}>{a.enabled ? '暂停' : '启用'}</button>
+                  <button type="button" className="btn" onClick={() => void remove(a)} aria-label={`删除 ${a.name}`} style={{ minHeight: 32, fontSize: 12, color: 'var(--danger)' }}>删除</button>
                 </div>
-                <button type="button" className="btn" onClick={() => void runNow(a)} style={{ minHeight: 32, fontSize: 12 }}>立即运行</button>
-                <button type="button" className="btn" onClick={() => startEdit(a)} style={{ minHeight: 32, fontSize: 12 }}>编辑</button>
-                <button type="button" className="btn" onClick={() => void toggle(a.id)} style={{ minHeight: 32, fontSize: 12 }}>{a.enabled ? '暂停' : '启用'}</button>
-                <button type="button" className="btn" onClick={() => void remove(a)} aria-label={`删除 ${a.name}`} style={{ minHeight: 32, fontSize: 12, color: 'var(--danger)' }}>删除</button>
+                {historyFor === a.id && (
+                  <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                    {(history[a.id] ?? []).length === 0 ? (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>还没有运行记录。</span>
+                    ) : (
+                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
+                        {(history[a.id] ?? []).map((run) => (
+                          <li key={run.runId}>
+                            <button
+                              type="button"
+                              onClick={() => requestRunFocus(run.runId)}
+                              title="跳转到任务详情"
+                              style={{
+                                width: '100%', textAlign: 'left', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                                background: 'transparent', cursor: 'pointer', font: 'inherit', padding: '6px 10px',
+                                display: 'flex', gap: 10, alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)',
+                              }}
+                            >
+                              <span style={{ color: STATUS_COLOR[run.status] ?? 'var(--text-muted)', fontWeight: 700 }}>
+                                {STATUS_LABEL[run.status] ?? run.status}
+                              </span>
+                              <span style={{ color: 'var(--text-muted)' }}>
+                                {run.startedAt ? new Date(run.startedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
