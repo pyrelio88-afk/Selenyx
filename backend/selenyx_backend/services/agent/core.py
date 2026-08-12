@@ -51,6 +51,7 @@ SYSTEM_PROMPT = """你是 Selenyx 的本机研究 agent。你通过「规划→�
 10. list_notes / read_note — 读取本机笔记作为上下文。args: {} / {"name": "笔记文件名"}
 11. read_memory — 读取本机记忆（项目 + 全局）。args: {}
 12. write_memory — 把值得长期记住的要点追加进记忆（有项目归属写项目记忆）。args: {"content": "要点"}
+13. mcp:<server-id>/<tool> — 仅当系统另行列出已探测 MCP 工具时可用；参数遵循该工具的 inputSchema。
 
 原则：计划 2-6 步、量力而行；不编造文献、作者、DOI 或数据；工具没查到的就明说不知道；final 用中文、结构清晰、直给结论。
 证据门：final 中凡引用文献结论，必须先 save_evidence 落卡并附原文摘录；证据卡一律 pending，经人接受才算数。
@@ -280,8 +281,28 @@ TOOLS: dict[str, ToolHandler] = {
 }
 
 
-async def run_tool(session: Session, project_id: str | None, tool: str, args: dict[str, Any]) -> Any:
-    """按注册表执行白名单工具，返回可 JSON 序列化的观察结果。"""
+async def run_tool(
+    session: Session,
+    project_id: str | None,
+    tool: str,
+    args: dict[str, Any],
+    *,
+    allow_mcp: bool = False,
+) -> Any:
+    """按注册表执行工具。
+
+    ``mcp:`` 不是进程级静态注册表项：它必须经过主 agent 显式放行，随后
+    再由连接器服务核验持久化的已探测能力快照。这样专家子代理仍只有原有
+    的内置工具边界，配置失效也不会成为任意 JSON-RPC 代理。
+    """
+    if tool.startswith("mcp:"):
+        if not allow_mcp:
+            return {"error": "当前 agent 边界不允许调用 MCP 工具。"}
+        # 延迟导入避免 core ↔ connector service 的初始化环；错误会以观察结果
+        # 返回，连接器故障不会让整个 run 抛异常。
+        from selenyx_backend.services.connectors import call_mcp_tool
+
+        return await call_mcp_tool(tool, args)
     handler = TOOLS.get(tool)
     if handler is None:
         return {"error": f"未知工具：{tool}"}

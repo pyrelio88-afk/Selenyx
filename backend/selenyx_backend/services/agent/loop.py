@@ -48,6 +48,7 @@ from selenyx_backend.services.citations import (
     has_evidence_markers as _has_evidence_markers,
     rejection_message as _rejection_message,
 )
+from selenyx_backend.services.connectors import agent_mcp_prompt
 from selenyx_backend.services.memory import (
     append_memory as _append_memory,
     memory_digest as _memory_digest,
@@ -214,6 +215,11 @@ async def _dispatch_tool(run_id: str, project_id: str | None, tool: str, args: d
             _record_artifact(run_id, {"kind": "artifact", "name": result["name"], "path": result["path"]})
         return result
     with Session(get_engine()) as session:
+        # Keep the legacy four-argument dispatch call intact for built-ins:
+        # existing integrations/tests intentionally monkeypatch that seam.
+        # Only the dynamic MCP prefix needs the explicit main-agent gate.
+        if tool.startswith("mcp:"):
+            return await _run_tool(session, project_id, tool, args, allow_mcp=True)
         return await _run_tool(session, project_id, tool, args)
 
 
@@ -313,6 +319,11 @@ async def execute_run(
         system_content += f"\n\n# 用户自定义指令\n{custom_instructions.strip()[:1500]}"
     if skill_directive:
         system_content += f"\n\n# 技能约束（本任务必须遵守）\n{skill_directive}"
+    # MCP 能力来自此前用户显式探测并持久化的本机快照；这里不会为了列工具
+    # 而联网或启动进程。服务端会二次核验名称，所以 prompt 只是可见性而非授权。
+    mcp_prompt = agent_mcp_prompt()
+    if mcp_prompt:
+        system_content += f"\n\n{mcp_prompt}"
     goal_message = f"我的目标：{goal}"
     if recipe_directive:
         goal_message = f"{goal_message}\n\n{recipe_directive}"
@@ -433,7 +444,8 @@ async def execute_run(
             args = action.get("args") if isinstance(action.get("args"), dict) else {}
             timeline.record("tool", tool=tool, args=args)
             # 技能白名单（V4 模块 F）：越界工具不执行，观察里说明可用清单
-            if allowed_tools is not None and tool not in allowed_tools:
+            mcp_wildcard_allowed = tool.startswith("mcp:") and "mcp:*" in (allowed_tools or set())
+            if allowed_tools is not None and tool not in allowed_tools and not mcp_wildcard_allowed:
                 observation = {
                     "error": f"当前技能不允许使用工具 {tool}",
                     "allowedTools": sorted(allowed_tools),
