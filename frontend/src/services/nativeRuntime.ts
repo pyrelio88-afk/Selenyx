@@ -11,8 +11,13 @@ interface TauriCore {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
 }
 
+interface TauriEvent {
+  emit(event: string, payload?: unknown): Promise<void>;
+  listen<T>(event: string, handler: (event: { payload: T }) => void): Promise<() => void>;
+}
+
 interface TauriWindow extends Window {
-  __TAURI__?: { core?: TauriCore };
+  __TAURI__?: { core?: TauriCore; event?: TauriEvent };
 }
 
 function runtimeWindow(): TauriWindow | null {
@@ -56,6 +61,57 @@ export function saveLocalLLMConfig(config: LocalLLMConfigInput): Promise<void> {
 /** 切换仙鹤桌宠（桌面端独立透明窗口）；返回切换后的可见状态。 */
 export function setPetVisible(visible: boolean): Promise<boolean> {
   return invoke<boolean>('toggle_pet', { visible });
+}
+
+/** 终态 run 让桌宠显示短状态气泡；非桌面环境静默无操作。 */
+export interface PetRuntimeState {
+  pendingCount: number;
+  completedToday: number;
+  failedToday: number;
+  runningToday: number;
+  message?: string;
+  status?: 'completed' | 'failed';
+}
+
+/** Broadcast a state snapshot to the optional native companion window. */
+export function emitPetState(state: PetRuntimeState): void {
+  const emit = runtimeWindow()?.__TAURI__?.event?.emit;
+  if (!emit) return;
+  void emit('pet:state', state).catch(() => { /* Browser/mobile builds have no pet event bus. */ });
+}
+
+/** A terminal run gets a concise status bubble; there is intentionally no flight animation. */
+export function emitPetCelebrate(state: PetRuntimeState): void {
+  const emit = runtimeWindow()?.__TAURI__?.event?.emit;
+  if (!emit) return;
+  void emit('pet:celebrate', state).catch(() => { /* 权限缺失或窗口已关：不值得惊动用户 */ });
+}
+
+/**
+ * Subscribe once to a native pet action.  The returned cleanup is safe even
+ * when a component unmounts before Tauri resolves the asynchronous listener.
+ */
+export function listenForPetEvent<T>(event: string, handler: (payload: T) => void): () => void {
+  const listen = runtimeWindow()?.__TAURI__?.event?.listen;
+  if (!listen) return () => {};
+  let disposed = false;
+  let unlisten: (() => void) | undefined;
+  void listen<T>(event, ({ payload }) => handler(payload))
+    .then((cleanup) => {
+      if (disposed) cleanup();
+      else unlisten = cleanup;
+    })
+    .catch(() => { /* An older desktop runtime simply does not expose this feature. */ });
+  return () => {
+    disposed = true;
+    unlisten?.();
+  };
+}
+
+export function requestPetSummary(state: PetRuntimeState): void {
+  const emit = runtimeWindow()?.__TAURI__?.event?.emit;
+  if (!emit) return;
+  void emit('pet:summary', state).catch(() => {});
 }
 
 export function exportNativeState(json: string): Promise<string> {

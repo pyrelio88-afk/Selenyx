@@ -24,7 +24,7 @@ import {
 // 复用旧设置页的卡片网格/统计样式（theme-choice-grid、settings-data-stats 等）
 import '../views/settings-workbench.css';
 
-const APP_VERSION = '0.1.0'; // 发布时与 package.json 同步
+const APP_VERSION = '0.2.0'; // 发布时与 package.json 同步
 
 const SECTIONS: { key: SettingsSection; label: string; icon: IconName }[] = [
   { key: 'general', label: '通用', icon: 'settings' },
@@ -476,7 +476,7 @@ export function SettingsModal() {
                 <div className="card" style={{ marginBottom: 16 }}>
                   <h3 style={{ marginBottom: 8, fontSize: 16 }}>仙鹤桌宠</h3>
                   <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                    在屏幕上放养一只仙鹤：桌面端为透明置顶小窗（随机踱步与飞行），网页端降级为应用内右下角漂浮。关闭后立即收起。
+                    在聊天输入框附近静驻一只仙鹤：桌面端为透明置顶小窗，网页端降级为应用内安静停驻。任务完成或失败时仅显示短气泡；关闭后立即收起。
                   </p>
                   <button
                     type="button"
@@ -484,7 +484,7 @@ export function SettingsModal() {
                     onClick={() => setPetEnabled(!petEnabled)}
                     aria-pressed={petEnabled}
                   >
-                    {petEnabled ? '已开启 · 点击收起' : '已关闭 · 点击放养'}
+                    {petEnabled ? '已开启 · 点击收起' : '已关闭 · 点击开启'}
                   </button>
                 </div>
                 <div className="card" style={{ marginBottom: 16 }}>

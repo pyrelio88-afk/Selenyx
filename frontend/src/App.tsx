@@ -15,7 +15,7 @@ import { ThemeProvider } from '@hooks/useTheme';
 import { clearSelenyxBrowserStorage } from '@services/workspaceBackup';
 import { readEnvironmentLLM } from '@services/envLLM';
 import { isDesktopTauri, setPetVisible } from '@services/nativeRuntime';
-import { FloatingCrane } from '@components/pet/FloatingCrane';
+import { PetCompanionBridge } from '@components/pet/PetCompanionBridge';
 import { bootstrapReferenceRepository } from '@services/referenceRepository';
 import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
 import './styles/tokens.css';
@@ -108,6 +108,19 @@ export default function App() {
       }
       if (event.key === 'Escape' && useAppStore.getState().settingsOpen) {
         closeSettings();
+        return;
+      }
+      // K 全局检索（侧栏搜索框的键帽提示）：输入中/设置弹窗打开时不抢键；
+      // 知识库·证据卡 tab 的 J/K 裁决优先，那里不触发跳转。
+      if ((event.key === 'k' || event.key === 'K') && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+        const state = useAppStore.getState();
+        const adjudicating = state.currentView === 'library' && state.libraryTab === 'evidence';
+        if (!typing && !state.settingsOpen && !adjudicating) {
+          event.preventDefault();
+          setView('references');
+        }
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -172,7 +185,7 @@ export default function App() {
             <ErrorBoundary>{renderView()}</ErrorBoundary>
           </div>
         </main>
-        {petEnabled && !desktopPetActive && <FloatingCrane />}
+        <PetCompanionBridge nativeActive={desktopPetActive} />
       </div>
       <SettingsModal />
     </ThemeProvider>

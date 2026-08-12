@@ -3,64 +3,155 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Selenyx 仙鹤</title>
+<title>Selenyx 仙鹤伙伴</title>
 <style>
-  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; }
-  body { display: grid; place-items: center; user-select: none; -webkit-user-select: none; }
-  .pet { width: 124px; height: 124px; display: grid; place-items: center; transition: transform 120ms ease; cursor: pointer; }
-  .pet.flip { transform: scaleX(-1); }
-  /* 白羽在任何底色上都要可辨：墨影勾边 + 落地淡影 */
-  .crane {
-    width: 116px; height: auto; display: block;
-    filter:
-      drop-shadow(0 0 1.5px rgba(27, 27, 27, 0.45))
-      drop-shadow(0 3px 6px rgba(27, 27, 27, 0.22));
-    animation: perch-breathe 2.8s ease-in-out infinite;
-    transform-origin: 50% 88%;
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: visible; background: transparent; }
+  body { display: grid; place-items: end center; user-select: none; -webkit-user-select: none; font-family: "Microsoft YaHei", system-ui, sans-serif; }
+  .pet-shell { position: relative; width: 156px; height: 156px; }
+  .pet {
+    position: absolute; right: 10px; bottom: 0; width: 82px; height: 82px;
+    display: grid; place-items: center; cursor: grab; touch-action: none;
   }
-  /* 趴着：缓慢呼吸起伏；飞行：振翅频率加快并前倾 */
-  .pet.flying .crane { animation: fly-flap 560ms ease-in-out infinite; }
-  .pet.idle .crane { animation-play-state: running; }
-  @keyframes perch-breathe {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-1.6px) rotate(-0.8deg); }
+  .pet:active { cursor: grabbing; }
+  .crane { width: 76px; height: 76px; object-fit: contain; display: block; filter: drop-shadow(0 2px 4px rgba(27,27,27,.22)); animation: breathe 3.4s ease-in-out infinite; }
+  .pet.waiting .crane { animation: none; }
+  .pending-dot, .status-dot { position: absolute; border-radius: 50%; pointer-events: none; }
+  .pending-dot { top: 5px; right: 5px; width: 12px; height: 12px; background: #e6ad25; border: 2px solid rgba(255,255,255,.96); box-shadow: 0 1px 4px rgba(102,72,6,.32); }
+  .status-dot { right: 10px; bottom: 10px; width: 9px; height: 9px; border: 2px solid rgba(255,255,255,.96); background: #5d7288; }
+  .status-dot.is-completed { background: #2d8a57; }
+  .status-dot.is-failed { background: #bb4b45; }
+  .bubble {
+    position: absolute; right: 8px; bottom: 72px; width: 148px; max-height: 74px;
+    box-sizing: border-box; overflow: hidden; padding: 7px 9px;
+    border: 1px solid rgba(92, 104, 112, .26); border-radius: 10px;
+    background: rgba(255,255,255,.96); color: #293238; box-shadow: 0 4px 14px rgba(0,0,0,.13);
+    font-size: 11px; line-height: 1.45; cursor: pointer;
   }
-  @keyframes fly-flap {
-    0%, 100% { transform: translateY(0) rotate(-4deg) scaleY(1); }
-    50% { transform: translateY(-4px) rotate(3deg) scaleY(0.94); }
+  .bubble::after { content: ""; position: absolute; right: 27px; bottom: -5px; width: 9px; height: 9px; background: rgba(255,255,255,.96); border-right: 1px solid rgba(92,104,112,.26); border-bottom: 1px solid rgba(92,104,112,.26); transform: rotate(45deg); }
+  .bubble[hidden], .menu[hidden], .pending-dot[hidden] { display: none; }
+  .bubble strong { display: block; font-size: 11px; color: #1b252b; }
+  .menu {
+    /* This window is 164px tall. Keep the whole menu inside it (over the
+       resting crane) rather than letting its top be clipped by native chrome. */
+    position: absolute; right: 3px; bottom: 6px; z-index: 2; width: 150px; box-sizing: border-box; padding: 5px;
+    border: 1px solid rgba(92,104,112,.28); border-radius: 9px; background: rgba(255,255,255,.98); box-shadow: 0 5px 16px rgba(0,0,0,.16);
   }
-  @media (prefers-reduced-motion: reduce) {
-    .crane { animation: none !important; }
-  }
+  .menu button { display: block; width: 100%; padding: 6px 7px; border: 0; border-radius: 6px; background: transparent; color: #293238; text-align: left; font: inherit; font-size: 11px; cursor: pointer; }
+  .menu button:hover { background: #edf3ee; }
+  .menu .menu-stat { display: block; padding: 6px 7px; color: #68757d; font-size: 11px; line-height: 1.35; }
+  @keyframes breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+  @media (prefers-reduced-motion: reduce) { .crane { animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="pet idle" id="pet" title="仙鹤伙伴：点我飞一圈，右键收起">
-  <img class="crane" src="crane.png" alt="" draggable="false" />
+<div class="pet-shell">
+  <div class="bubble" id="bubble" role="status" aria-live="polite" hidden></div>
+  <div class="menu" id="menu" role="menu" hidden>
+    <button type="button" id="menu-summary">今日进展</button>
+    <button type="button" id="menu-open-main">打开主窗口</button>
+    <span class="menu-stat" id="menu-stat" aria-live="polite"></span>
+    <button type="button" id="menu-hide">隐藏宠物</button>
+  </div>
+  <div class="pet" id="pet" data-tauri-drag-region role="button" tabindex="0" aria-label="仙鹤伙伴：点击查看今日进展，右键打开菜单">
+    <img class="crane" src="brand-crane-cloud-512-v1.png" alt="" draggable="false" data-tauri-drag-region />
+    <span class="pending-dot" id="pending-dot" title="有待裁决证据" hidden></span>
+    <span class="status-dot" id="status-dot" aria-hidden="true"></span>
+  </div>
 </div>
 <script>
-  // 位移由 Rust 侧定时器驱动（pet.rs）；此处根据窗口实际移动速度切换飞/趴姿态。
   const pet = document.getElementById('pet');
-  let lastX = window.screenX, lastY = window.screenY;
-  setInterval(() => {
-    const dx = window.screenX - lastX;
-    const dy = window.screenY - lastY;
-    lastX = window.screenX; lastY = window.screenY;
-    const speed = Math.abs(dx) + Math.abs(dy);
-    if (Math.abs(dx) > 0.5) pet.classList.toggle('flip', dx < 0);
-    pet.classList.toggle('flying', speed > 3.2);
-    pet.classList.toggle('idle', speed < 0.4);
-  }, 90);
+  const bubble = document.getElementById('bubble');
+  const menu = document.getElementById('menu');
+  const pendingDot = document.getElementById('pending-dot');
+  const statusDot = document.getElementById('status-dot');
+  const menuStat = document.getElementById('menu-stat');
+  let state = { pendingCount: 0, completedToday: 0, failedToday: 0, runningToday: 0 };
+  let dragged = false;
+  let pointerStart = null;
+  let bubbleTimer = 0;
 
-  // 点击飞一圈；右键收起桌宠（仅发事件，窗口动作全在 Rust 侧）
-  const emit = (name) => {
-    try { window.__TAURI__?.event?.emit(name); } catch (_) { /* 无权限时静默 */ }
+  const emit = (name, payload) => {
+    try { return window.__TAURI__?.event?.emit(name, payload); } catch (_) { return undefined; }
   };
-  pet.addEventListener('click', () => emit('pet:clicked'));
+  const payloadOf = (event) => {
+    const raw = event && event.payload;
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw); } catch (_) { return {}; }
+    }
+    return raw && typeof raw === 'object' ? raw : {};
+  };
+  const summaryText = () => {
+    const chunks = [`今日完成 ${state.completedToday || 0} 项`];
+    if (state.failedToday) chunks.push(`失败 ${state.failedToday} 项`);
+    if (state.runningToday) chunks.push(`进行中 ${state.runningToday} 项`);
+    if (state.pendingCount) chunks.push(`待裁决证据 ${state.pendingCount} 条`);
+    return chunks.join(' · ');
+  };
+  const updateState = (payload) => {
+    state = { ...state, ...payload };
+    const pending = Number(state.pendingCount || 0);
+    pendingDot.hidden = pending <= 0;
+    pet.classList.toggle('waiting', pending > 0);
+    menuStat.textContent = summaryText();
+  };
+  const showBubble = (message, status) => {
+    if (!message) return;
+    bubble.innerHTML = `<strong>${status === 'failed' ? '任务需要查看' : '仙鹤伙伴'}</strong>${String(message).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}`;
+    bubble.hidden = false;
+    statusDot.className = `status-dot${status ? ` is-${status}` : ''}`;
+    window.clearTimeout(bubbleTimer);
+    bubbleTimer = window.setTimeout(() => { bubble.hidden = true; }, 6500);
+  };
+  const showSummary = () => {
+    menu.hidden = true;
+    showBubble(summaryText(), '');
+    emit('pet:summary-request');
+  };
+
+  bubble.addEventListener('click', showSummary);
+  pet.addEventListener('click', () => { if (!dragged) showSummary(); });
+  pet.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showSummary(); }
+  });
+  pet.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    dragged = false;
+    pointerStart = { x: event.screenX, y: event.screenY };
+  });
+  pet.addEventListener('pointermove', (event) => {
+    if (!pointerStart) return;
+    if (Math.abs(event.screenX - pointerStart.x) + Math.abs(event.screenY - pointerStart.y) > 5) dragged = true;
+  });
+  pet.addEventListener('pointerup', () => {
+    if (!pointerStart) return;
+    pointerStart = null;
+    if (dragged) emit('pet:pinned');
+  });
   pet.addEventListener('contextmenu', (event) => {
     event.preventDefault();
-    emit('pet:hide');
+    bubble.hidden = true;
+    menu.hidden = !menu.hidden;
   });
+  document.getElementById('menu-summary').addEventListener('click', showSummary);
+  document.getElementById('menu-open-main').addEventListener('click', () => { menu.hidden = true; emit('pet:show-main'); });
+  document.getElementById('menu-hide').addEventListener('click', () => { menu.hidden = true; emit('pet:hide'); });
+
+  const eventApi = window.__TAURI__?.event;
+  if (eventApi?.listen) {
+    eventApi.listen('pet:state', (event) => updateState(payloadOf(event))).catch(() => {});
+    eventApi.listen('pet:celebrate', (event) => {
+      const payload = payloadOf(event);
+      updateState(payload);
+      showBubble(payload.message || summaryText(), payload.status || 'completed');
+    }).catch(() => {});
+    eventApi.listen('pet:summary', (event) => {
+      const payload = payloadOf(event);
+      updateState(payload);
+      showBubble(payload.message || summaryText(), '');
+    }).catch(() => {});
+  }
+  emit('pet:ready');
 </script>
 </body>
 </html>
