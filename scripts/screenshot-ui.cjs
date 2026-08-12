@@ -1,19 +1,23 @@
-/* 新 UI 截图：遍历主要视图，输出到 docs/screenshots/v2/ */
+/* v4 UI 截图：遍历 v4 主要视图与签名功能，输出到 docs/screenshots/v4/
+   前置：npm run dev（127.0.0.1:5173）；后端可选（离线时主页有提示条，不影响构图） */
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const OUT = path.join(__dirname, '..', 'docs', 'screenshots', 'v2');
+const OUT = path.join(__dirname, '..', 'docs', 'screenshots', 'v4');
 const BASE = 'http://127.0.0.1:5173/';
 
+// label = 侧边栏导航可见文本；tab = 容器页页内 tab 文本
 const SHOTS = [
-  { name: 'overview', label: '总览', wait: 1200 },
-  { name: 'tasks', label: '任务', wait: 900 },
-  { name: 'references', label: '文献库', wait: 1200 },
-  { name: 'automations', label: '自动化', wait: 900 },
-  { name: 'experts', label: '专家', wait: 900 },
-  { name: 'connectors', label: '连接器', wait: 1200 },
-  { name: 'settings', label: '设置', wait: 900 },
+  { name: 'home', label: '新建任务', wait: 1600 },
+  { name: 'assistant', label: '助理', wait: 1000 },
+  { name: 'projects', label: '项目', wait: 1000 },
+  { name: 'library', label: '知识库', wait: 1200 },
+  { name: 'evidence', label: '知识库', tab: '证据卡', wait: 1200 },
+  { name: 'extensions', label: '专家·技能·连接器', wait: 1000 },
+  { name: 'connectors', label: '专家·技能·连接器', tab: '连接器', wait: 1400 },
+  { name: 'automations', label: '自动化', wait: 1000 },
+  { name: 'more', label: '更多', wait: 1000 },
 ];
 
 (async () => {
@@ -25,29 +29,26 @@ const SHOTS = [
   page.setDefaultTimeout(15000);
 
   await page.goto(BASE, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1800);
 
   for (const shot of SHOTS) {
-    if (shot.label !== '总览') {
-      // 侧边栏导航按钮按可见文本点击
-      const nav = page.locator(`nav button:has-text("${shot.label}"), aside button:has-text("${shot.label}")`).first();
-      await nav.click();
-      await page.waitForTimeout(shot.wait);
+    const nav = page.locator(`nav button:has-text("${shot.label}")`).first();
+    await nav.click();
+    await page.waitForTimeout(700);
+    if (shot.tab) {
+      await page.locator(`.tabbar button:has-text("${shot.tab}")`).first().click();
     }
+    await page.waitForTimeout(shot.wait);
     await page.screenshot({ path: path.join(OUT, `${shot.name}.png`) });
     console.log('shot:', shot.name);
   }
 
-  // 总览下半区（嵌入的 AI 助手）
-  const navHome = page.locator('nav button:has-text("总览"), aside button:has-text("总览")').first();
-  await navHome.click();
+  // 设置弹窗（v4：模态，Ctrl+,）
+  await page.keyboard.press('Control+,');
   await page.waitForTimeout(900);
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const main = page.locator('main');
-  await main.evaluate((el) => { el.scrollTop = el.scrollHeight; });
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: path.join(OUT, 'overview-assistant.png') });
-  console.log('shot: overview-assistant');
+  await page.screenshot({ path: path.join(OUT, 'settings.png') });
+  console.log('shot: settings');
+  await page.keyboard.press('Escape');
 
   await browser.close();
   console.log('done ->', OUT);

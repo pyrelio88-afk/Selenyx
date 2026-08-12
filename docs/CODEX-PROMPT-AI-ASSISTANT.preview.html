@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Selenyx v4 计划 · Codex 任务书（最新版预览）</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#6b6b6b; --line:#e3e0da; --accent:#c7483b; --paper:#fdfdfb; --card:#f6f5f2; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font:15px/1.85 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+  .topbar { position:sticky; top:0; z-index:10; background:rgba(253,253,251,.94); backdrop-filter:blur(6px);
+            border-bottom:1px solid var(--line); padding:10px 24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .topbar .brand { font-weight:700; letter-spacing:.5px; }
+  .badge { font-size:11px; padding:2px 9px; border:1px solid var(--accent); color:var(--accent); border-radius:99px; font-weight:700; }
+  .badge.gray { border-color:var(--muted); color:var(--muted); }
+  .topbar nav { margin-left:auto; display:flex; gap:12px; flex-wrap:wrap; }
+  .topbar nav a { font-size:12px; color:var(--muted); text-decoration:none; border-bottom:1px solid transparent; }
+  .topbar nav a:hover { color:var(--accent); border-bottom-color:var(--accent); }
+  main { max-width:900px; margin:0 auto; padding:32px 28px 96px; }
+
+  .diff { border:1px solid var(--line); background:var(--card); border-radius:10px; padding:20px 24px; margin-bottom:40px; }
+  .diff h2 { margin:0 0 4px; font-size:17px; }
+  .diff .sub { font-size:12px; color:var(--muted); margin-bottom:14px; }
+  .timeline { display:grid; gap:8px; margin:0 0 16px; padding:0; list-style:none; }
+  .timeline li { display:flex; gap:10px; align-items:baseline; font-size:13px; }
+  .timeline .when { color:var(--muted); flex:0 0 108px; font-variant-numeric:tabular-nums; }
+  .timeline .what b { font-weight:600; }
+  .pill { font-size:10.5px; padding:1px 8px; border-radius:99px; font-weight:700; margin-left:8px; white-space:nowrap; }
+  .pill.done { background:#e8f0e6; color:#3d6b35; border:1px solid #c3d6bd; }
+  .pill.new  { background:#fbeeec; color:var(--accent); border:1px solid #eec5bf; }
+  .diff table { width:100%; border-collapse:collapse; font-size:13px; }
+  .diff th, .diff td { border-top:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+  .diff th { font-size:12px; color:var(--muted); font-weight:600; border-top:none; }
+  .diff td.dim { color:var(--muted); }
+
+  .doc h1 { font-size:26px; line-height:1.4; margin:0 0 8px; padding-bottom:14px; border-bottom:2px solid var(--accent); }
+  .doc h2 { font-size:20px; margin:44px 0 12px; padding-left:12px; border-left:3px solid var(--accent); }
+  .doc h3 { font-size:16px; margin:30px 0 8px; }
+  .doc h4 { font-size:14px; margin:20px 0 6px; }
+  .doc p { margin:10px 0; }
+  .doc blockquote { margin:14px 0; padding:10px 16px; border-left:3px solid var(--line); background:var(--card); color:var(--muted); border-radius:0 8px 8px 0; }
+  .doc table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; }
+  .doc th, .doc td { border:1px solid var(--line); padding:8px 12px; text-align:left; vertical-align:top; }
+  .doc th { background:var(--card); font-weight:600; }
+  .doc code { font:13px/1.6 "Cascadia Code",Consolas,monospace; background:var(--card); border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  .doc pre { background:#22211f; color:#f2efe9; border-radius:8px; padding:14px 16px; overflow:auto; }
+  .doc pre code { background:none; border:none; color:inherit; padding:0; }
+  .doc hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+  .doc ul, .doc ol { padding-left:24px; }
+  .doc li { margin:4px 0; }
+  .doc strong { color:#000; }
+  .src { margin-top:56px; padding-top:14px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span class="brand">Selenyx 计划预览</span>
+  <span class="badge">最新版 v4 · 未实施</span>
+  <span class="badge gray">docs/CODEX-PROMPT-AI-ASSISTANT.md · 2026-08-10 07:30</span>
+  <nav>
+    <a href="#diff">版本对比</a>
+    <a href="#doc">计划全文</a>
+  </nav>
+</div>
+<main>
+<section class="diff" id="diff">
+  <h2>版本时间线与关键差异</h2>
+  <div class="sub">搜索范围：对话历史 + 桌面/项目规划文件 + 项目日志；三份候选按时间排序，v4 为最新（v1→v4 同日四稿覆盖同一文件，当前内容即 v4）。</div>
+  <ul class="timeline">
+    <li><span class="when">08-09 01:55</span><span class="what"><b>v1 转型方案</b>（toasty-aurora-tesla.md）— P1→P8：IA 重构 / mono 主题 / agent loop / 专家 / 自动化 / 连接器 / 桌宠 / 体积<span class="pill done">已实施 c3cfebe</span></span></li>
+    <li><span class="when">08-09 07:07</span><span class="what"><b>v2 迭代方案</b>（cosmic-aurora-curie.md）— audit 增量落库 / registry / plan-first / 批评审查门 / 观察折叠<span class="pill done">已实施 c2551f6·2b4b826，今晨重构 0479458·88df54d</span></span></li>
+    <li><span class="when">08-10 07:30</span><span class="what"><b>v4 Codex 任务书</b>（docs/CODEX-PROMPT-AI-ASSISTANT.md）— 产品灵魂 + IA 重排 + 8 模块深化<span class="pill new">最新 · 未实施 · 未提交</span></span></li>
+  </ul>
+  <table>
+    <tr><th style="width:16%">维度</th><th style="width:36%">v1/v2（旧版，已完成）</th><th>v4（最新计划）</th></tr>
+    <tr><td><b>目标</b></td><td class="dim">把 WorkBuddy 式骨架与 agent 能力做出来</td><td>做出产品个性与可信度：「别人交付报告，Selenyx 交付证据链」——证据门即灵魂 + 本地优先 + 仙鹤伙伴</td></tr>
+    <tr><td><b>信息架构</b></td><td class="dim">侧边栏分组含设置项；总览页内嵌助手</td><td>侧边栏三段式：固定 7 项 + 进行中任务动态区 + 底部用户区；<b>设置改模态弹窗</b>（Ctrl+,，9 分区）；总览页废弃；新建任务即主页（ClawsGO 式）</td></tr>
+    <tr><td><b>签名功能</b></td><td class="dim">无（证据门数据模型已具备但未产品化）</td><td>证据卡待裁决队列（J/K 裁决 + 朱砂角标）、成稿证据三色染色（<code>[^e:id]</code> 后端校验防编造）、覆盖率徽标、可重放 run、仙鹤=证据门吉祥物（待裁决头顶黄点）</td></tr>
+    <tr><td><b>agent 能力</b></td><td class="dim">只读工具 + plan-first + 审查门 + 轮询时间线</td><td>读写闭环（write_note / export_artifact / 工件落盘）、<b>恢复 SSE 流式</b> + steer 干预 + plan 确认 + 取消即时化、多专家流水线、技能包 / 两层记忆、cron 自动化、MCP 连接器、AIChatView 巨石拆分</td></tr>
+    <tr><td><b>硬约束</b></td><td class="dim">测试全绿、体积精简</td><td>加码：证据门不可绕过、染色标记后端真实性校验、体积涨幅 ≤10%（index.html 9.72MB / sidecar 21.4MB 起）、核心逻辑各带测试、分模块 commit + v0.2.0 tag</td></tr>
+  </table>
+  <div class="sub" style="margin:12px 0 0">注：v4 文档「现状盘点」写于今晨重构前（loop.py 375 行 / 55 pytest）；重构后实际为 core+loop 两文件 / 58 pytest，不影响计划本身。</div>
+</section>
+
+<article class="doc" id="doc">
+<h1>Codex 任务：把 Selenyx 做成真正可用、且有自己个性的桌面 AI 科研助手 v4</h1>
+<blockquote>
+<p>给 Codex 的完整任务书。请先通读全文与「现状盘点」中列出的文件，再动手。v4 相对 v3 的变化：<strong>侧边栏与设置的布局修正</strong>——设置从侧边栏/更多里拿掉，收进左下角用户区弹出的「设置弹窗」（WorkBuddy/ClawsGO/Codex 三家一致范式）；侧边栏导航下方加动态区（进行中任务）。</p>
+</blockquote>
+<hr />
+<h2>0. 产品定位与独特个性（本轮最重要的部分）</h2>
+<h3>0.1 赛道认知（2026 年调研结论）</h3>
+<p>科研 AI 助手赛道已分层：Elicit（结构化综述）、Consensus（证据答案+consensus meter）、Scite（引用语境：支持/反对/提及）、NotebookLM（只用你给的材料）、Paperguide（Plan→Search→Screen→Extract→Generate 透明工作流）、ClawsGO（云端长程 agent 集群，广告语"每个结论都有出处"）、OpenScience/Open Science Desktop（开源本地工作台）。</p>
+<p><strong>共同软肋</strong>：全部是"自动成稿、事后自证"——Retraction Watch 2026 年 5 月分析：每 277 篇 PubMed 论文就有 1 篇引用了不存在的文献。引用透明已成卖点，但没人把<strong>人工判断</strong>做成核心机制。</p>
+<h3>0.2 Selenyx 的定位（一句话）</h3>
+<p><strong>别人交付"一份报告"，Selenyx 交付"一条证据链"。</strong> Selenyx 是唯一把「人工证据门」做成 agent 工作流核心的科研助手：agent 负责跑断腿（检索/提取/起草/自批评），人负责落锤（接受/驳回证据）——可信不是功能，是架构。</p>
+<p>三个不可动摇的个性支柱：
+1. <strong>证据门即灵魂</strong>：agent 写的每个论断必须挂在证据上；证据必须经人接受才进成稿。这不是限制，是卖点——"AI 干活，人签字"。
+2. <strong>本地优先</strong>：未发表的手稿、数据、密钥永不出本机（唯一出口是用户自己配的 LLM 网关）。对手都是云端，这是硬差异。
+3. <strong>仙鹤伙伴</strong>：桌宠不是皮肤，是"研究伙伴"人格的化身——让孤独的科研长跑有个陪伴者（情感差异化，所有对手都没有）。</p>
+<h3>0.3 签名功能（Signature Features，对外能讲、对手没有）</h3>
+<ol>
+<li><strong>证据卡是一等公民</strong>：agent 每次检索/阅读产出的不是文本，是结构化证据卡（论断 claim / 原文摘录 / 页码 / 来源文献 / 置信说明），进入「待裁决」队列。用户像批奏折一样一键接受/驳回（键盘快捷键 J/K）。</li>
+<li><strong>成稿证据染色</strong>：agent 交出的综述/提纲里，每个句子按支撑强度染色——🟩 有已接受证据 / 🟨 仅有候选证据 / 🟥 无据断言（要求 agent 自检标出）。看一眼就知道这稿子哪里能信。灵感来自 Scite 的引用语境，但用在"自己的稿子"上。</li>
+<li><strong>证据覆盖率</strong>：每篇成稿头部一个指标徽标：<code>证据覆盖率 87%（13/15 论断有据，其中 11 条人工已接受）</code>——把可信度量化成数字。</li>
+<li><strong>可重放的 run</strong>：每次任务完整留痕（计划→每次工具调用→每次观察→批评意见→修订稿），时间线可回放。研究过程可审计，这是"科研级"和"聊天级"的分水岭。</li>
+<li><strong>仙鹤伙伴</strong>：任务完成飞来报喜；点它可以问"今天做了什么"（汇总今日 run）；它是证据门的吉祥物——证据待裁决时它会站着等（头顶 🟡 点）。</li>
+</ol>
+<h3>0.4 设计基调</h3>
+<p>墨白 mono 主题为默认脸：大量留白、1px 细线、零阴影、朱砂红（#c7483b）只做点睛（鹤顶、证据门待办角标）。整体气质：<strong>像一本排印精良的学术笔记本，不像 SaaS 仪表盘</strong>。</p>
+<h2>1. 项目现状（先读这些，别猜）</h2>
+<p>技术栈：Tauri 2 (Rust) + React/TS/Vite（<strong>单文件构建</strong> viteSingleFile + inlineDynamicImports）+ FastAPI/SQLModel/SQLite sidecar（127.0.0.1:8770，BYOK 密钥网关）。包管理：npm workspaces（frontend/）+ uv（backend/）。</p>
+<p>已完成（P1–P8 + 一轮迭代，全部已提交 main）：</p>
+<ul>
+<li>IA 重构第一版（已被否决，按本文第 2 节重排）；黑白 mono 主题；证据链（EvidenceItem 表：claim/excerpt/review=pending|accepted|rejected，已有！签名功能直接建在它上面）；RAG 混合检索（rag.py，保留页码/偏移）。</li>
+<li>agent 自循环 <code>backend/selenyx_backend/services/agent/loop.py</code>（375 行）：JSON 动作协议（plan/tool/final）、5 个只读工具、max 12 步、audit_log 每步增量落库、plan-first、finalize 批评审查门（review opt-in）、观察折叠。</li>
+<li>subagent（专家人格子循环，禁嵌套）+ 4 位内置专家（reviewer/critic/methodologist/writer）；自动化调度（interval/daily + in-flight 守卫）；registry（取消/占用）。</li>
+<li>前端：TasksView 步骤时间线、Experts/Automations/Connectors 卡片页、仙鹤桌宠（透明置顶窗 + FloatingCrane 降级 + 开关）、SettingsView（现为整页 + 左侧 tab，<strong>本轮改为弹窗范式</strong>，见 2.3）。</li>
+<li>测试基线：后端 55 pytest / 前端 130 vitest / typecheck / lint 全绿。<strong>门槛必须保持并扩大。</strong></li>
+</ul>
+<p>关键文件地图：</p>
+<pre><code>backend/selenyx_backend/
+  main.py / routers/{agent,experts,automations,connectors,ai,evidence}.py
+  services/agent/{loop,subagents,registry}.py / scheduler.py / rag.py
+frontend/src/
+  components/views/{TasksView,ExpertsView,AutomationsView,ConnectorsView,AIChatView,SettingsView,...}.tsx
+  components/views/AIChatView.tsx   # 1119 行巨石，待拆
+  components/layout/{Sidebar,MobileShell}.tsx  # 侧边栏，本轮重构
+  services/{agent,extensions,api,nativeRuntime}.ts / stores/appStore.ts
+desktop/src/pet.rs                  # 桌宠窗口 + 走位状态机
+</code></pre>
+<h2>2. 信息架构（v4 定稿）</h2>
+<h3>2.1 侧边栏三段式结构（自上而下）</h3>
+<p><strong>A. 顶部品牌区</strong>：仙鹤 logo + Selenyx 字样 + 版本号；右侧折叠/搜索图标（WorkBuddy 同款布局）。</p>
+<p><strong>B. 主导航区</strong>（固定 7 项一级项，不展开子项）：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>项</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>新建任务</strong></td>
+<td>主页。ClawsGO 式：时段问候语 + 任务模板卡（文献综述/证据梳理/论文提纲/数据解读，点击填入输入框）+ 底部任务输入框（<code>/</code>技能、<code>@</code>专家、选择归入项目）。提交即创建 run 并跳任务详情</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>助理</strong></td>
+<td>AI 对话（会话列表 + 对话区）</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>项目</strong></td>
+<td>项目列表 + 详情（项目任务、八段流水线、关联文献/笔记/证据门待办数）</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>知识库</strong></td>
+<td>单入口，页内 tab：文献 / 文档·笔记 / <strong>证据卡</strong>（新，见模块 A）/ 表格 / 临床数据 / 图片·文件。左侧栏不展开</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>专家·技能·连接器</strong></td>
+<td>三合一页面，页内 tab</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>自动化</strong></td>
+<td>定时任务 + 运行历史</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>更多</strong></td>
+<td>统计工具、工具箱、数据备份导出、快捷键说明、关于。（旧"总览"页废弃，番茄钟等小部件挪到这里）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>C. 导航下动态区</strong>（WorkBuddy 范式）：
+- <strong>任务（n）</strong>：进行中的 run 实时列表（名称 + 相对时间 + 状态点），点击进任务详情；无进行中时收起。
+- <strong>项目（n）</strong>：最近/置顶项目快捷入口（可折叠）。</p>
+<p><strong>D. 底部用户区</strong>（设置从这里进，<strong>不进导航也不进"更多"</strong>）：
+- 左下角：用户头像/名片区（本地应用无账号体系 → 显示可编辑的昵称 + 仙鹤头像，或读取系统用户名）。
+- 点击弹出浮层（WorkBuddy/ClawsGO/Codex 一致）：
+  - <strong>显示宠物</strong> 开关（Codex 同款，桌宠总开关也在这里放一份）
+  - <strong>外观</strong>：浅色/深色 快速切换（segmented control）
+  - <strong>设置</strong>（Ctrl+,）→ 打开设置弹窗（见 2.3）
+  - <strong>检查更新</strong>、<strong>帮助与反馈</strong>、<strong>关于</strong></p>
+<h3>2.2 「任务」不做侧边栏一级项</h3>
+<p>新建任务即入口；进行中任务在动态区实时可见；历史从项目详情/自动化运行历史进入。旧 localStorage 的 currentView 废弃值迁移兜底（落到新建任务）。</p>
+<h3>2.3 设置 = 弹窗，不是页面（WorkBuddy 范式）</h3>
+<ul>
+<li>触发：用户区浮层「设置」或 Ctrl+,；<strong>模态弹窗</strong>（遮罩 + 居中面板 + 右上角 ×），左轨 + 右内容。</li>
+<li>左轨分区（按 Selenyx 实际裁剪）：
+  1. <strong>通用</strong>：显示语言（预留，先中文）/ 字体大小滑杆 / 开机自启 / 后端服务状态（健康检测+重启）
+  2. <strong>外观</strong>：四套主题卡 + 浅色/深色 + 三档密度（现 SettingsView 外观 tab 内容平移）
+  3. <strong>个性化</strong>：回复风格语调 / 自定义指令（注入所有对话与 agent run 的 system 后缀，≤1500 字）
+  4. <strong>记忆</strong>：生成对话记忆开关 / 全局记忆查看·编辑·清空 / 项目记忆列表 / 导出（模块 F 的记忆管理放这里，不做设置页卡片）
+  5. <strong>模型</strong>：BYOK 配置（provider/Key/BaseURL/模型 表单，现 AI tab 平移）+ Ollama 官网引导 + 用量统计（tokenBudget）
+  6. <strong>助理</strong>：仙鹤桌宠开关与行为（完成通知/待裁决提醒）、自定义专家快捷入口
+  7. <strong>数据管理</strong>：工作区备份导出 / 导入 / 已归档任务 / 数据目录位置（打开文件夹）
+  8. <strong>快捷键</strong>：表格列出（J/K 裁决、Ctrl+,、Ctrl+N 新任务、Esc 停止生成、Ctrl+B 侧栏……）
+  9. <strong>关于</strong>：版本号 / 检查更新 / 官网与文档链接 / 开源许可</li>
+<li>现有 SettingsView 的内容全部平移进弹窗对应分区；路由式 settings 视图删除。</li>
+</ul>
+<h2>3. 需求详述（按模块，含验收点）</h2>
+<h3>模块 0：IA 重排（侧边栏三段式 + 设置弹窗 + 新建任务主页，最先做）</h3>
+<p>按第 2 节落地。验收：侧边栏无设置项、底部有用户区；浮层含显示宠物/外观/设置/检查更新；Ctrl+, 打开设置弹窗且 9 个分区内容正确；导航下动态区列出进行中 run；主页像 ClawsGO 一样"一句话开始干活"；知识库 6 个 tab 正确渲染；mono 主题下气质对齐 0.4（学术笔记本而非仪表盘）。</p>
+<h3>模块 A：证据卡一等公民（签名功能 1，最高价值）</h3>
+<ol>
+<li>后端：<code>save_evidence</code> agent 工具（claim/excerpt/source/page → EvidenceItem review=pending）；<code>list_pending_evidence</code> 工具与 <code>GET /api/evidence/pending</code> 路由。</li>
+<li>知识库新增「证据卡」tab：待裁决队列（卡片流：论断加粗 + 原文摘录 + 来源 + 页码回跳 PDF），接受 ✓ / 驳回 ✗（键盘 J/K/方向键，批量模式）；已接受/已驳回分 tab 可查可撤销。</li>
+<li>项目详情与主页显示「待裁决 n」朱砂角标；桌宠头顶黄点同步（模块 G）。</li>
+<li>验收：跑一个综述 run → 证据卡队列出现 5+ 张卡 → J/K 快速裁决 → 裁决结果落库且 run 时间线可见。</li>
+</ol>
+<h3>模块 B：agent 读写闭环 + 工件（成稿不再消失）</h3>
+<ol>
+<li>新工具：<code>write_note</code>（成稿写入知识库·文档）、<code>list_notes</code>/<code>read_note</code>（读上下文）、<code>export_artifact</code>（落 artifacts/runs/{runId}/ 文件）。写工具全部落 audit。</li>
+<li>AgentRun 加 artifacts_json；任务详情「产出」区：成稿渲染 + 下载 .md / 复制 / 写入笔记。</li>
+<li>验收：run 结束后产出区可见可下载，一键写入笔记后知识库·文档可见。</li>
+</ol>
+<h3>模块 C：证据染色 + 覆盖率（签名功能 2/3）</h3>
+<ol>
+<li>写作类 run 的 final 输出协议扩展：agent 按句标注支撑标记 <code>[^e:evidenceId]</code>（已接受证据）或 <code>[^none]</code>（无据）；后端校验这些标记引用的 evidenceId 真实存在且属于该项目（<strong>防 agent 编造引用标记</strong>）。</li>
+<li>前端产出区渲染染色：绿/黄/红三色背景 + hover 显示证据卡摘要 + 点击回跳证据。</li>
+<li>成稿头部自动计算覆盖率徽标（有据论断占比 + 人工接受占比）。</li>
+<li>验收：一篇成稿里能看到三色句子；hover 有证据卡；<code>[^e:xxx]</code> 指向不存在的证据时后端拒绝并打回修订。</li>
+</ol>
+<h3>模块 D：流式 + 干预 + plan 确认（任务体验现代化）</h3>
+<ol>
+<li>恢复 SSE（<code>GET /runs/{id}/events</code>）：每订阅者独立队列或 broadcast；run 结束清理 registry；前端 EventSource 优先、轮询兜底。事件类型对齐 go-claw：thought/tool_call/tool_result/plan/review/final/error。</li>
+<li><code>POST /runs/{id}/steer</code>：运行中追加用户指示，loop 下一步顶部消费，时间线显示为用户插话。</li>
+<li>plan 确认模式（开关）：plan 产出 → <code>waiting_confirm</code> → 前端「按计划执行/调整」→ 继续。</li>
+<li>取消即时化：LLM 调用包可取消 task，秒级停。</li>
+<li>侧边栏动态区「任务（n）」实时反映进行中 run（这里复用轮询即可）。</li>
+<li>验收：运行中步骤 1s 内出现在时间线；steer 后下一步可见方向调整；取消 2s 内停；动态区任务数实时增减。</li>
+</ol>
+<h3>模块 E：多专家流水线 + 专家页活化</h3>
+<ol>
+<li>内置「综述流水线」recipe：规划 → 综述员起草 → 批评员审 → 修订 → 证据染色成稿；新建任务页模板卡一键启动。</li>
+<li>专家 tab：卡片加「对话」（专家人格会话）；专家详情（被委托记录、工具边界）。</li>
+<li>subagent 事件在时间线折叠为可展开分组（专家名+步数+结论摘要）。</li>
+<li>验收：流水线 run 时间线可见三段角色交接；能跟批评员单独对话。</li>
+</ol>
+<h3>模块 F：技能 + 记忆（agent 的"经验"）</h3>
+<ol>
+<li>技能：SKILL.md 包（frontmatter: name/description/allowed_tools + 指令正文），用户级 ~/.selenyx/skills/ + 项目级；<code>POST /runs</code> 支持 skill 参数（注入 system + 裁剪工具白名单）；技能 tab 真实管理（启用/查看/新建）；输入框 <code>/技能名</code>。</li>
+<li>记忆：全局 ~/.selenyx/memory/MEMORY.md + 项目级；<code>read_memory</code>（run 启动注入摘要）+ <code>write_memory</code>（run 结尾追加）；管理界面在设置弹窗「记忆」分区（查看/编辑/清空/导出）；<strong>记忆永不外发，只进 prompt</strong>。</li>
+<li>验收：第一次 run 写入"该项目聚焦老年谵妄"→ 第二次 run 开头能引用此记忆；设置·记忆里能看到这条并可删除。</li>
+</ol>
+<h3>模块 G：自动化 2.0 + 仙鹤伙伴</h3>
+<ol>
+<li>自动化：cron 表达式（自写最小解析或 croniter，给体积说明）、运行历史（关联 run 可跳详情）、失败指数退避重试 ×3、停机错过补偿（可关）。</li>
+<li>仙鹤：run 完成/失败飞一圈 + 气泡；有待裁决证据时头顶黄点静立；点击气泡答"今天做了什么"（今日 run 汇总）；可拖拽换位；右键菜单（隐藏/打开主窗/今日任务数）。总开关在三处同步：用户浮层「显示宠物」+ 设置弹窗「助理」分区 + 桌宠右键「隐藏」。</li>
+<li>验收：cron 到点触发；run 完成时桌宠有动画 + 气泡；三处开关状态一致。</li>
+</ol>
+<h3>模块 H：连接器可配 + AIChatView 拆分</h3>
+<ol>
+<li>连接器：学术检索真实探测（超时+缓存）；MCP server 添加（stdio/sse，最小 client：initialize/tools-list/tools-call，工具带 mcp: 前缀进白名单）。</li>
+<li>拆 AIChatView → <code>components/assistant/</code>（SessionList/MessageList/Composer/StreamController）；助理页与新建任务页共用 Composer；助理会话可「转为任务」；run 产出回贴来源会话。</li>
+</ol>
+<h2>4. 硬性约束（违反即返工）</h2>
+<ol>
+<li>不换技术栈、不引重型 agent 框架（纯 asyncio）；新依赖给体积与理由。</li>
+<li>本地优先：数据/密钥/记忆不出本机；唯一出口是用户配置的 LLM 网关与学术连接器。</li>
+<li><strong>证据门不可绕过</strong>：agent 写证据只能 pending；证据染色标记必须经后端真实性校验；任何"为了让 demo 好看"而绕过证据门的行为 = 返工。</li>
+<li>测试门槛：pytest / typecheck / lint / vitest 全绿；新核心逻辑带测试（证据校验、染色标记校验、steer、plan 确认、cron、记忆、MCP 各 ≥1）。</li>
+<li>体积：index.html 现 9.72MB/gzip 2.0MB、sidecar 21.4MB，本轮涨幅 ≤10%。</li>
+<li>既有功能零回归；三栏骨架继续复用。</li>
+<li>本机构建限制：vite build 前删 frontend/dist；PyInstaller 不用 --clean；tauri build 走 GitHub CI。</li>
+<li>分模块 commit（conventional commits）；README/CHANGELOG 同步。</li>
+</ol>
+<h2>5. 实施顺序（每步独立可交付）</h2>
+<ol>
+<li>模块 0（IA 三段式 + 设置弹窗 + 新建任务主页）→ 第一眼变化</li>
+<li>模块 A（证据卡队列）→ 灵魂落地，后续模块都围绕它</li>
+<li>模块 B + C（读写闭环 + 证据染色）→ 成稿可信可见</li>
+<li>模块 D（流式/steer/plan 确认/动态区）→ 体验现代化</li>
+<li>模块 E（流水线 + 专家页）</li>
+<li>模块 F（技能 + 记忆）</li>
+<li>模块 G + H（自动化/仙鹤/连接器/拆聊天）</li>
+<li>收尾：README 截图重拍（scripts/screenshot-ui.cjs）、BUILD.md 体积复测、v0.2.0 tag</li>
+</ol>
+<h2>6. 完成定义（DoD）</h2>
+<p>全部真实跑通并截图/录屏进 docs/screenshots/：</p>
+<ol start="0">
+<li>打开应用即「新建任务」主页；侧边栏 7 项 + 动态任务区 + 底部用户区；<strong>设置不在侧边栏</strong>——点头像浮层进设置弹窗（Ctrl+, 亦可），9 个分区齐全。</li>
+<li>综述任务全流程：主页输入 → plan 确认 → 流式看专家接力与批评修订 → 成稿<strong>证据染色</strong>（三色可见）+ <strong>覆盖率徽标</strong> → 一键写入笔记。</li>
+<li>证据裁决：知识库·证据卡 tab 用 J/K 批掉 10 张卡；待裁决角标实时消减；桌宠黄点同步出现/消失。</li>
+<li>染色防编造：手动改坏一个 <code>[^e:xxx]</code> 引用 → 后端拒绝并打回。</li>
+<li>cron 自动化到点触发，运行历史可跳详情，产出带染色。</li>
+<li>记忆跨 run 生效（第二次任务引用第一次的记忆）；设置弹窗·记忆里可管理。</li>
+<li>跟批评员单独对话；流水线 run 详情里子代理分组可展开。</li>
+<li>任务完成仙鹤飞来报喜；点它答出今日进展；浮层「显示宠物」关掉它真的消失。</li>
+</ol>
+<p><strong>最终验收标准不是"功能在"，而是：给一个真实研究者用一天，他能说出"这玩意儿的稿子我敢信"——因为每个论断都能三秒内看到出处和裁决记录。</strong></p>
+</article>
+<div class="src">源文件：docs/CODEX-PROMPT-AI-ASSISTANT.md（git 未跟踪，等待过目后提交）· 渲染：小火 · 2026-08-10</div>
+</main>
+</body>
+</html>

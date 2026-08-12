@@ -96,8 +96,13 @@ npm run verify:local
 
 发布桌面应用时，再在目标平台运行 \`npm run desktop:doctor\` 和 \`npm run desktop:build\`。工作流产物不等于已验收发布；发布前仍应实际安装并检查 sidecar、数据持久化、导入导出、RAG、离线 OCR 和主流程。
 
-## 8. 体积基线（2026-08-09，P8 后）
+## 8. 体积基线
 
+**v0.2.0（2026-08-12，V4 全模块后）复测**：
+- 前端单文件 \`index.html\` 9.78MB（gzip 2.02MB）——较 8-09 基线 9.72MB / 2.00MB 涨幅 **+0.7%**（约束 ≤10%）。后端零新增依赖（cron 解析为标准库自实现，MCP 复用 httpx），sidecar 体积无实质变化（CI 构建复核）。
+- 新增静态资产：\`brand-crane-cloud-512-v1.png\` 244KB（品牌鹤云图，主页 Composer 与侧栏）。
+
+2026-08-09（P8 后）基线：
 - 前端 \`frontend/dist/\` 共 28MB：单文件 \`index.html\` 9.72MB（gzip 2.00MB，KaTeX 仅 woff2）、\`anydoc.wasm\` 6.4MB、OCR 四核心与双语模型、\`pet.html\` 3.6KB（仙鹤桌宠窗口页）。
 - 后端 sidecar \`selenyx-backend.exe\` 21.4MB（PyInstaller onefile；已 exclude tkinter/turtle/unittest/pydoc/test，较未排除时 -0.29MB）。
 - 前端按需化：echarts 走 \`echarts/core\` 按需注册；pdfjs-dist 动态 import 延迟到首次打开 PDF。构建为单文件模式（viteSingleFile + inlineDynamicImports），manualChunks 不适用。
