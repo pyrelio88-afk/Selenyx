@@ -482,3 +482,25 @@ def test_pending_evidence_route_enriches_titles(tmp_path, monkeypatch):
     assert card["claim"] == "待裁决论断"
     assert card["referenceTitle"] == "ABCDE 集束化护理与谵妄"
     assert card["projectName"] == "谵妄预防"
+
+
+async def test_projectless_run_fabricated_citation_bounced(tmp_path, monkeypatch):
+    """无项目 run 也不得放行编造引用：save_evidence 要求项目上下文，
+    此时任何 [^e:id] 都不可能真实存在，必须打回一次并记录覆盖率为 0。"""
+    reset_backend(tmp_path, monkeypatch)
+    run_id = make_run("无项目成稿", "")
+    script_llm(monkeypatch, [
+        json.dumps({"thought": "直接成稿", "final": "集束化护理有效[^e:ghost-1]。"}),
+        json.dumps({"thought": "修订", "final": "集束化护理可能有效[^none]。"}),
+    ])
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "无项目成稿", "", events.append, lambda: False)
+
+    review = next(e for e in events if e.get("kind") == "review" and e.get("critic") == "证据门校验")
+    assert "ghost-1" in review["text"]
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None
+        assert run.status == "completed"
+        assert run.output_text == "集束化护理可能有效[^none]。"

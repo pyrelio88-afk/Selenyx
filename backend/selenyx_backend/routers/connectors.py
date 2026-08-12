@@ -64,6 +64,12 @@ async def connectors_status():
 
     settings = get_settings()
     llm_ready = llm_is_configured(settings)
+    # detail 契约是纯文本（前端直接渲染）：嵌入运行摘要转成一句话，不塞对象
+    embedding = embedding_runtime_summary(settings)
+    if embedding["configured"]:
+        embedding_detail = f"稠密向量（{embedding['provider']} · {embedding['model'] or '默认模型'}），失败回退哈希"
+    else:
+        embedding_detail = "哈希向量（未配置稠密嵌入；可在设置中接入嵌入服务）"
     try:
         zotero = await local_zotero_status()
         zotero_state = {"status": "ok", "detail": f"API v{zotero.get('apiVersion', '?')}"}
@@ -84,7 +90,7 @@ async def connectors_status():
                 "key": "embedding",
                 "name": "向量检索",
                 "status": "ok",
-                "detail": embedding_runtime_summary(settings),
+                "detail": embedding_detail,
             },
             {"key": "zotero", "name": "Zotero", **zotero_state},
             {

@@ -394,10 +394,12 @@ async def execute_run(
             if "final" in action:
                 draft = str(action.get("final", "")).strip()
                 # 证据染色校验（V4 模块 C）：带标记的成稿先验真实性——
-                # 编造 [^e:id] 一律打回修订一次；二次仍编造则审计存证、前端染红，不再打回
-                if draft and project_id and _has_evidence_markers(draft):
+                # 编造 [^e:id] 一律打回修订一次；二次仍编造则审计存证、前端染红，不再打回。
+                # 无项目 run 同样校验（scope=""）：save_evidence 要求项目上下文，
+                # 此时任何 [^e:id] 都不可能真实存在，必须打回而不是放行。
+                if draft and _has_evidence_markers(draft):
                     with Session(get_engine()) as session:
-                        report = _analyze_citations(session, project_id, draft)
+                        report = _analyze_citations(session, project_id or "", draft)
                     timeline.record(
                         "coverage",
                         sentences=report.sentences,

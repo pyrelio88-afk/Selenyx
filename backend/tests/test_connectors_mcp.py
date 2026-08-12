@@ -190,3 +190,20 @@ async def test_academic_probe_cache_and_timeout(monkeypatch):
     timed_out = await connector_svc.probe_academic_connectors(force=True)
     assert {item["status"] for item in timed_out["connectors"]} == {"timeout"}
     assert timed_out["timeoutSeconds"] == 0.01
+
+
+@pytest.mark.asyncio
+async def test_connectors_status_details_are_plain_strings(tmp_path, monkeypatch):
+    """契约回归：每个连接器的 detail 必须是字符串（前端直接渲染文本；
+    曾因向量检索项塞入 embedding_runtime_summary 字典导致整个视图渲染崩溃）。"""
+
+    reset_backend(tmp_path, monkeypatch)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/api/connectors")
+    assert response.status_code == 200, response.text
+    connectors = response.json()["connectors"]
+    assert len(connectors) >= 4
+    for item in connectors:
+        assert isinstance(item["detail"], str), f"{item['key']} 的 detail 不是字符串: {item['detail']!r}"
+        assert isinstance(item["status"], str) and item["status"]
