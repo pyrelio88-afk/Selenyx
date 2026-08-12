@@ -34,7 +34,7 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <div className="v4-brand-copy">
             <div className="workspace-brand-name">Selenyx</div>
-            <div className="workspace-brand-subtitle">v0.2.0</div>
+            <div className="workspace-brand-subtitle">v0.02</div>
           </div>
         )}
         <div className="v4-brand-actions">

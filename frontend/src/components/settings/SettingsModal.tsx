@@ -24,7 +24,7 @@ import {
 // 复用旧设置页的卡片网格/统计样式（theme-choice-grid、settings-data-stats 等）
 import '../views/settings-workbench.css';
 
-const APP_VERSION = '0.2.0'; // 发布时与 package.json 同步
+const APP_VERSION = '0.02'; // 发布时与 package.json 同步
 
 const SECTIONS: { key: SettingsSection; label: string; icon: IconName }[] = [
   { key: 'general', label: '通用', icon: 'settings' },
