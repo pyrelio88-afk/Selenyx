@@ -15,6 +15,8 @@ export interface Msg {
   ts: number;
   error?: boolean;
   model?: string;
+  /** Persisted agent run that supplied this terminal output, used for dedupe and deep-linking. */
+  runId?: string;
 }
 
 export interface Session {

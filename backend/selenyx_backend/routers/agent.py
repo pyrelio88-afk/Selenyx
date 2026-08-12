@@ -55,6 +55,9 @@ class StartRunBody(BaseModel):
     # 模块 F：技能名（前端解析 /技能名 传入）与自定义指令注入
     skill: str | None = Field(default=None, max_length=60)
     custom_instructions: str | None = Field(default=None, alias="customInstructions", max_length=1500)
+    # V4 模块 H：只接收本地会话的 opaque id/scope，不存对话正文。
+    source_session_id: str | None = Field(default=None, alias="sourceSessionId", max_length=200)
+    source_session_scope: str | None = Field(default=None, alias="sourceSessionScope", max_length=200)
 
 
 class SteerBody(BaseModel):
@@ -74,6 +77,8 @@ def _serialize(run: AgentRun, *, with_log: bool) -> dict[str, Any]:
         "id": run.id,
         "goal": run.input_text,
         "projectId": run.project_id or None,
+        "sourceSessionId": run.source_session_id or None,
+        "sourceSessionScope": run.source_session_scope or None,
         "status": run.status,
         "startedAt": run.started_at,
         "completedAt": run.completed_at,
@@ -118,6 +123,8 @@ async def start_run(body: StartRunBody):
         project_id=body.project_id or "",
         status="running",
         input_text=goal,
+        source_session_id=body.source_session_id or "",
+        source_session_scope=body.source_session_scope or "",
         started_at=datetime.now().isoformat(),
     )
     with Session(get_engine()) as session:
@@ -151,7 +158,12 @@ async def start_run(body: StartRunBody):
             registry.finish_run(run.id)
 
     asyncio.create_task(runner())
-    return {"runId": run.id, "status": "running"}
+    return {
+        "runId": run.id,
+        "status": "running",
+        "sourceSessionId": run.source_session_id or None,
+        "sourceSessionScope": run.source_session_scope or None,
+    }
 
 
 @router.get("/runs")

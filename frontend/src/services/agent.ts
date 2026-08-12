@@ -12,6 +12,9 @@ export interface AgentRunSummary {
   id: string;
   goal: string;
   projectId: string | null;
+  /** Browser-local assistant session that created this run, when applicable. */
+  sourceSessionId?: string | null;
+  sourceSessionScope?: string | null;
   status: 'running' | 'completed' | 'failed' | 'cancelled' | 'cancelling' | 'waiting_confirm' | string;
   startedAt: string | null;
   completedAt: string | null;
@@ -57,6 +60,9 @@ export interface StartRunOptions {
   /** 模块 F：/技能名 解析出的技能；自定义指令随 run 注入 system 后缀 */
   skill?: string | null;
   customInstructions?: string;
+  /** V4 模块 H：任务完成后回贴的浏览器会话来源（opaque local IDs only）。 */
+  sourceSessionId?: string;
+  sourceSessionScope?: string;
 }
 
 export const agentApi = {
@@ -71,6 +77,8 @@ export const agentApi = {
         recipe: opts.recipe ?? null,
         skill: opts.skill ?? null,
         customInstructions: opts.customInstructions ?? null,
+        sourceSessionId: opts.sourceSessionId ?? null,
+        sourceSessionScope: opts.sourceSessionScope ?? null,
       }),
     }),
   list: () => request<{ runs: AgentRunSummary[] }>('/agent/runs'),

@@ -27,6 +27,29 @@
   min-width: 0;
 }
 
+/* The shell scroll container is not a flex column. Give the desktop workbench
+   a definite height so the central timeline owns scrolling and the Composer
+   stays anchored at the bottom instead of following short threads upward. */
+@media (min-width: 769px) {
+  .app-main:has(> .app-view-region > .aichat-root:not(.is-embedded)) {
+    overflow: hidden;
+  }
+  .app-view-region:has(> .aichat-root:not(.is-embedded)) {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+  }
+  .aichat-root:not(.is-embedded) {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+  }
+  .aichat-root > .aichat-workbench { height: 100%; min-height: 0; }
+  .aichat-workbench .aichat-main,
+  .aichat-workbench .aichat-sidebar,
+  .aichat-workbench .aichat-evidence-rail { height: 100%; min-height: 0; }
+}
+
 .aichat-workbench {
   position: relative;
   overflow: hidden;
@@ -55,6 +78,9 @@
 
 .aichat-workbench .aichat-main {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border: 0;
   background: var(--bg-canvas);
 }
@@ -124,7 +150,18 @@
 .aichat-workbench .aichat-thread { max-width: 840px; gap: 16px; padding: 22px 28px 12px; }
 .aichat-workbench .aichat-msg { gap: 10px; }
 .aichat-workbench .aichat-msg-avatar { width: 30px; height: 30px; border-radius: 8px; box-shadow: none; }
-.aichat-workbench .aichat-msg.assistant .aichat-msg-avatar { background: var(--accent-light); }
+.aichat-workbench .aichat-msg.assistant .aichat-msg-avatar {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-radius: 50%;
+  background: var(--accent-light);
+}
+.aichat-workbench .aichat-assistant-avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .aichat-workbench .aichat-msg.user .aichat-msg-avatar { background: var(--accent); }
 .aichat-workbench .aichat-msg.assistant .aichat-msg-content {
   padding: 2px 0 10px;
@@ -166,6 +203,10 @@
 .aichat-evidence-constraint input { width: 15px; height: 15px; accent-color: var(--accent); }
 .aichat-evidence-constraint label:has(input:checked) { color: var(--success); }
 .aichat-constraint-notice { margin: 4px 9px; padding: 7px 9px; border-left: 3px solid var(--warning); color: var(--text-secondary); background: color-mix(in srgb, var(--warning) 9%, transparent); font-size: 11px; line-height: 1.45; }
+.aichat-task-notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 9px 0; padding: 7px 9px; border-left: 3px solid var(--accent); color: var(--text-secondary); background: var(--accent-light); font-size: 11px; line-height: 1.45; }
+.aichat-task-notice.is-error { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--danger); }
+.aichat-task-notice button { flex: 0 0 auto; border: 0; color: var(--accent-hover); background: transparent; font: inherit; font-weight: 700; cursor: pointer; }
+.aichat-task-notice.is-error button { color: inherit; }
 .aichat-workbench .aichat-input-row { border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent); }
 .aichat-workbench .aichat-composer-foot { max-width: 840px; }
 
