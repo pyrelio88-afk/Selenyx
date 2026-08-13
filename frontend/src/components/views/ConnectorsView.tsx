@@ -96,11 +96,11 @@ function buildPayload(draft: McpDraft): McpServerInput | null {
 
 function ConnectorCard({ item }: { item: { key: string; name: string; status: ConnectorStatus; detail: string } }) {
   return (
-    <div className="card" style={{ padding: 16, display: 'grid', gap: 8, alignContent: 'start', minWidth: 0 }}>
+    <div className="card connector-status-card" style={{ padding: 16, display: 'grid', gap: 8, alignContent: 'start', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
         <Icon name={CONNECTOR_ICONS[item.key] ?? 'link'} size={20} />
         <strong style={{ fontSize: 14.5, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.name}>{item.name}</strong>
-        <span style={{ fontSize: 11, color: STATUS_COLOR[item.status], fontWeight: 700, flexShrink: 0 }}>{statusLabel(item.status)}</span>
+        <span className={`connector-status is-${item.status}`} style={{ color: STATUS_COLOR[item.status] }}>{statusLabel(item.status)}</span>
       </div>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, ...LONG_TEXT }}>{item.detail}</p>
     </div>
@@ -121,11 +121,11 @@ function McpCard({
     : server.url;
   const serverVersion = [server.serverInfo?.name, server.serverInfo?.version].filter(Boolean).join(' · ');
   return (
-    <article className="card" style={{ padding: 16, display: 'grid', gap: 9, alignContent: 'start', minWidth: 0 }}>
+    <article className="card connector-mcp-card" style={{ padding: 16, display: 'grid', gap: 9, alignContent: 'start', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
         <Icon name="link" size={20} />
         <strong style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14.5 }} title={server.name}>{server.name}</strong>
-        <span style={{ fontSize: 11, color: STATUS_COLOR[server.status], fontWeight: 700, flexShrink: 0 }}>{statusLabel(server.status)}</span>
+        <span className={`connector-status is-${server.status}`} style={{ color: STATUS_COLOR[server.status] }}>{statusLabel(server.status)}</span>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--text-muted)' }}>
         <span style={{ border: '1px solid var(--border)', borderRadius: 999, padding: '2px 8px' }}>{server.transport === 'stdio' ? 'stdio（本机）' : 'HTTP / SSE'}</span>
@@ -282,7 +282,7 @@ export function ConnectorsView() {
   ];
 
   return (
-    <div style={{ display: 'grid', gap: 16, alignContent: 'start', minWidth: 0 }}>
+    <div className="connectors-workbench" style={{ display: 'grid', gap: 16, alignContent: 'start', minWidth: 0 }}>
       <div className="view-header" style={{ gap: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <h1 className="view-title">连接器</h1>
@@ -291,13 +291,13 @@ export function ConnectorsView() {
           </p>
         </div>
         <button type="button" className="btn btn-primary" onClick={startCreate} style={{ minHeight: 38, flexShrink: 0 }}>
-          <Icon name="plus" size={15} /> 添加 MCP server
+          <Icon name="plus" size={15} /> 添加 MCP 服务
         </button>
       </div>
 
       {offline && (
-        <div role="alert" style={{ padding: '10px 14px', border: '1px solid var(--warning)', borderRadius: 'var(--radius-md)', fontSize: 12.5, color: 'var(--text-secondary)', ...LONG_TEXT }}>
-          本机后端未连接，无法读取或修改连接器。桌面版会自动启动后端；开发环境请运行 <code>npm run dev:local</code>。
+        <div role="alert" className="local-offline-alert">
+          本机后端未连接，无法读取或修改连接器。桌面版会自动拉起后端。
         </div>
       )}
       {actionError && (
@@ -314,7 +314,7 @@ export function ConnectorsView() {
         <div style={CARD_GRID}>{builtinItems.map((item) => <ConnectorCard key={item.key} item={item} />)}</div>
       </section>
 
-      <section className="card" style={{ padding: 16, display: 'grid', gap: 12, minWidth: 0 }}>
+      <section className="card connector-probe-panel" style={{ padding: 16, display: 'grid', gap: 12, minWidth: 0 }}>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ margin: 0, fontSize: 15 }}>学术检索真实探测</h2>
@@ -346,21 +346,21 @@ export function ConnectorsView() {
       <section style={{ display: 'grid', gap: 10, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 15 }}>MCP server</h2>
+            <h2 style={{ margin: 0, fontSize: 15 }}>MCP 服务</h2>
             <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>探测成功的工具会以 <code>mcp:&lt;server-id&gt;/&lt;tool&gt;</code> 加入主 agent 白名单。</p>
           </div>
-          {!showForm && <button type="button" className="btn" onClick={startCreate} style={{ minHeight: 34 }}><Icon name="plus" size={13} /> 添加</button>}
+          {!showForm && <button type="button" className="btn" onClick={startCreate} style={{ minHeight: 34 }}><Icon name="plus" size={13} /> 添加服务</button>}
         </div>
 
         {showForm && (
           <div className="card" style={{ padding: 16, display: 'grid', gap: 12, minWidth: 0 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <h3 style={{ margin: 0, fontSize: 14.5 }}>{editingId ? '编辑 MCP server' : '添加 MCP server'}</h3>
+              <h3 style={{ margin: 0, fontSize: 14.5 }}>{editingId ? '编辑 MCP 服务' : '添加 MCP 服务'}</h3>
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>保存后请显式探测；未探测的工具不会交给 agent。</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
               <label style={{ display: 'grid', gap: 5, minWidth: 0, fontSize: 12 }}>名称
-                <input value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="如：本机文献分析" aria-label="MCP server 名称" style={{ minWidth: 0, minHeight: 38 }} />
+                <input value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="如：本机文献分析" aria-label="MCP 服务名称" style={{ minWidth: 0, minHeight: 38 }} />
               </label>
               <label style={{ display: 'grid', gap: 5, minWidth: 0, fontSize: 12 }}>传输
                 <select value={draft.transport} onChange={(event) => setDraft((prev) => ({ ...prev, transport: event.target.value as McpDraft['transport'] }))} aria-label="MCP 传输" style={{ minHeight: 38 }}>
@@ -389,12 +389,12 @@ export function ConnectorsView() {
                 <input type="number" min={1} max={30} value={draft.timeoutSeconds} onChange={(event) => setDraft((prev) => ({ ...prev, timeoutSeconds: event.target.value }))} aria-label="MCP 超时秒数" style={{ minHeight: 38 }} />
               </label>
               <label style={{ display: 'flex', gap: 7, alignItems: 'center', minHeight: 38, fontSize: 12 }}>
-                <input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft((prev) => ({ ...prev, enabled: event.target.checked }))} /> 启用此 server
+                <input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft((prev) => ({ ...prev, enabled: event.target.checked }))} /> 启用此服务
               </label>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button type="button" className="btn btn-primary" onClick={() => void submit()} disabled={busyKey === 'form'} style={{ minHeight: 38 }}>
-                {busyKey === 'form' ? '保存中…' : editingId ? '保存修改' : '保存 server'}
+                {busyKey === 'form' ? '保存中…' : editingId ? '保存修改' : '保存服务'}
               </button>
               <button type="button" className="btn" onClick={resetForm} disabled={busyKey === 'form'} style={{ minHeight: 38 }}>取消</button>
             </div>
@@ -402,7 +402,7 @@ export function ConnectorsView() {
         )}
 
         {servers.length === 0 ? (
-          <div className="card" style={{ padding: 18, color: 'var(--text-muted)', fontSize: 12.5 }}>尚未配置 MCP server。添加后先点击“探测”，能力才会进入 agent 白名单。</div>
+          <div className="card connector-empty-state" style={{ padding: 18, color: 'var(--text-muted)', fontSize: 12.5 }}>尚未配置 MCP 服务。添加后先点击“探测”，能力才会进入 agent 白名单。</div>
         ) : (
           <div style={CARD_GRID}>
             {servers.map((server) => (

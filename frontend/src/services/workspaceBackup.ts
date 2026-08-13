@@ -1,8 +1,9 @@
 import { useAppStore } from '@stores/appStore';
 import type { KanbanTask, ResearchProject } from '@apptypes/index';
-import { replaceMirroredWorkspace } from './workspaceRepository';
+import { mergeMirroredWorkspace } from './workspaceRepository';
 
 export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2;
+export const WORKSPACE_BACKUP_SCOPE = 'JSON 仅包含前端工作区数据；不包含本机后端的证据、RAG 索引、运行记录或工件。';
 const CHAT_PREFIX = 'selenyx_chat_';
 const MAX_BACKUP_BYTES = 50 * 1024 * 1024;
 
@@ -18,7 +19,7 @@ const ID_COLLECTION_KEYS = [
 
 const EMPTY_DATA: Record<(typeof DATA_KEYS)[number], unknown> = {
   currentView: 'dashboard',
-  theme: 'paper-green',
+  theme: 'mono',
   mode: 'light',
   density: 'comfortable',
   references: [],
@@ -78,7 +79,7 @@ function chatFromStorage(storage: StorageLike | null): Record<string, string> {
   return chat;
 }
 
-/** Creates a portable JSON snapshot without exposing an LLM secret. */
+/** Creates a portable frontend-workspace snapshot without exposing an LLM secret. */
 export function createWorkspaceBackupJson(
   state: Record<string, unknown> = useAppStore.getState() as unknown as Record<string, unknown>,
   storage: StorageLike | null = browserStorage(),
@@ -316,6 +317,7 @@ function normalizeWorkspaceEntities(data: Record<string, unknown>): void {
     label: stringValue(value.label),
     date: stringValue(value.date),
     color: stringValue(value.color),
+    projectId: nullableString(value.projectId),
   }));
 }
 
@@ -403,33 +405,136 @@ export function parseWorkspaceBackup(text: string): WorkspaceBackup {
   };
 }
 
-export function restoreWorkspaceBackup(text: string, storage: StorageLike | null = browserStorage()): WorkspaceBackup {
+function uniqueStrings(...values: unknown[]): string[] {
+  return [...new Set(values.flatMap(stringArray))];
+}
+
+function idRecords(value: unknown): Record<string, unknown>[] {
+  return objectArray(value).filter((item) => typeof item.id === 'string' && item.id.trim().length > 0);
+}
+
+function mergeIdCollection(
+  currentValue: unknown,
+  importedValue: unknown,
+  mergeRecord?: (current: Record<string, unknown>, imported: Record<string, unknown>) => Record<string, unknown>,
+): Record<string, unknown>[] {
+  const merged = new Map<string, Record<string, unknown>>();
+  for (const item of idRecords(currentValue)) merged.set(item.id as string, item);
+  for (const item of idRecords(importedValue)) {
+    const current = merged.get(item.id as string);
+    // The current workspace is the live local source of truth. An older JSON
+    // may supplement it with missing records, but it must not roll a matching
+    // id back to an earlier title, body, status, or timestamp.
+    merged.set(item.id as string, current ? (mergeRecord?.(current, item) ?? mergeRecordPreservingCurrent(current, item)) : item);
+  }
+  return [...merged.values()];
+}
+
+function mergeRecordPreservingCurrent(current: Record<string, unknown>, imported: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...imported, ...current };
+  for (const [key, importedValue] of Object.entries(imported)) {
+    const currentValue = current[key];
+    if (Array.isArray(currentValue) && Array.isArray(importedValue)) {
+      merged[key] = mergeUntypedCollection(currentValue, importedValue);
+    }
+  }
+  return merged;
+}
+
+function mergeProjectRecord(current: Record<string, unknown>, imported: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...imported,
+    ...current,
+    // These links are ownership metadata. Preserve both sides during a merge
+    // so importing an older JSON file cannot silently detach local work.
+    tags: uniqueStrings(current.tags, imported.tags),
+    referenceIds: uniqueStrings(current.referenceIds, imported.referenceIds),
+    taskIds: uniqueStrings(current.taskIds, imported.taskIds),
+  };
+}
+
+function mergeUntypedCollection(currentValue: unknown, importedValue: unknown): unknown[] {
+  const result: unknown[] = [];
+  const seen = new Set<string>();
+  for (const item of [...(Array.isArray(currentValue) ? currentValue : []), ...(Array.isArray(importedValue) ? importedValue : [])]) {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+/**
+ * Produces a non-destructive frontend merge. Imported records win on a stable
+ * id, while records not represented by the JSON remain in the local workspace.
+ */
+function mergeWorkspaceBackupData(
+  current: Record<string, unknown>,
+  imported: Record<string, unknown>,
+): Record<string, unknown> {
+  // A merge restore is a supplement, not a rollback: preserve the user's
+  // current view/settings and add only records absent from this workspace.
+  const data: Record<string, unknown> = {};
+  for (const key of DATA_KEYS) {
+    data[key] = key in current ? current[key] : imported[key];
+  }
+  for (const key of ID_COLLECTION_KEYS) {
+    data[key] = mergeIdCollection(
+      current[key],
+      imported[key],
+      key === 'projects' ? mergeProjectRecord : undefined,
+    );
+  }
+  data.customCountdowns = mergeUntypedCollection(current.customCountdowns, imported.customCountdowns);
+  data.pipelineRuns = { ...(isRecord(imported.pipelineRuns) ? imported.pipelineRuns : {}), ...(isRecord(current.pipelineRuns) ? current.pipelineRuns : {}) };
+  data.stageConfigs = { ...(isRecord(imported.stageConfigs) ? imported.stageConfigs : {}), ...(isRecord(current.stageConfigs) ? current.stageConfigs : {}) };
+
+  const projectIds = new Set(idRecords(data.projects).map((project) => project.id as string));
+  const importedProjectId = typeof imported.currentProjectId === 'string' ? imported.currentProjectId : null;
+  const currentProjectId = typeof current.currentProjectId === 'string' ? current.currentProjectId : null;
+  data.currentProjectId = currentProjectId && projectIds.has(currentProjectId)
+    ? currentProjectId
+    : importedProjectId && projectIds.has(importedProjectId) ? importedProjectId : null;
+
+  const noteIds = new Set(idRecords(data.notes).map((note) => note.id as string));
+  const importedNoteId = typeof imported.pendingNoteId === 'string' ? imported.pendingNoteId : null;
+  const currentNoteId = typeof current.pendingNoteId === 'string' ? current.pendingNoteId : null;
+  data.pendingNoteId = currentNoteId && noteIds.has(currentNoteId)
+    ? currentNoteId
+    : importedNoteId && noteIds.has(importedNoteId) ? importedNoteId : null;
+  return data;
+}
+
+export async function restoreWorkspaceBackup(text: string, storage: StorageLike | null = browserStorage()): Promise<WorkspaceBackup> {
   const backup = parseWorkspaceBackup(text);
   if (storage) {
     const previousChat = chatFromStorage(storage);
-    const replaceChat = (chat: Record<string, string>) => {
-      const oldChatKeys: string[] = [];
-      for (let index = 0; index < storage.length; index += 1) {
-        const key = storage.key(index);
-        if (key?.startsWith(CHAT_PREFIX)) oldChatKeys.push(key);
-      }
-      for (const key of oldChatKeys) storage.removeItem(key);
-      for (const [key, value] of Object.entries(chat)) storage.setItem(key, value);
-    };
     try {
-      replaceChat(backup.chat);
+      // Chat histories have no project sidecar equivalent, but they still
+      // belong to the current workspace. Import only missing conversations;
+      // an old JSON must not overwrite a newer local conversation with the
+      // same stable storage key.
+      for (const [key, value] of Object.entries(backup.chat)) {
+        if (storage.getItem(key) === null) storage.setItem(key, value);
+      }
     } catch {
-      try { replaceChat(previousChat); } catch { /* Best-effort rollback. */ }
+      try {
+        for (const key of Object.keys(backup.chat)) {
+          const previous = previousChat[key];
+          if (previous === undefined) storage.removeItem(key);
+          else storage.setItem(key, previous);
+        }
+      } catch { /* Best-effort rollback. */ }
       throw new Error('Backup chat data could not be written to local storage');
     }
   }
-  useAppStore.setState(backup.data as Partial<ReturnType<typeof useAppStore.getState>>);
-  const projects = backup.data.projects as ResearchProject[];
-  const tasks = backup.data.tasks as KanbanTask[];
-  // A deliberately selected backup is a replacement, not a merge. Keep the
-  // local UI usable when SQLite is unavailable, while recording an intent so
-  // stale remote projects are removed before any later reconciliation.
-  void replaceMirroredWorkspace(projects, tasks, (status, message) => {
+  const current = useAppStore.getState() as unknown as Record<string, unknown>;
+  const data = mergeWorkspaceBackupData(current, backup.data);
+  useAppStore.setState(data as Partial<ReturnType<typeof useAppStore.getState>>);
+  const projects = data.projects as ResearchProject[];
+  const tasks = data.tasks as KanbanTask[];
+  await mergeMirroredWorkspace(projects, tasks, (status, message) => {
     useAppStore.setState({ workspaceSyncStatus: status, workspaceSyncMessage: message });
   });
   return backup;

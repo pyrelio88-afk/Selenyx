@@ -2,23 +2,25 @@
  * 自动化 — 定时 agent 任务（后端调度器驱动）
  *
  * 名称 + 任务描述 + 节奏（每天定时 / 按间隔）+ 可选项目。
- * 本机后端 asyncio 调度循环（30s tick）到期触发 agent 自循环，
- * 运行记录落在「任务」页；此处负责编排定义与手动触发。
+ * 本机后端 asyncio 调度循环（30s tick）到期触发 agent 自循环。
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
+import { EmptyGuide } from '@components/ui/EmptyGuide';
 import { automationsApi, type AutomationDef, type AutomationRunEntry } from '@services/extensions';
 import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
 import { validateCronExpression } from '@services/cron';
+
+type LoadState = 'loading' | 'ready' | 'error';
 
 export function AutomationsView() {
   const projects = useAppStore((s) => s.projects);
   const setView = useAppStore((s) => s.setView);
   const requestRunFocus = useAppStore((s) => s.requestRunFocus);
   const [items, setItems] = useState<AutomationDef[]>([]);
-  const [offline, setOffline] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -32,16 +34,17 @@ export function AutomationsView() {
   const [history, setHistory] = useState<Record<string, AutomationRunEntry[]>>({});
 
   const activeProjects = projects.filter((p) => p.status !== 'archived');
-  // Derived during render rather than synchronized through another effect.
+  const offline = loadState === 'error';
   const cronError = scheduleType === 'cron' ? validateCronExpression(cronExpr) : null;
 
   const refresh = useCallback(async () => {
+    setLoadState('loading');
     try {
       const { automations } = await automationsApi.list();
       setItems(automations);
-      setOffline(false);
+      setLoadState('ready');
     } catch {
-      setOffline(true);
+      setLoadState('error');
     }
   }, []);
 
@@ -82,7 +85,6 @@ export function AutomationsView() {
     setProjectId(item.projectId ?? '');
   };
 
-  /* 运行历史展开（V4 模块 G）：关联 run 可跳任务详情 */
   const toggleHistory = async (item: AutomationDef) => {
     const next = historyFor === item.id ? null : item.id;
     setHistoryFor(next);
@@ -126,42 +128,39 @@ export function AutomationsView() {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
-      <div className="view-header">
-        <div>
-          <h1 className="view-title">自动化</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
-            让 Selenyx 按节奏自动运行任务：每日文献监测、定时综述更新。
-          </p>
-        </div>
-      </div>
+    <div className="auto-page">
+      <header className="newtask-hero">
+        <h1>定时任务</h1>
+        <p>到点在这台电脑上跑一条任务，比如每天扫文献。建了就能删。</p>
+      </header>
 
-      {offline && (
-        <div role="alert" style={{ padding: '10px 14px', border: '1px solid var(--warning)', borderRadius: 'var(--radius-md)', fontSize: 12.5, color: 'var(--text-secondary)' }}>
-          本机后端未连接：自动化由后端调度器执行，离线时定义与触发均不可用。
+      {loadState === 'error' && (
+        <div role="alert" className="auto-alert">
+          <span>本机后端未连接：自动化由本机调度器执行，离线时无法创建或触发。</span>
+          <button type="button" className="btn btn-sm" onClick={() => void refresh()}>重试</button>
         </div>
       )}
 
-      <div className="card" style={{ padding: 16, display: 'grid', gap: 10 }}>
-        <h2 style={{ margin: 0, fontSize: 15 }}>{editingId ? '编辑自动化' : '新建自动化'}</h2>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="名称，如：每日 AI 文献动态" aria-label="自动化名称" style={{ minHeight: 40 }} />
-        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="触发时执行的任务描述…" rows={2} aria-label="任务描述" style={{ resize: 'vertical' }} />
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 12.5, color: 'var(--text-secondary)' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <section className="auto-composer" aria-labelledby="auto-compose-heading">
+        <h2 id="auto-compose-heading">{editingId ? '编辑自动化' : '新建自动化'}</h2>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="名称，如：每日 AI 文献动态" aria-label="自动化名称" />
+        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="触发时执行的任务描述…" rows={2} aria-label="任务描述" />
+        <div className="auto-row">
+          <label>
             节奏
-            <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as 'interval' | 'daily' | 'cron')} style={{ minHeight: 36 }}>
+            <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as 'interval' | 'daily' | 'cron')}>
               <option value="daily">每天定时</option>
               <option value="interval">按间隔</option>
               <option value="cron">cron 表达式</option>
             </select>
           </label>
           {scheduleType === 'daily' && (
-            <input type="time" value={dailyTime} onChange={(e) => setDailyTime(e.target.value)} aria-label="每天时间" style={{ minHeight: 36 }} />
+            <input type="time" value={dailyTime} onChange={(e) => setDailyTime(e.target.value)} aria-label="每天时间" />
           )}
           {scheduleType === 'interval' && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <label>
               每
-              <input type="number" min={5} value={intervalMin} onChange={(e) => setIntervalMin(Math.max(5, Number(e.target.value) || 60))} aria-label="间隔分钟" style={{ width: 80, minHeight: 36 }} />
+              <input type="number" min={5} value={intervalMin} onChange={(e) => setIntervalMin(Math.max(5, Number(e.target.value) || 60))} aria-label="间隔分钟" style={{ width: 80 }} />
               分钟
             </label>
           )}
@@ -173,16 +172,16 @@ export function AutomationsView() {
               aria-label="cron 表达式"
               aria-invalid={Boolean(cronError)}
               aria-describedby={cronError ? 'cron-expression-help' : undefined}
-              style={{ minHeight: 36, width: 200, fontFamily: 'monospace' }}
+              style={{ width: 220, fontFamily: 'var(--font-mono)' }}
             />
           )}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }} title="停机/休眠期间错过的触发，开机后补跑一次">
+          <label title="停机期间错过的触发，开机后补跑一次">
             <input type="checkbox" checked={catchUp} onChange={(e) => setCatchUp(e.target.checked)} />
             错过补跑
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label>
             项目
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={{ minHeight: 36 }}>
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
               <option value="">不关联项目</option>
               {activeProjects.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
@@ -196,22 +195,28 @@ export function AutomationsView() {
             <button type="button" className="btn" onClick={cancelEdit}>取消编辑</button>
           )}
         </div>
-        {cronError && <p id="cron-expression-help" role="alert" style={{ margin: 0, fontSize: 12, color: 'var(--danger)' }}>{cronError}</p>}
-      </div>
+        {cronError && <p id="cron-expression-help" role="alert" style={{ margin: 0, color: 'var(--danger)', fontSize: 'var(--font-sm)' }}>{cronError}</p>}
+      </section>
 
-      <div className="card" style={{ padding: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 15 }}>已创建</h2>
-        {items.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)' }}>暂无自动化任务。</p>
+      <section className="auto-list" aria-labelledby="auto-list-heading">
+        <h2 id="auto-list-heading">已创建</h2>
+        {loadState === 'loading' ? (
+          <div className="auto-load-state" role="status" aria-live="polite" aria-busy="true">
+            <Icon name="retry" size={15} /> 正在读取自动化…
+          </div>
+        ) : loadState === 'error' ? null : items.length === 0 ? (
+          <EmptyGuide title="还没有自动化">
+            <p>写名称和要跑的任务，选每天或间隔。到点会在这台电脑上执行，不喜欢可以删。</p>
+          </EmptyGuide>
         ) : (
           <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
             {items.map((a) => (
-              <li key={a.id} style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <li key={a.id} className="auto-item">
+                <div className="auto-item-head">
                   <Icon name="clock" size={15} />
-                  <div style={{ flex: 1, minWidth: 160 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{a.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  <div className="auto-item-copy">
+                    <strong>{a.name}</strong>
+                    <span>
                       {a.scheduleType === 'daily' ? `每天 ${a.dailyHhmm}` : a.scheduleType === 'cron' ? `cron: ${a.cronExpr}` : `每 ${a.intervalMin} 分钟`}
                       {!a.catchUp && ' · 不补跑'}
                       {' · '}{activeProjects.find((p) => p.id === a.projectId)?.name ?? '全局'}
@@ -225,36 +230,29 @@ export function AutomationsView() {
                       {!a.nextRetryAt && a.retryCount >= 3 && (
                         <span style={{ color: 'var(--danger)' }}>{' · '}已重试 3 次仍失败</span>
                       )}
-                    </div>
+                    </span>
                   </div>
-                  <button type="button" className="btn" onClick={() => void toggleHistory(a)} aria-expanded={historyFor === a.id} style={{ minHeight: 32, fontSize: 12 }}>历史</button>
-                  <button type="button" className="btn" onClick={() => void runNow(a)} style={{ minHeight: 32, fontSize: 12 }}>立即运行</button>
-                  <button type="button" className="btn" onClick={() => startEdit(a)} style={{ minHeight: 32, fontSize: 12 }}>编辑</button>
-                  <button type="button" className="btn" onClick={() => void toggle(a.id)} style={{ minHeight: 32, fontSize: 12 }}>{a.enabled ? '暂停' : '启用'}</button>
-                  <button type="button" className="btn" onClick={() => void remove(a)} aria-label={`删除 ${a.name}`} style={{ minHeight: 32, fontSize: 12, color: 'var(--danger)' }}>删除</button>
+                  <div className="auto-item-acts">
+                    <button type="button" className="btn" onClick={() => void toggleHistory(a)} aria-expanded={historyFor === a.id}>历史</button>
+                    <button type="button" className="btn" onClick={() => void runNow(a)}>立即运行</button>
+                    <button type="button" className="btn" onClick={() => startEdit(a)}>编辑</button>
+                    <button type="button" className="btn" onClick={() => void toggle(a.id)}>{a.enabled ? '暂停' : '启用'}</button>
+                    <button type="button" className="btn" onClick={() => void remove(a)} aria-label={`删除 ${a.name}`} style={{ color: 'var(--danger)' }}>删除</button>
+                  </div>
                 </div>
                 {historyFor === a.id && (
-                  <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                  <div>
                     {(history[a.id] ?? []).length === 0 ? (
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>还没有运行记录。</span>
+                      <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>还没有运行记录。</span>
                     ) : (
-                      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
+                      <ul className="auto-history">
                         {(history[a.id] ?? []).map((run) => (
                           <li key={run.runId}>
-                            <button
-                              type="button"
-                              onClick={() => requestRunFocus(run.runId)}
-                              title="跳转到任务详情"
-                              style={{
-                                width: '100%', textAlign: 'left', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)',
-                                background: 'transparent', cursor: 'pointer', font: 'inherit', padding: '6px 10px',
-                                display: 'flex', gap: 10, alignItems: 'center', fontSize: 12, color: 'var(--text-secondary)',
-                              }}
-                            >
+                            <button type="button" onClick={() => requestRunFocus(run.runId)} title="查看这次运行">
                               <span style={{ color: STATUS_COLOR[run.status] ?? 'var(--text-muted)', fontWeight: 700 }}>
                                 {STATUS_LABEL[run.status] ?? run.status}
                               </span>
-                              <span style={{ color: 'var(--text-muted)' }}>
+                              <span>
                                 {run.startedAt ? new Date(run.startedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
                               </span>
                             </button>
@@ -268,7 +266,7 @@ export function AutomationsView() {
             ))}
           </ul>
         )}
-      </div>
+      </section>
     </div>
   );
 }

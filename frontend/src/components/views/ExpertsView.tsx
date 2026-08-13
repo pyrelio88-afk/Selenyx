@@ -119,8 +119,8 @@ export function ExpertsView() {
       </div>
 
       {offline && (
-        <div role="alert" style={{ padding: '10px 14px', border: '1px solid var(--warning)', borderRadius: 'var(--radius-md)', fontSize: 12.5, color: 'var(--text-secondary)' }}>
-          本机后端未连接，专家列表不可用。桌面版会自动启动后端；开发环境请运行 <code>npm run dev:local</code>。
+        <div role="alert" className="local-offline-alert">
+          本机后端未连接，专家列表不可用。桌面版会自动拉起后端。
         </div>
       )}
 

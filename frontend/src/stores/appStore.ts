@@ -35,7 +35,7 @@ export type LegacyViewKey =
 export type AnyViewKey = ViewKey | LegacyViewKey;
 export type LibraryTab = 'references' | 'notes' | 'evidence' | 'tables' | 'clinical' | 'files';
 export type ExtensionsTab = 'experts' | 'skills' | 'connectors';
-export type MoreTab = 'statTools' | 'tools' | 'widgets';
+export type MoreTab = 'statTools' | 'tools' | 'widgets' | 'tables' | 'files';
 export type SettingsSection =
   | 'general' | 'appearance' | 'personality' | 'memory' | 'model'
   | 'assistant' | 'data' | 'shortcuts' | 'about';
@@ -53,7 +53,7 @@ const LEGACY_VIEW_TARGET: Record<string, LegacyViewTarget | undefined> = {
   aiChat: { view: 'assistant' },
   references: { view: 'library', libraryTab: 'references' },
   notes: { view: 'library', libraryTab: 'notes' },
-  tables: { view: 'library', libraryTab: 'tables' },
+  tables: { view: 'more', moreTab: 'tables' },
   clinicalData: { view: 'library', libraryTab: 'clinical' },
   experts: { view: 'extensions', extensionsTab: 'experts' },
   skills: { view: 'extensions', extensionsTab: 'skills' },
@@ -78,6 +78,11 @@ interface AppState {
   // === 导航 ===
   currentView: ViewKey;
   setView: (v: AnyViewKey) => void;
+  taskLaunchNonce: number;
+  handledTaskLaunchNonce: number;
+  requestNewTask: () => void;
+  /** Claims a new-task event once, so a remount cannot recreate its chat. */
+  claimTaskLaunch: (nonce: number) => boolean;
 
   // === v4 容器页 tab ===
   libraryTab: LibraryTab;
@@ -174,9 +179,9 @@ interface AppState {
   updateTableRecord: (tableId: string, recordIdx: number, patch: Record<string, unknown>) => void;
   deleteTableRecord: (tableId: string, recordIdx: number) => void;
 
-  // === 自定义倒数日 ===
-  customCountdowns: { label: string; date: string; color: string }[];
-  addCountdown: (c: { label: string; date: string; color: string }) => void;
+  // === 项目截止日期（截稿/答辩/伦理，不属于「更多·小部件」） ===
+  customCountdowns: { label: string; date: string; color: string; projectId?: string | null }[];
+  addCountdown: (c: { label: string; date: string; color: string; projectId?: string | null }) => void;
   removeCountdown: (idx: number) => void;
 
   // === AI 配置 ===
@@ -208,15 +213,43 @@ interface AppState {
   /** 桌面端为独立透明窗口；Web/移动端降级为应用内漂浮鹤 */
   petEnabled: boolean;
   setPetEnabled: (enabled: boolean) => void;
+
+  // === v0.03 证据卡 → PDF 原文页 ===
+  pendingPdfOpen: { referenceId: string; page: number } | null;
+  requestPdfOpen: (referenceId: string, page: number) => void;
+  clearPendingPdfOpen: () => void;
+  pendingChatOpen: { scope: string; sessionId: string } | null;
+  requestChatOpen: (scope: string, sessionId: string) => void;
+  clearPendingChatOpen: () => void;
 }
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       currentView: 'newTask' as ViewKey,
+      taskLaunchNonce: 0,
+      handledTaskLaunchNonce: 0,
+      requestNewTask: () => set((s) => ({
+        currentView: 'newTask',
+        taskLaunchNonce: s.taskLaunchNonce + 1,
+      })),
+      claimTaskLaunch: (nonce) => {
+        let claimed = false;
+        set((state) => {
+          if (nonce <= 0 || state.taskLaunchNonce !== nonce || state.handledTaskLaunchNonce >= nonce) return state;
+          claimed = true;
+          return { handledTaskLaunchNonce: nonce };
+        });
+        return claimed;
+      },
       setView: (v) => {
         // 设置已改为模态弹窗（WorkBuddy 范式），不再是路由视图
         if (v === 'settings') { set({ settingsOpen: true }); return; }
+        // 助理不再是独立一级页：旧深链并进新建任务工作壳
+        if (v === 'assistant' || v === 'aiChat') {
+          set({ currentView: 'newTask' });
+          return;
+        }
         const legacy = LEGACY_VIEW_TARGET[v as string];
         if (legacy) {
           set((s) => ({
@@ -234,7 +267,7 @@ export const useAppStore = create<AppState>()(
       setLibraryTab: (t) => set({ libraryTab: t }),
       extensionsTab: 'experts' as ExtensionsTab,
       setExtensionsTab: (t) => set({ extensionsTab: t }),
-      moreTab: 'statTools' as MoreTab,
+      moreTab: 'tools' as MoreTab,
       setMoreTab: (t) => set({ moreTab: t }),
 
       settingsOpen: false,
@@ -272,6 +305,20 @@ export const useAppStore = create<AppState>()(
 
       petEnabled: true,
       setPetEnabled: (enabled) => set({ petEnabled: enabled }),
+      pendingPdfOpen: null,
+      requestPdfOpen: (referenceId, page) => set({
+        pendingPdfOpen: { referenceId, page },
+        currentView: 'library',
+        libraryTab: 'references',
+      }),
+      clearPendingPdfOpen: () => set({ pendingPdfOpen: null }),
+      pendingChatOpen: null,
+      requestChatOpen: (scope, sessionId) => set({
+        pendingChatOpen: { scope, sessionId },
+        currentView: 'newTask',
+        currentProjectId: scope === 'global' ? null : scope,
+      }),
+      clearPendingChatOpen: () => set({ pendingChatOpen: null }),
 
       references: [],
       referenceSyncStatus: 'idle',
@@ -389,6 +436,9 @@ export const useAppStore = create<AppState>()(
           projects,
           tasks,
           tables: s.tables.filter((table) => table.projectId !== id),
+          // Scoped deadlines are project data. Keep legacy/unassigned dates,
+          // but never leave a date attached to a project that no longer exists.
+          customCountdowns: s.customCountdowns.filter((countdown) => countdown.projectId !== id),
           pipelineRuns,
           stageConfigs,
           currentProjectId,
@@ -483,12 +533,16 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'selenyx-v2',
-      version: 6,
+      version: 7,
       // D6：版本化迁移链（R102）。migrate 只做"补默认值 + 结构调整"，绝不整个 reset
       // ——reset 留给下方 storage.getItem 的 JSON 预校验兜底（数据真损坏读不出时才回退）。
       // 新增持久化字段时在此补默认（state.xxx ??= defaultValue），保持链路完整可追踪。
       migrate: (persistedState: unknown, _version: number) => {
         const state = migratePersistedAppState(persistedState);
+        // Launches are in-memory one-shot events, never instructions to reopen
+        // an old blank session after the application restarts.
+        state.taskLaunchNonce = 0;
+        state.handledTaskLaunchNonce = 0;
         // v<2 → v2：R91.1 时代字段补默认（历史布局/配置缺字段类崩溃的正式迁移占位）
         // v2 → v3：本轮起占位，后续新增持久化字段在此补默认
         // v3 → v4（R109）：笔记区持久化字段补默认
@@ -501,6 +555,10 @@ export const useAppStore = create<AppState>()(
         ...state,
         settingsOpen: false,
         focusRunId: null,
+        taskLaunchNonce: 0,
+        handledTaskLaunchNonce: 0,
+        pendingPdfOpen: null,
+        pendingChatOpen: null,
         llmConfig: state.llmConfig ? { ...state.llmConfig, apiKey: undefined } : null,
       }),
       // C1 修复：自定义 storage 预校验 JSON，脏数据降级为初始状态而非白屏崩溃

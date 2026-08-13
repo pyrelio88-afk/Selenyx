@@ -1,6 +1,5 @@
 import { useEffect, useState, Component, type ReactNode } from 'react';
 import { Sidebar } from '@components/layout/Sidebar';
-import { NewTaskHome } from '@components/views/NewTaskHome';
 import { LibraryView } from '@components/views/LibraryView';
 import { ExtensionsView } from '@components/views/ExtensionsView';
 import { MoreView } from '@components/views/MoreView';
@@ -19,6 +18,7 @@ import { PetCompanionBridge } from '@components/pet/PetCompanionBridge';
 import { bootstrapReferenceRepository } from '@services/referenceRepository';
 import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
 import './styles/tokens.css';
+import './styles/interaction.css';
 import './styles/shell-v4.css';
 
 export type { ViewKey } from '@stores/appStore';
@@ -58,7 +58,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 const VIEWS: Record<ViewKey, () => ReactNode> = {
-  newTask: () => <NewTaskHome />,
+  newTask: () => <AIChatView />,
   assistant: () => <AIChatView />,
   projects: () => <ProjectsView />,
   library: () => <LibraryView />,
@@ -72,7 +72,7 @@ const VIEWS: Record<ViewKey, () => ReactNode> = {
 
 export default function App() {
   const {
-    currentView, theme, mode, density, setLLMConfig, petEnabled, fontScale, setView,
+    currentView, theme, mode, density, setLLMConfig, petEnabled, fontScale, setView, requestNewTask,
     openSettings, closeSettings,
     replaceReferences, setReferenceSync, replaceWorkspace, setWorkspaceSync,
   } = useAppStore();
@@ -103,7 +103,7 @@ export default function App() {
       }
       if ((event.ctrlKey || event.metaKey) && (event.key === 'n' || event.key === 'N')) {
         event.preventDefault();
-        setView('newTask');
+        requestNewTask();
         return;
       }
       if (event.key === 'Escape' && useAppStore.getState().settingsOpen) {
@@ -120,12 +120,16 @@ export default function App() {
         if (!typing && !state.settingsOpen && !adjudicating) {
           event.preventDefault();
           setView('references');
+          window.setTimeout(() => {
+            const box = document.querySelector<HTMLInputElement>('input[aria-label="搜索文献"]');
+            box?.focus();
+          }, 40);
         }
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [openSettings, closeSettings, setView]);
+  }, [openSettings, closeSettings, requestNewTask, setView]);
 
   // A local build may opt into direct AI requests through .env.local.  This
   // overwrites stale UI configuration on every launch and keeps keys out of

@@ -38,6 +38,31 @@ export const SYSTEM_PROMPT = [
   '你可以使用 Markdown 格式回复，包括标题、列表、加粗、表格、代码块、数学公式等，使输出更结构化。',
 ].join('\n');
 
+export type ReplyStyle = 'concise' | 'balanced' | 'thorough';
+
+export function replyStyleLine(style: ReplyStyle): string {
+  if (style === 'concise') return '回复风格：简洁。先给结论，少铺垫，默认不超过八段。';
+  if (style === 'thorough') return '回复风格：详尽。分点论证，必要时写对照与局限，不要注水。';
+  return '回复风格：均衡。结论先行，再补必要理由与一步建议。';
+}
+
+export function composeSystemPrompt(opts: {
+  replyStyle?: ReplyStyle;
+  customInstructions?: string;
+  extras?: string;
+} = {}): string {
+  return [
+    SYSTEM_PROMPT,
+    replyStyleLine(opts.replyStyle ?? 'balanced'),
+    opts.customInstructions?.trim(),
+    opts.extras,
+  ].filter(Boolean).join('\n');
+}
+
+export function withReplyStyle(custom: string | undefined, style: ReplyStyle): string {
+  return [replyStyleLine(style), custom?.trim()].filter(Boolean).join('\n');
+}
+
 /* ============ 快捷操作（斜杠面板 + 空态） ============ */
 
 export const QUICK_ACTIONS = [
@@ -55,6 +80,27 @@ export const CATEGORIES = ['研究', '分析', '写作', '临床'] as const;
 /* ============ 工具函数 ============ */
 
 export const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+/** Creates a genuinely new, empty conversation rather than reusing a draft. */
+export function createEmptySession(
+  title = '新对话',
+  timestamp = Date.now(),
+  id = uid(),
+): Session {
+  return { id, title, messages: [], createdAt: timestamp, updatedAt: timestamp };
+}
+
+/**
+ * A launch request must always select a newly-created empty session.  In
+ * particular, it must not resurrect an older empty draft that happened to be
+ * left in storage.
+ */
+export function prependFreshSession(sessions: Session[], session: Session): {
+  sessions: Session[];
+  activeId: string;
+} {
+  return { sessions: [session, ...sessions], activeId: session.id };
+}
 
 export function nowHHMM(ts: number) {
   const d = new Date(ts);
@@ -82,11 +128,15 @@ export function acceptedEvidenceForProject(
   records: EvidenceRecord[],
 ): EvidenceRecord[] {
   if (!projectId || loadedProjectId !== projectId) return [];
-  return records.filter((item) => item.project_id === projectId && item.review === 'accepted');
+  return records.filter((item) => (
+    item.project_id === projectId
+    && item.review === 'accepted'
+    && item.status === 'accepted'
+  ));
 }
 
 export function buildAcceptedEvidenceContext(records: EvidenceRecord[]): string {
-  const accepted = records.filter((item) => item.review === 'accepted').slice(0, 24);
+  const accepted = records.filter((item) => item.review === 'accepted' && item.status === 'accepted').slice(0, 24);
   if (!accepted.length) return '';
   const entries = accepted.map((item, index) => {
     const clean = (value: string) => value.replace(/\s+/g, ' ').trim();

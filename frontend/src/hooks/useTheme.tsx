@@ -1,6 +1,6 @@
 /**
- * 主题 Hook — 三主题 × 昼夜双模式
- * 纸间豆绿 / 瑞士 / 墨岩（新粗野主义）
+ * 主题 Hook — 四套四字名 × 昼夜双模式
+ * 墨白经典 / 纸间豆绿 / 瑞士杂志 / 粗野主义
  */
 
 import { useContext, createContext, type ReactNode } from 'react';
@@ -33,22 +33,22 @@ export function useTheme() {
 export const THEME_OPTIONS: { key: ThemeName; name: string; description: string }[] = [
   {
     key: 'mono',
-    name: '墨白',
-    description: '黑白极简、1px 细线、零阴影，焦点清晰',
+    name: '黑白经典',
+    description: '浅灰栏、纯白主区、黑字细线，WorkBuddy 那种',
   },
   {
     key: 'paper-green',
     name: '纸间豆绿',
-    description: '暖纸白、豆绿强调、克制的 1.5px 边线与硬影',
+    description: '近白纸底，豆青只点按钮',
   },
   {
     key: 'minimal-white',
-    name: '瑞士蓝',
-    description: '白底蓝辅、严格网格、小圆角与无装饰阴影',
+    name: '瑞士杂志',
+    description: '白底浅灰栏，花青只点主按钮和左边线',
   },
   {
     key: 'ink-classic',
-    name: '墨岩·新粗野',
-    description: '东方墨色、朱砂状态、粗边框与块面硬影',
+    name: '粗野主义',
+    description: '白底、墨框、硬阴影、朱砂块，不是牙色黄底',
   },
 ];

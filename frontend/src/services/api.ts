@@ -152,6 +152,8 @@ export interface EvidenceRecord {
   excerpt: string;
   relation: 'supports' | 'contradicts' | 'qualifies';
   review: 'pending' | 'accepted' | 'rejected';
+  /** Canonical provenance state.  Exports/strict mode require accepted here too. */
+  status?: 'retrieved' | 'pending' | 'accepted' | 'rejected' | 'unresolved';
   confidence: 'high' | 'medium' | 'low';
   page: number | null;
   chunk_id: string | null;

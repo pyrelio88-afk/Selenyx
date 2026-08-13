@@ -22,7 +22,10 @@ export interface WorkspaceBootstrapResult {
 // startup's conservative union reconciliation would resurrect a project the
 // user deleted while SQLite was offline.
 const DELETED_PROJECT_KEY = 'selenyx-deleted-project-ids';
-const RESTORED_PROJECT_IDS_KEY = 'selenyx-restored-project-ids';
+// Versions before the non-destructive JSON restore wrote this marker and then
+// treated a backup as authority to delete every other SQLite project. Keep the
+// key only long enough to discard that unsafe, interrupted intent.
+const LEGACY_RESTORED_PROJECT_IDS_KEY = 'selenyx-restored-project-ids';
 const volatileStringSets = new Map<string, string[]>();
 
 function readStringSet(key: string): string[] | null {
@@ -54,7 +57,7 @@ function clearStringSet(key: string): void {
   try {
     globalThis.localStorage?.removeItem(key);
   } catch {
-    // Best effort only; retaining an intent is safer than losing it.
+    // Best effort only. The caller still remains safe in this process.
   }
 }
 
@@ -70,10 +73,15 @@ function forgetDeletedProject(id: string): void {
   writeStringSet(DELETED_PROJECT_KEY, readDeletedProjectIds().filter((candidate) => candidate !== id));
 }
 
-function rememberAuthoritativeRestore(projects: ResearchProject[]): void {
-  // An empty list is meaningful: restoring an empty backup must not bring
-  // every old SQLite project back on the next online launch.
-  writeStringSet(RESTORED_PROJECT_IDS_KEY, projects.map((project) => project.id));
+function discardLegacyAuthoritativeRestoreIntent(): void {
+  if (readStringSet(LEGACY_RESTORED_PROJECT_IDS_KEY) === null) return;
+
+  // A legacy replacement could have queued deletion tombstones for every
+  // project omitted from a JSON file. They are indistinguishable from a user
+  // deletion after an interrupted restore, so preserving SQLite data wins.
+  // A user can still explicitly delete a project again from the UI.
+  clearStringSet(LEGACY_RESTORED_PROJECT_IDS_KEY);
+  clearStringSet(DELETED_PROJECT_KEY);
 }
 
 function text(value: unknown): string {
@@ -202,40 +210,17 @@ export function mirrorWorkspace(
 }
 
 /**
- * Mirrors a user-selected backup as an authoritative workspace replacement.
- * Normal working copies are union-reconciled; an explicit restore is not.
+ * Persists the already-merged JSON restore workspace. This is deliberately an
+ * upsert-only path: a JSON backup does not contain evidence, RAG indexes,
+ * runs, or artifacts, so restoring one must never call projectApi.delete().
  */
-export function replaceMirroredWorkspace(
+export function mergeMirroredWorkspace(
   projects: ResearchProject[],
   tasks: KanbanTask[],
   report?: (status: WorkspaceSyncStatus, message: string) => void,
 ): Promise<void> {
-  rememberAuthoritativeRestore(projects);
-  // A backup can intentionally restore a project id that was deleted in a
-  // later local session. The user's explicit restore wins over that old
-  // tombstone, even if the sidecar is currently offline.
-  for (const project of projects) forgetDeletedProject(project.id);
-  report?.('syncing', '正在将恢复的工作区写入本机 SQLite…');
-  writeQueue = writeQueue
-    .then(async () => {
-      const snapshot = await projectApi.workspaceSnapshot();
-      const desiredIds = new Set(projects.map((project) => project.id));
-      for (const remoteProject of snapshot.projects) {
-        if (!desiredIds.has(remoteProject.id)) {
-          rememberDeletedProject(remoteProject.id);
-          await projectApi.delete(remoteProject.id);
-          forgetDeletedProject(remoteProject.id);
-        }
-      }
-      await projectApi.bulkUpsertWorkspace(projects, tasks);
-      for (const project of projects) forgetDeletedProject(project.id);
-      clearStringSet(RESTORED_PROJECT_IDS_KEY);
-      report?.('synced', `已恢复并同步 ${projects.length} 个项目、${tasks.length} 个任务`);
-    })
-    .catch((error: unknown) => {
-      report?.('offline', error instanceof Error ? error.message : '本机后端不可用；恢复内容已保存在离线工作区');
-    });
-  return writeQueue;
+  discardLegacyAuthoritativeRestoreIntent();
+  return mirrorWorkspace(projects, tasks, report);
 }
 
 let bootstrapPromise: Promise<WorkspaceBootstrapResult> | null = null;
@@ -246,6 +231,10 @@ export function bootstrapWorkspaceRepository(
 ): Promise<WorkspaceBootstrapResult> {
   if (bootstrapPromise) return bootstrapPromise;
   bootstrapPromise = (async () => {
+    // Never replay the old restore-as-replacement behavior after upgrading.
+    // Do this before reading remote data so an upgrade cannot cascade-delete
+    // evidence and other project sidecars.
+    discardLegacyAuthoritativeRestoreIntent();
     try {
       const snapshot = await projectApi.workspaceSnapshot();
       const remoteProjects = snapshot.projects.map((project) => normalizeBackendProject(
@@ -254,19 +243,12 @@ export function bootstrapWorkspaceRepository(
       const remoteTasks = snapshot.tasks.map((task) => normalizeBackendTask(
         task as KanbanTask & Record<string, unknown>,
       ));
-      const restoredIds = readStringSet(RESTORED_PROJECT_IDS_KEY);
-      const restoredIdSet = restoredIds ? new Set(restoredIds) : null;
-      const deletedIds = new Set(
-        readDeletedProjectIds().filter((id) => !restoredIdSet?.has(id)),
-      );
-      const projectsToDelete = remoteProjects.filter((project) => (
-        deletedIds.has(project.id) || (restoredIdSet !== null && !restoredIdSet.has(project.id))
-      ));
+      const deletedIds = new Set(readDeletedProjectIds());
+      const projectsToDelete = remoteProjects.filter((project) => deletedIds.has(project.id));
       for (const project of projectsToDelete) {
         await projectApi.delete(project.id);
         forgetDeletedProject(project.id);
       }
-      if (restoredIdSet !== null) clearStringSet(RESTORED_PROJECT_IDS_KEY);
       const removedProjectIds = new Set(projectsToDelete.map((project) => project.id));
       const workspace = reconcileWorkspace(
         localProjects.filter((project) => !deletedIds.has(project.id)),

@@ -3,6 +3,7 @@ import type { KanbanTask, ResearchProject } from '@apptypes/index';
 import { projectApi } from '../api';
 import {
   bootstrapWorkspaceRepository,
+  mergeMirroredWorkspace,
   mirrorWorkspace,
   normalizeBackendProject,
   normalizeBackendTask,
@@ -94,6 +95,30 @@ describe('workspaceRepository', () => {
     await mirrorWorkspace([], [], (status) => statuses.push(status));
 
     expect(statuses).toEqual(['syncing', 'synced']);
+  });
+
+  it('merges a JSON restore without deleting a project that can own evidence sidecars', async () => {
+    const existingEvidenceProject = project('evidence-sidecar-project', '2026-08-08T01:00:00Z', 'Existing evidence');
+    const importedProject = project('imported-project', '2026-08-08T02:00:00Z', 'Imported project');
+    const deleteSpy = vi.spyOn(projectApi, 'delete').mockResolvedValue({
+      deleted: '', deletedTasks: 0, deletedEvidence: 0,
+    });
+    const snapshotSpy = vi.spyOn(projectApi, 'workspaceSnapshot');
+    const upsertSpy = vi.spyOn(projectApi, 'bulkUpsertWorkspace').mockResolvedValue({
+      storedProjects: 2, storedTasks: 0, createdProjects: 1, updatedProjects: 1, createdTasks: 0, updatedTasks: 0,
+    });
+
+    await mergeMirroredWorkspace([existingEvidenceProject, importedProject], []);
+
+    // DELETE /projects/:id cascades evidence/runs/artifacts in the sidecar.
+    // A JSON merge must only upsert and must not even inspect a snapshot to
+    // decide which existing projects to remove.
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(snapshotSpy).not.toHaveBeenCalled();
+    expect(upsertSpy).toHaveBeenCalledWith(
+      [existingEvidenceProject, importedProject],
+      [],
+    );
   });
 
   it('replays an offline project deletion before startup reconciliation', async () => {

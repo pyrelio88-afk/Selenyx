@@ -14,6 +14,8 @@ import { agentApi, type AgentRunSummary } from '@services/agent';
 import { parseSkillPrefix } from '@services/skills';
 import { evidenceApi } from '@services/api';
 import { Composer } from '@components/assistant/Composer';
+import { handoffNewTaskToAssistant } from '@components/assistant/handoffNewTask';
+import { withReplyStyle } from '@components/assistant/chatShared';
 
 interface TaskTemplate {
   icon: IconName;
@@ -66,8 +68,12 @@ function greeting(): string {
   return '晚上好';
 }
 
-export function NewTaskHome() {
-  const { projects, currentProjectId, nickname, requestRunFocus, setView, setLibraryTab, customInstructions, llmConfig, openSettings } = useAppStore();
+export function NewTaskHome({
+  onStarted,
+}: {
+  onStarted?: (goal: string, projectId: string | null, runId: string) => void;
+} = {}) {
+  const { projects, currentProjectId, nickname, setView, setLibraryTab, customInstructions, replyStyle, llmConfig, openSettings, requestRunFocus } = useAppStore();
   const [goal, setGoal] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
@@ -158,10 +164,14 @@ export function NewTaskHome() {
         confirmPlan,
         recipe,
         skill: parsed.skill,
-        customInstructions,
+        customInstructions: withReplyStyle(customInstructions, replyStyle),
       });
       setGoal('');
-      requestRunFocus(runId); // 跳任务详情（任务视图）
+      if (onStarted) {
+        onStarted(parsed.goal, projectId || null, runId);
+      } else {
+        handoffNewTaskToAssistant(parsed.goal, projectId || null, runId);
+      }
     } catch (error) {
       setBackendOffline(true);
       alert(`任务创建失败：${error instanceof Error ? error.message : String(error)}`);
@@ -190,8 +200,8 @@ export function NewTaskHome() {
       </header>
 
       {backendOffline && (
-        <div role="alert" className="newtask-backend-alert">
-          本机后端未连接：桌面版会自动启动；开发环境请运行 <code>npm run dev:local</code>。agent 任务依赖后端执行。
+        <div role="alert" className="local-offline-alert">
+          本机后端还没连上。桌面版会自动拉起；开发时在本机启动后端即可。
         </div>
       )}
 
@@ -216,20 +226,13 @@ export function NewTaskHome() {
       </section>
 
       <div className="newtask-composer-stage">
-        <img
-          className="newtask-composer-crane"
-          src="/brand-crane-cloud-512-v1.png"
-          alt=""
-          aria-hidden="true"
-          draggable={false}
-        />
         <Composer
           value={goal}
           onChange={updateGoal}
           onSubmit={() => void submit()}
           ariaLabel="任务目标"
           placeholder="一句话开始干活，例如：帮我梳理这个项目文献库里关于谵妄预防的证据"
-          rows={5}
+          rows={3}
           className="newtask-composer"
           inputWrapClassName="newtask-composer-input-wrap"
           inputRowClassName="newtask-composer-input-row"

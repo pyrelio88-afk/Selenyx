@@ -20,4 +20,14 @@ describe('persisted app state migration', () => {
       pendingNoteId: null,
     });
   });
+
+  it('keeps legacy countdowns visible as unassigned instead of dropping them', () => {
+    const migrated = migratePersistedAppState({
+      customCountdowns: [{ label: '投稿截止', date: '2026-09-01', color: '#c7483b' }],
+    });
+
+    expect(migrated.customCountdowns).toEqual([{
+      label: '投稿截止', date: '2026-09-01', color: '#c7483b', projectId: null,
+    }]);
+  });
 });

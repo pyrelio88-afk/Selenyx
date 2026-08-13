@@ -13,18 +13,23 @@ import { agentApi, type AgentRunDetail } from '@services/agent';
 import { type LLMMessage } from '@services/llm';
 import { evidenceApi, type EvidenceRecord } from '@services/api';
 import { Icon } from '@components/ui/Icon';
-import { RESEARCH_SKILLS, getRecommendedSkills } from '@data/skills';
+import { NewTaskHome } from '@components/views/NewTaskHome';
+import { handoffNewTaskToAssistant } from '@components/assistant/handoffNewTask';
+import { RESEARCH_SKILLS } from '@data/skills';
 import { persistChatSessions } from '@services/chatSessionStorage';
 import { PIPELINE_STAGES } from '@apptypes/project';
 import {
   QUICK_ACTIONS,
-  SYSTEM_PROMPT,
+  composeSystemPrompt,
   acceptedEvidenceForProject,
   buildAcceptedEvidenceContext,
+  createEmptySession,
   loadSessions,
   nowHHMM,
+  prependFreshSession,
   titleFrom,
   uid,
+  withReplyStyle,
   type Msg,
   type Session,
 } from '@components/assistant/chatShared';
@@ -69,8 +74,7 @@ function useNarrowDesktop(): boolean {
 }
 
 function newSession(title = '新对话'): Session {
-  const timestamp = Date.now();
-  return { id: uid(), title, messages: [], createdAt: timestamp, updatedAt: timestamp };
+  return createEmptySession(title);
 }
 
 function latestUserMessage(messages: Msg[]): Msg | null {
@@ -88,9 +92,15 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     currentProjectId,
     setCurrentProject,
     setView,
+    openSettings,
     references,
     customInstructions,
+    replyStyle,
     requestRunFocus,
+    taskLaunchNonce,
+    claimTaskLaunch,
+    pendingChatOpen,
+    clearPendingChatOpen,
   } = useAppStore();
   const isMobile = useIsMobile();
   const narrowDesktop = useNarrowDesktop();
@@ -103,8 +113,8 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   // Keep the scope that produced in-memory sessions. A project switch renders
   // once with old state, which must never be persisted under the new key.
   const [sessionScope, setSessionScope] = useState(scope);
-  const [sidebarOpen, setSidebarOpen] = useState(() => (embedded ? false : window.innerWidth > 768));
-  const [evidenceRailOpen, setEvidenceRailOpen] = useState(!embedded);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [evidenceRailOpen, setEvidenceRailOpen] = useState(false);
   const [acceptedOnly, setAcceptedOnly] = useState(false);
   const [constraintNotice, setConstraintNotice] = useState('');
   const [evidenceState, setEvidenceState] = useState<{
@@ -175,20 +185,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   const pendingEvidenceCount = evidenceState.projectId === activeProjectId
     ? evidenceState.items.filter((item) => item.review === 'pending').length
     : 0;
-  const linkedReferenceCount = project
-    ? project.referenceIds.filter((id) => references.some((reference) => reference.id === id)).length
-    : 0;
   const stageLabel = PIPELINE_STAGES.find((stage) => stage.key === project?.currentStage)?.label ?? '未设阶段';
-  const roleLabel = project?.ownerRole === 'participant'
-    ? '参与课题'
-    : project?.ownerRole === 'lead'
-      ? '主线课题'
-      : project
-        ? '职责未标注'
-        : '全局会话';
-  const acceptedCountLabel = evidenceState.projectId === activeProjectId && evidenceState.status === 'ready'
-    ? String(acceptedEvidence.length)
-    : '—';
   const configured = !!llmConfig;
   const tokensUsed = llmConfig?.tokensUsed ?? 0;
 
@@ -225,6 +222,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   useEffect(() => {
     try {
       persistChatSessions(localStorage, sessionScope, scope, sessions, activeId);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('selenyx-chat-changed'));
     } catch { /* Browser storage can be unavailable in a restricted preview. */ }
   }, [activeId, scope, sessionScope, sessions]);
 
@@ -237,12 +235,25 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
 
   const createSession = useCallback((title = '新对话') => {
     const session = newSession(title);
-    setSessionState((previous) => ({ sessions: [session, ...previous.sessions], activeId: session.id }));
+    setSessionState((previous) => prependFreshSession(previous.sessions, session));
     setEditingIdx(null);
     if (window.innerWidth <= 760) setSidebarOpen(false);
     window.setTimeout(() => inputRef.current?.focus(), 50);
     return session;
   }, []);
+
+  useEffect(() => {
+    if (!taskLaunchNonce || !claimTaskLaunch(taskLaunchNonce)) return;
+    createSession();
+  }, [claimTaskLaunch, createSession, taskLaunchNonce]);
+
+  useEffect(() => {
+    if (!pendingChatOpen) return;
+    if (pendingChatOpen.scope !== scope) return;
+    if (!sessions.some((session) => session.id === pendingChatOpen.sessionId)) return;
+    setSessionState((previous) => ({ ...previous, activeId: pendingChatOpen.sessionId }));
+    clearPendingChatOpen();
+  }, [clearPendingChatOpen, pendingChatOpen, scope, sessions]);
 
   const patchSession = useCallback((target: ChatStreamTarget, updater: (session: Session) => Session) => {
     setSessionState((previous) => {
@@ -352,6 +363,20 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     runWatchersRef.current.set(link.runId, close);
   }, [applyTerminalRunOutput]);
 
+  const absorbStartedTask = useCallback((goal: string, projectId: string | null, runId: string) => {
+    const nextScope = projectId || 'global';
+    handoffNewTaskToAssistant(goal, projectId, runId);
+    const loaded = loadSessions(nextScope);
+    if (projectId && projectId !== currentProjectId) {
+      setCurrentProject(projectId);
+    } else {
+      setSessionState(loaded);
+      setSessionScope(nextScope);
+    }
+    setSidebarOpen(true);
+    if (loaded.activeId) startRunWatcher({ runId, sessionId: loaded.activeId, scope: nextScope });
+  }, [currentProjectId, setCurrentProject, startRunWatcher]);
+
   useEffect(() => {
     let cancelled = false;
     const links = loadPendingRunBacklinks(localStorage);
@@ -373,11 +398,12 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   const buildHistory = useCallback((historyMessages: Msg[]): LLMMessage[] => {
     const projectContext = project ? `\n\n当前项目：${project.name}（阶段：${stageLabel}）。` : '';
     const acceptedContext = acceptedOnly ? `\n\n${buildAcceptedEvidenceContext(acceptedEvidence)}` : '';
+    const extras = `${projectContext}${acceptedContext}`;
     return [
-      { role: 'system', content: SYSTEM_PROMPT + projectContext + acceptedContext },
+      { role: 'system', content: composeSystemPrompt({ replyStyle, customInstructions, extras }) },
       ...historyMessages.filter((message) => !message.error).map((message) => ({ role: message.role, content: message.content })),
     ];
-  }, [acceptedEvidence, acceptedOnly, project, stageLabel]);
+  }, [acceptedEvidence, acceptedOnly, customInstructions, project, replyStyle, stageLabel]);
 
   const evidenceConstraintReady = useCallback((): boolean => {
     if (!acceptedOnly) return true;
@@ -530,7 +556,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   const exportSession = useCallback(() => {
     if (!activeSession) return;
     const markdown = activeSession.messages
-      .map((message) => `## ${message.role === 'user' ? '🧑 我' : '🤖 AI'}  ·  ${nowHHMM(message.ts)}\n\n${message.content}`)
+      .map((message) => `## ${message.role === 'user' ? '我' : 'Selenyx'}  ·  ${nowHHMM(message.ts)}\n\n${message.content}`)
       .join('\n\n---\n\n');
     const blob = new Blob([`# ${activeSession.title}\n\n${markdown}`], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
@@ -594,13 +620,6 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     return filtered.slice(0, 8);
   }, [activeSession, createSession, input, patchSession, scope]);
 
-  const recommendedSkills = useMemo(() => {
-    const ids = getRecommendedSkills(project?.frameworkId);
-    return ids
-      .map((id) => RESEARCH_SKILLS.find((skill) => skill.id === id))
-      .filter(Boolean) as typeof RESEARCH_SKILLS;
-  }, [project?.frameworkId]);
-
   const onComposerKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (showSlash && slashItems.length) {
       if (event.key === 'ArrowDown') {
@@ -644,7 +663,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     setTaskNotice(null);
     try {
       const { runId } = await agentApi.start(taskSource.content, activeProjectId, {
-        customInstructions,
+        customInstructions: withReplyStyle(customInstructions, replyStyle),
         sourceSessionId: activeSession.id,
         sourceSessionScope: scope,
       });
@@ -661,11 +680,15 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     } finally {
       setTaskStarting(false);
     }
-  }, [activeProjectId, activeSession, busy, customInstructions, scope, startRunWatcher, taskSource, taskStarting]);
+  }, [activeProjectId, activeSession, busy, customInstructions, replyStyle, scope, startRunWatcher, taskSource, taskStarting]);
 
   const openRun = useCallback((runId: string) => {
     requestRunFocus(runId);
   }, [requestRunFocus]);
+
+  if (messages.length === 0) {
+    return <NewTaskHome onStarted={absorbStartedTask} />;
+  }
 
   return (
     <div className={embedded ? 'aichat-root is-embedded' : 'aichat-root'}>
@@ -719,39 +742,30 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
               >
                 <Icon name="list" size={17} />
               </button>
-              <div className="aichat-context-line" aria-label="AI 会话项目上下文">
-                <Icon name="projects" size={15} />
+              <div className="aichat-context-line" aria-label="当前项目">
                 <select
                   id="aichat-project-scope"
                   className="aichat-project-select"
                   value={activeProjectId ?? ''}
                   onChange={(event) => switchProject(event.target.value || null)}
                   disabled={busy}
-                  aria-label="切换 AI 会话所属项目"
+                  aria-label="切换会话所属项目"
                 >
-                  <option value="">不关联项目（全局）</option>
+                  <option value="">不关联项目</option>
                   {projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
-                <span className={`aichat-context-badge ${project?.ownerRole === 'participant' ? 'is-participant' : project?.ownerRole === 'lead' ? 'is-lead' : 'is-neutral'}`}>{roleLabel}</span>
-                {project ? <span className="aichat-context-stat">阶段 <b>{stageLabel}</b></span> : null}
-                {project ? <span className="aichat-context-stat">文献 <b>{linkedReferenceCount}</b></span> : null}
-                {project ? <span className="aichat-context-stat is-evidence">已接受 <b>{acceptedCountLabel}</b></span> : null}
                 {busy ? <span className="aichat-context-busy">生成完成后可切换项目</span> : null}
               </div>
               <div className="aichat-header-right">
-                <div className="aichat-model-wrap">
-                  <button
-                    type="button"
-                    className={`aichat-model-chip ${configured ? 'ok' : 'warn'}`}
-                    onClick={() => setView('settings')}
-                    title="模型只在设置中管理"
-                    aria-label={configured ? `前往设置管理 AI 模型；当前为 ${llmConfig!.provider} ${llmConfig!.model}` : '前往设置配置 AI 模型'}
-                  >
-                    <span className="pdf-tool-dot" style={{ background: 'currentColor' }} />
-                    {configured ? `${llmConfig!.provider} / ${llmConfig!.model}` : '未配置'}
-                    <Icon name="settings" size={13} />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={`aichat-model-chip ${configured ? 'ok' : 'warn'}`}
+                  onClick={() => openSettings('model')}
+                  title="模型只在设置中管理"
+                  aria-label={configured ? `打开设置；当前 ${llmConfig!.provider} ${llmConfig!.model}` : '打开设置配置模型'}
+                >
+                  {configured ? llmConfig!.model : '未配置模型'}
+                </button>
                 {activeSession && taskSource ? (
                   <button
                     type="button"
@@ -826,28 +840,6 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
                           <span className="aichat-slash-desc">{item.desc}</span>
                         </button>
                       ))}
-                    </div>
-                  ) : null}
-                  {recommendedSkills.length > 0 && !showSlash ? (
-                    <div className="aichat-skill-bar">
-                      <span className="aichat-skill-bar-label">{project?.frameworkId ? '推荐技能' : '常用技能'}</span>
-                      <div className="aichat-skill-scroll">
-                        {recommendedSkills.map((skill) => (
-                          <button
-                            key={skill.id}
-                            type="button"
-                            className="aichat-skill-chip"
-                            onClick={() => {
-                              setInput(skill.prompt ?? `[${skill.name}] `);
-                              window.setTimeout(() => inputRef.current?.focus(), 20);
-                            }}
-                            title={skill.description}
-                          >
-                            <Icon name="sparkles" size={13} strokeWidth={1.6} />
-                            <span>{skill.name}</span>
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   ) : null}
                 </>

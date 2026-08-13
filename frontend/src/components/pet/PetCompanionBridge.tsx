@@ -13,6 +13,7 @@ import { evidenceApi } from '@services/api';
 import {
   emitPetCelebrate,
   emitPetState,
+  isDesktopTauri,
   listenForPetEvent,
   requestPetSummary,
   type PetRuntimeState,
@@ -151,7 +152,8 @@ export function PetCompanionBridge({ nativeActive }: { nativeActive: boolean }) 
     return () => cleanups.forEach((cleanup) => cleanup());
   }, [setPetEnabled]);
 
-  if (!enabled || nativeActive) return null;
+  // 桌宠只活在桌面独立透明窗。浏览器 / Hermes 预览禁止再嵌一只角落鹤。
+  if (!enabled || nativeActive || !isDesktopTauri()) return null;
   return (
     <FloatingCrane
       snapshot={snapshot}

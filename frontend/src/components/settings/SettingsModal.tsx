@@ -20,11 +20,11 @@ import {
   clearSelenyxBrowserStorage,
   createWorkspaceBackupJson,
   restoreWorkspaceBackup,
+  WORKSPACE_BACKUP_SCOPE,
 } from '@services/workspaceBackup';
+import { APP_VERSION } from '@lib/appVersion';
 // 复用旧设置页的卡片网格/统计样式（theme-choice-grid、settings-data-stats 等）
 import '../views/settings-workbench.css';
-
-const APP_VERSION = '0.02'; // 发布时与 package.json 同步
 
 const SECTIONS: { key: SettingsSection; label: string; icon: IconName }[] = [
   { key: 'general', label: '通用', icon: 'settings' },
@@ -103,7 +103,7 @@ export function SettingsModal() {
       } catch (error) {
         if (cancelled) return;
         setBackendHealth('离线（前端本地降级）');
-        setBackendDetail(error instanceof Error ? error.message : '无法连接 127.0.0.1:8770');
+        setBackendDetail(error instanceof Error ? error.message : '无法连接本机后端');
       }
     })();
     return () => { cancelled = true; };
@@ -168,8 +168,8 @@ export function SettingsModal() {
       const file = (event.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        restoreWorkspaceBackup(await file.text());
-        alert('数据导入成功。');
+        await restoreWorkspaceBackup(await file.text());
+        alert('JSON 工作区已合并；未删除现有项目或本机后端数据。');
       } catch (error) {
         alert(`导入失败：${error instanceof Error ? error.message : '文件格式不正确'}`);
       }
@@ -223,7 +223,7 @@ export function SettingsModal() {
                   <p style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600 }}>{backendHealth}</p>
                   <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.55 }}>{backendDetail}</p>
                   <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-                    开发请用 <code>npm run dev:local</code>；桌面版启动时自动拉起本机后端（127.0.0.1:8770）。
+                    桌面版启动时自动拉起<strong>当前这台电脑</strong>上的本机后端（只听本机回环）。开发时分开启动后端即可。
                   </p>
                 </div>
                 <div className="card" style={{ marginBottom: 16 }}>
@@ -334,71 +334,48 @@ export function SettingsModal() {
 
             {settingsSection === 'model' && (
               <section aria-label="模型">
-                <div className="card" style={{ marginBottom: 16 }}>
-                  <h3 style={{ marginBottom: 10, fontSize: 16 }}>AI 配置（BYOK）</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, margin: '0 0 12px' }}>
-                    推荐把密钥写在后端环境文件，由本机网关代理。也可在 <code>frontend/.env.local</code> 设置
-                    <code>VITE_LLM_*</code>（仅私有本机开发；会进入前端构建产物，勿分发）。
-                  </p>
-                  <div style={{ display: 'grid', gap: 10, marginBottom: 14, padding: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-canvas)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-                      <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        提供商
-                        <select value={form.provider} onChange={(e) => applyProvider(e.target.value as LLMConfig['provider'])} style={{ minHeight: 40 }}>
-                          {PROVIDERS.map((p) => (
-                            <option key={p} value={p}>{p} — {PROVIDER_DEFAULTS[p].hint}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        API Key
-                        <input
-                          type="password"
-                          value={form.apiKey}
-                          onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
-                          placeholder={form.provider === 'ollama' ? '本地模型可留空' : 'sk-…'}
-                          autoComplete="off"
-                          style={{ minHeight: 40 }}
-                        />
-                      </label>
-                      <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        Base URL
-                        <input value={form.baseUrl} onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))} placeholder="https://…" style={{ minHeight: 40 }} />
-                      </label>
-                      <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                        模型
-                        <input value={form.model} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} placeholder="模型名" style={{ minHeight: 40 }} />
-                      </label>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <button type="button" className="btn btn-primary" onClick={saveForm} disabled={!form.baseUrl.trim() || !form.model.trim()} style={{ minHeight: 38 }}>
+                <div className="card settings-llm-card" style={{ marginBottom: 16 }}>
+                  <h3>AI 配置（BYOK）</h3>
+                  <p className="settings-llm-lead">密钥只写在本机。推荐后端环境文件；不要把 Key 打进前端构建。</p>
+                  <div className="settings-llm-form">
+                    <label>
+                      提供商
+                      <select value={form.provider} onChange={(e) => applyProvider(e.target.value as LLMConfig['provider'])}>
+                        {PROVIDERS.map((p) => (
+                          <option key={p} value={p}>{p} — {PROVIDER_DEFAULTS[p].hint}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      API Key
+                      <input
+                        type="password"
+                        value={form.apiKey}
+                        onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
+                        placeholder={form.provider === 'ollama' ? '本地模型可留空' : 'sk-…'}
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label>
+                      Base URL
+                      <input value={form.baseUrl} onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))} placeholder="https://…" />
+                    </label>
+                    <label>
+                      模型
+                      <input value={form.model} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} placeholder="模型名" />
+                    </label>
+                    <div className="settings-llm-actions">
+                      <button type="button" className="btn btn-primary" onClick={saveForm} disabled={!form.baseUrl.trim() || !form.model.trim()}>
                         保存配置
                       </button>
-                      {formSaved && <span role="status" style={{ fontSize: 12.5, color: 'var(--success)' }}>已保存，可直接开始任务或对话</span>}
+                      {formSaved && <span role="status">已保存</span>}
                     </div>
-                    <p style={{ margin: 0, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                      密钥只进入本机内存与本地配置，不经任何第三方中转；为安全起见刷新页面后需重新填入 Key（Base URL 与模型会记住）。也可写入 <code>backend/.env.local</code> 由本机网关持久代理。
-                    </p>
                   </div>
-                  {environmentLLM.error && (
-                    <div role="alert" style={{ padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--danger-light, var(--bg-canvas))', border: '1px solid var(--danger)', fontSize: 13 }}>
-                      环境变量配置无效：{environmentLLM.error}
-                    </div>
-                  )}
-                  {!environmentLLM.error && configuredLLM && (
-                    <dl style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px 12px', margin: '0 0 14px', fontSize: 13 }}>
-                      <dt style={{ color: 'var(--text-muted)' }}>提供商</dt><dd style={{ margin: 0 }}>{configuredLLM.provider}</dd>
-                      <dt style={{ color: 'var(--text-muted)' }}>Base URL</dt><dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{configuredLLM.baseUrl}</dd>
-                      <dt style={{ color: 'var(--text-muted)' }}>模型</dt><dd style={{ margin: 0 }}>{configuredLLM.model}</dd>
-                    </dl>
-                  )}
                   {!environmentLLM.error && !configuredLLM && (
-                    <div style={{ padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--bg-canvas)', border: '1px solid var(--border)', fontSize: 13, marginBottom: 12 }}>
-                      前端未配置 AI；若后端已配置 <code>SELENYX_LLM_*</code>，仍可通过本机网关对话。其余本地功能可离线使用。
-                    </div>
+                    <p className="settings-llm-note">前端未配 Key。后端若已写 SELENYX_LLM_*，仍可通过本机网关对话。</p>
                   )}
-                  <button type="button" className="btn btn-primary" disabled={testing} onClick={() => { void testLLM(); }} style={{ marginBottom: 8 }}>
-                    {testing ? '测试中…' : '测试连接（后端网关优先）'}
+                  <button type="button" className="btn" disabled={testing} onClick={() => { void testLLM(); }} style={{ marginTop: 12 }}>
+                    {testing ? '测试中…' : '测试连接'}
                   </button>
                   {testResult && (
                     <div role="status" style={{ marginTop: 12, padding: '10px 12px', borderRadius: 'var(--radius-md)', fontSize: 13, lineHeight: 1.5, background: testResult.ok ? 'var(--accent-light)' : 'var(--danger-light, var(--bg-canvas))', border: `1px solid ${testResult.ok ? 'var(--accent)' : 'var(--danger)'}` }}>
@@ -476,7 +453,7 @@ export function SettingsModal() {
                 <div className="card" style={{ marginBottom: 16 }}>
                   <h3 style={{ marginBottom: 8, fontSize: 16 }}>仙鹤桌宠</h3>
                   <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                    在聊天输入框附近静驻一只仙鹤：桌面端为透明置顶小窗，网页端降级为应用内安静停驻。任务完成或失败时仅显示短气泡；关闭后立即收起。
+                    仙鹤桌宠只在桌面客户端以独立透明窗口出现，不嵌进网页每个角落。浏览器 / Hermes 预览里不会再画一只角落鹤。任务完成或失败时桌面窗显示短气泡。
                   </p>
                   <button
                     type="button"
@@ -536,11 +513,11 @@ export function SettingsModal() {
                 <div className="card" style={{ marginBottom: 16 }}>
                   <h3 style={{ marginBottom: 12, fontSize: 16 }}>备份与恢复</h3>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
-                    工作区保存在当前浏览器或 WebView 的本地存储中。导出的 JSON 包含项目、文献、笔记和聊天记录，但不包含任何 API Key；恢复前会验证文件结构。
+                    工作区保存在当前浏览器或 WebView 的本地存储中。导出的 JSON 包含前端项目、文献、笔记和聊天记录，但不包含任何 API Key。{WORKSPACE_BACKUP_SCOPE} 恢复仅补充当前工作区缺失的记录，不会覆盖本地同 ID 编辑，也不会删除当前项目或本机后端数据。
                   </p>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button type="button" className="btn btn-primary" onClick={exportData}><Icon name="download" size={14} /> 导出 JSON</button>
-                    <button type="button" className="btn" onClick={importData}><Icon name="import" size={14} /> 选择 JSON 恢复</button>
+                    <button type="button" className="btn" onClick={importData}><Icon name="import" size={14} /> 选择 JSON 合并恢复</button>
                   </div>
                 </div>
                 <div className="card" style={{ marginBottom: 16 }}>
@@ -601,7 +578,7 @@ export function SettingsModal() {
                 <div className="card">
                   <h3 style={{ marginBottom: 8, fontSize: 16 }}>隐私边界</h3>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                    <li>后端仅监听 127.0.0.1，不接受局域网连接。</li>
+                    <li>后端只听当前使用者这台机器的本机回环，不接受局域网连接，也不写死某一台电脑的地址。</li>
                     <li>文献完整对象在前端缓存与本机 SQLite 间对账；后端离线时仍可继续编辑。</li>
                     <li>不自动上传工作区内容。</li>
                     <li>JSON 备份由您明确导出和保存。</li>
