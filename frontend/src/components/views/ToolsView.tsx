@@ -759,7 +759,7 @@ function GrantOutline() {
           <summary style={{ padding: '12px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{s.title}</summary>
           <div style={{ padding: '0 16px 12px' }}>
             <pre style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontFamily: 'inherit', color: 'var(--text-secondary)', margin: '8px 0' }}>{s.content}</pre>
-            <p style={{ fontSize: 12, color: 'var(--accent)', marginTop: 8 }}>💡 {s.tips}</p>
+            <p style={{ alignItems: 'center', color: 'var(--accent)', display: 'flex', fontSize: 12, gap: 5, marginTop: 8 }}><Icon name="sparkles" size={14} /> {s.tips}</p>
           </div>
         </details>
       ))}

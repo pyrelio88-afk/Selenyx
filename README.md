@@ -6,7 +6,7 @@
 
 展翼丹顶鹤为记 —— 安静、专注、行稳致远。
 
-`v0.02` &nbsp;·&nbsp; `React + TypeScript + Vite` &nbsp;·&nbsp; `Tauri 2 (Rust)` &nbsp;·&nbsp; `FastAPI + SQLite`
+`v0.03` &nbsp;·&nbsp; `React + TypeScript + Vite` &nbsp;·&nbsp; `Tauri 2 (Rust)` &nbsp;·&nbsp; `FastAPI + SQLite`
 
 ![新建任务主页](docs/screenshots/v4/home.png)
 

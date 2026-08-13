@@ -11,6 +11,7 @@ function evidence(overrides: Partial<EvidenceRecord> = {}): EvidenceRecord {
     excerpt: '研究组的结局风险低于对照组。',
     relation: 'supports',
     review: 'accepted',
+    status: 'accepted',
     confidence: 'medium',
     page: 8,
     chunk_id: 'chunk-1',
@@ -30,6 +31,7 @@ describe('AIChat accepted-evidence boundary', () => {
     const records = [
       evidence(),
       evidence({ id: 'e-2', review: 'pending' }),
+      evidence({ id: 'e-unverified', status: 'pending' }),
       evidence({ id: 'e-3', project_id: 'project-b' }),
     ];
     expect(acceptedEvidenceForProject('project-a', 'project-a', records).map((item) => item.id)).toEqual(['e-1']);

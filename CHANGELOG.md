@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.03] - 2026-08-13
+
+v0.03 深化轮：IA 收敛（新对话即助理）、UI 成熟度跃升、图标鹤化 2.0、证据链闭环收紧、性能稳健硬闸。
+
+### IA 与导航
+- **新对话即助理**：独立「助理」页移除；提交后同一工作壳进入这场对话（一次性 taskLaunch nonce 认领，防重挂载复建会话）；会话列表回贴 run 产出；旧 `assistant`/`aiChat` 深链归一到新对话壳。
+- **侧栏 6 项定版**：新对话 → 项目 → 工具 → 自动化 → 知识库 → 专家·技能·连接器；侧栏只留导航 + 本机后端状态（RunningTasks 移出）。
+- **倒数日嵌项目卡**：截稿/答辩/伦理归属具体课题；旧工作区未归属倒数日保留为「未归属」分区，不猜挂到任意项目（migrations 显式置 null）。
+- **工具页承接**：表格、图片·文件、统计工具从知识库/更多归入「工具」；知识库主序：文献 → 证据卡 → 笔记。
+- 空态统一 `EmptyGuide`（只讲事，不画凑数插画）；证据裁决队列补 loading/ready/error 三态，失败可重试。
+
+### UI 成熟度（T1）
+- 排印刻度 `designScale.ts`：8pt 网格、字阶 11/12/13.5/16/20/26/32、行高 1.5/1.65/1.7，禁止散值。
+- 交互五态 `interaction.css`：hover/active/focus-visible/disabled/loading 全 clickable 覆盖；动效 token ≤300ms，`prefers-reduced-motion` 全局归零。
+- `K` 快捷键直达文献检索框（自动聚焦）；Ctrl+N 新对话。
+
+### 图标鹤化 2.0（T2）
+- 6 枚导航图标 + 新 `craneDraft` 全部重画：每枚仅一处朱砂鹤顶（`var(--cinnabar)`）+ S 颈曲线 + 翅/云剪影，18px 可辨。
+- 流水线 8 段图标从 emoji 改为类型化线性图标（`PipelineStageIcon`），纳入同一套视觉体系。
+
+### 证据链深化（T3）
+- **证据附录（导出强制）**：`write_note`/`export_artifact` 由后端权威生成「## 证据附录」（引用 → 证据卡 + 裁决 + 时间）；agent 自写的附录段整体替换，伪造/省略不留门。
+- **证据门收紧**：研究写作缺 `[^e:*]`/`[^none]` 标记一律打回（missing_markers）；引用必须当前项目 status+review 双 accepted——跨项目、pending/rejected、无项目 run 均 fail-closed；二次未过证据门 = run 失败，不再「按无据放行」。
+- **证据卡回跳 PDF**：`requestPdfOpen(referenceId, page)`，PdfReader `initialPage` 钳位到 [1, numPages]。
+- **矛盾证据并排**：同一 claim 的 supports/contradicts 在裁决队列对照展示（NFKC 归一化分组）。
+- RunOutput 证据加载状态机（idle/loading/ready/unavailable/error）；附录未就绪时下载闸不放开；产出正文先剥预置附录再以当前项目已接受证据重建。
+
+### 性能与稳健（T4）
+- **token 预算硬闸**：`SELENYX_LLM_TOKEN_BUDGET`（默认 0 不限）；优先用 API usage，缺失时按字符估算；超闸 run 置 failed 并落时间线。
+- **SQLite 加固**：连接级 `PRAGMA journal_mode=WAL` + `foreign_keys=ON`，附审计测试。
+- **RAG 黄金集**：20 问 hit@5 基线（≥12 告警），哈希混合检索回归不再隐形。
+- **备份合并恢复**：`restoreWorkspaceBackup` 从覆盖式改为非破坏合并——同 id 记录以本地为准、导入只补缺，项目 tags/referenceIds/taskIds 双边保留；改为异步接口。
+
+### 修复与清理
+- 修复 `LocalFilesPanel` 空态 props 误用（`text` → children）。
+- 穿透测试「任务提交反馈态」改为等待交接落点（原同拍断言异步入口必失败）。
+- 版本展示统一 v0.03（机器文件 SemVer 0.3.0：npm/Tauri/Cargo/FastAPI）；`APP_VERSION` 单一来源 `lib/appVersion.ts`。
+- 测试基线：后端 132 pytest / 前端 192 vitest / tsc / eslint / 24 项 UI 穿透全过；构建 9.81MB（gzip 2.03MB），与 v0.02 持平。
+
 ## [0.02] - 2026-08-11
 
 V4 转型发布：从「科研工具箱」到「证据链 AI 科研助手」——证据门即灵魂、本地优先、仙鹤伙伴。

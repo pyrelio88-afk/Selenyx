@@ -9,8 +9,7 @@ const BASE = 'http://127.0.0.1:5173/';
 
 // label = 侧边栏导航可见文本；tab = 容器页页内 tab 文本
 const SHOTS = [
-  { name: 'home', label: '新建任务', wait: 1600 },
-  { name: 'assistant', label: '助理', wait: 1000 },
+  { name: 'home', label: '新对话', wait: 1600 },
   { name: 'projects', label: '项目', wait: 1000 },
   { name: 'library', label: '知识库', wait: 1200 },
   { name: 'evidence', label: '知识库', tab: '证据卡', wait: 1200 },

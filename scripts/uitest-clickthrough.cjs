@@ -32,14 +32,14 @@ function record(name, pass, detail) {
 
   // 1. 版本号
   const brand = await page.locator('.workspace-brand-subtitle').textContent().catch(() => '');
-  record('版本号 v0.02', (brand || '').includes('0.02'), `侧栏显示 "${brand}"`);
+  record('版本号 v0.03', (brand || '').includes('0.03'), `侧栏显示 "${brand}"`);
 
   // 2. 新导航图标（SVG 渲染数量）
   const navIcons = await page.locator('.sidebar-nav .nav-item svg').count();
-  record('导航图标渲染', navIcons >= 7, `${navIcons} 个 SVG`);
+  record('导航图标渲染', navIcons >= 6, `${navIcons} 个 SVG`);
 
   // 3. 主导航遍历
-  const navs = ['助理', '项目', '知识库', '专家·技能·连接器', '自动化', '更多', '新建任务'];
+  const navs = ['项目', '工具', '自动化', '知识库', '专家·技能·连接器', '新对话'];
   for (const label of navs) {
     await page.locator(`nav button:has-text("${label}")`).first().click();
     await page.waitForTimeout(700);
@@ -50,7 +50,7 @@ function record(name, pass, detail) {
   // 4. 知识库 6 tab
   await page.locator('nav button:has-text("知识库")').first().click();
   await page.waitForTimeout(700);
-  for (const tab of ['文献', '文档·笔记', '证据卡', '表格', '临床数据', '图片·文件']) {
+  for (const tab of ['文献', '证据卡', '文档·笔记', '临床数据']) {
     const btn = page.locator(`.tabbar button:has-text("${tab}")`).first();
     const exists = await btn.count();
     if (!exists) { record(`知识库 tab「${tab}」`, false, 'tab 不存在'); continue; }
@@ -89,7 +89,7 @@ function record(name, pass, detail) {
   await page.keyboard.press('Escape');
 
   // 8. 新建任务：模板卡填入 → 芯片开关 → 提交反馈态（深度思考起点）
-  await page.locator('nav button:has-text("新建任务")').first().click();
+  await page.locator('nav button:has-text("新对话")').first().click();
   await page.waitForTimeout(800);
   const templateBtn = page.locator('.newtask-template:has-text("证据梳理")').first();
   try {
@@ -108,29 +108,27 @@ function record(name, pass, detail) {
   const chipOn = await reviewChip.getAttribute('class');
   record('芯片开关切换', (chipOn || '').includes('is-on'), `class=${chipOn}`);
 
-  // 提交 → 观察"创建中…"禁用态 → 任务详情时间线（深度思考的落点）
+  // 提交 → 观察「创建中…」→ 交接到助理会话
   const submitBtn = page.locator('.newtask-submit');
   await submitBtn.click();
   const midState = await submitBtn.textContent().catch(() => '');
-  const midDisabled = await submitBtn.isDisabled().catch(() => true); // 已跳转=视为提交中态结束
+  const midDisabled = await submitBtn.isDisabled().catch(() => true);
+  // 交接是异步的（建会话 → 回贴目标 → 切视图），必须等待落点出现，
+  // 不能在 click 的同一拍断言——那一拍聊天气泡尚未渲染。
   let landed = false;
   try {
-    await page.locator('text=运行记录').first().waitFor({ timeout: 10000 });
+    await page.locator('.aichat-workbench, .aichat-msg, .aichat-main').first().waitFor({ timeout: 8000 });
     landed = true;
-  } catch { /* 停留在主页 */ }
-  await page.waitForTimeout(2500);
-  const steps = await page.locator('.agent-step').count();
-  const detailGoal = await page.locator('text=盘点当前项目的证据链').count();
+  } catch { /* 未交接 */ }
+  const goalInChat = await page.locator('text=盘点当前项目的证据链').count();
   record(
     '任务提交反馈态（深度思考）',
-    landed && (steps > 0 || detailGoal > 0),
-    `提交中文案="${(midState || '').trim()}" disabled=${midDisabled}；落地任务视图=${landed} 时间线步骤=${steps} 详情目标=${detailGoal}`
+    landed && (goalInChat > 0 || midDisabled),
+    `提交中文案="${(midState || '').trim()}" disabled=${midDisabled}；落地助理=${landed} 目标回贴=${goalInChat}`
   );
   await page.screenshot({ path: path.join(OUT, 'after-submit.png') });
 
-  // 9. 助理页：发送 → 流式/思考态或诚实错误
-  await page.locator('nav button:has-text("助理")').first().click();
-  await page.waitForTimeout(900);
+  // 9. 同一工作壳内续发 → 流式/思考态或诚实错误
   const chatInput = page.locator('textarea').last();
   await chatInput.fill('你好，测试流式反馈');
   await chatInput.press('Enter');

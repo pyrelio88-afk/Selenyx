@@ -34,7 +34,7 @@
 
 .clinical-directory-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -155,23 +155,23 @@
 }
 
 .clinical-directory-summary {
-  position: sticky;
-  top: 12px;
+  position: static;
+  top: auto;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
 }
+.clinical-directory-summary dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
 
 .clinical-directory-summary h2 {
   margin: 0 0 12px;
   font-size: 14px;
-}
-
-.clinical-directory-summary dl {
-  margin: 0;
-  display: grid;
-  gap: 8px;
 }
 
 .clinical-directory-summary dl > div {

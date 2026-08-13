@@ -44,3 +44,6 @@ frontend/shot_*.cjs
 
 # Local agent workspace data
 .workbuddy/
+
+# Local run artifacts (pytest tmp / QA screenshots / pipeline output)
+output/

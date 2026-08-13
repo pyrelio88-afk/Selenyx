@@ -19,6 +19,7 @@ import {
   type AgentRunSummary,
 } from '@services/agent';
 import { parseSkillPrefix } from '@services/skills';
+import { withReplyStyle } from '@components/assistant/chatShared';
 
 export function TasksView() {
   const projects = useAppStore((s) => s.projects);
@@ -26,6 +27,7 @@ export function TasksView() {
   const focusRunId = useAppStore((s) => s.focusRunId);
   const clearRunFocus = useAppStore((s) => s.clearRunFocus);
   const customInstructions = useAppStore((s) => s.customInstructions);
+  const replyStyle = useAppStore((s) => s.replyStyle);
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
   const [review, setReview] = useState(false);
@@ -132,7 +134,7 @@ export function TasksView() {
         review,
         confirmPlan,
         skill: parsed.skill,
-        customInstructions,
+        customInstructions: withReplyStyle(customInstructions, replyStyle),
       });
       setGoal('');
       await refreshList();
@@ -195,8 +197,8 @@ export function TasksView() {
       </div>
 
       {backendOffline && (
-        <div role="alert" style={{ padding: '10px 14px', border: '1px solid var(--warning)', borderRadius: 'var(--radius-md)', fontSize: 12.5, color: 'var(--text-secondary)' }}>
-          本机后端未连接：桌面版会自动启动；开发环境请运行 <code>npm run dev:local</code>。agent 任务依赖后端执行。
+        <div role="alert" className="local-offline-alert">
+          本机后端还没连上。桌面版会自动拉起；开发时在本机启动后端即可。
         </div>
       )}
 
