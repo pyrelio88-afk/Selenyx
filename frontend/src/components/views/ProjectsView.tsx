@@ -7,13 +7,15 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/index';
 import type { ResearchProject, PipelineStageKey } from '@apptypes/index';
-import { Icon, NAV_ICONS, STAGE_ICONS } from '@components/ui/Icon';
+import { Icon, NAV_ICONS } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { useIsMobile } from '@lib/useIsMobile';
 import { CORE_RESEARCH_FRAMEWORKS, type ResearchFramework } from '@data/frameworks';
 import { orderProjectsForWorkspace, projectRoleLabel, selectPrimaryProject } from '@lib/projectPriority';
 import { evidenceApi } from '@services/api';
+import { ProjectCountdown, UnassignedProjectCountdowns } from '@components/projects/ProjectDeadlines';
+import { hasCompleteCountdown, isProjectNameReady } from '@components/projects/projectCreatePolicy';
 
 const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
   { label: '全部', match: [] },
@@ -37,7 +39,19 @@ interface ProjectFormState {
   frameworkId: string;
   ownerRole: 'lead' | 'participant';
   makePrimary: boolean;
+  countdownLabel: string;
+  countdownDate: string;
 }
+
+const EMPTY_FORM: ProjectFormState = {
+  name: '',
+  description: '',
+  frameworkId: '',
+  ownerRole: 'lead',
+  makePrimary: false,
+  countdownLabel: '',
+  countdownDate: '',
+};
 
 function ProjectOwnershipFields({
   form,
@@ -223,13 +237,12 @@ export function ProjectsView() {
     projects, tasks, currentProjectId, setCurrentProject, addProject, deleteProject,
     setPrimaryProject, setView, workspaceSyncStatus, workspaceSyncMessage,
     pendingCreateProject, clearPendingCreateProject, setLibraryTab,
+    addCountdown,
   } = useAppStore();
   const [showCreate, setShowCreate] = useState(false);
   const [showFrameworks, setShowFrameworks] = useState(false);
   const [selectedFramework, setSelectedFramework] = useState<ResearchFramework | null>(null);
-  const [form, setForm] = useState<ProjectFormState>({
-    name: '', description: '', frameworkId: '', ownerRole: 'lead', makePrimary: true,
-  });
+  const [form, setForm] = useState<ProjectFormState>({ ...EMPTY_FORM, makePrimary: true });
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [disciplineFilter, setDisciplineFilter] = useState(DISCIPLINE_FILTERS[0]);
   const [pendingEvidenceByProject, setPendingEvidenceByProject] = useState<Record<string, number>>({});
@@ -266,7 +279,7 @@ export function ProjectsView() {
   function startCreate() {
     setShowFrameworks(false);
     setSelectedFramework(null);
-    setForm({ name: '', description: '', frameworkId: '', ownerRole: 'lead', makePrimary: projects.length === 0 });
+    setForm({ ...EMPTY_FORM, makePrimary: projects.length === 0 });
     setFieldValues({});
     setDisciplineFilter(DISCIPLINE_FILTERS[0]);
     setShowCreate(true);
@@ -298,7 +311,7 @@ export function ProjectsView() {
   }
 
   function handleCreate() {
-    if (!form.name.trim()) return;
+    if (!isProjectNameReady(form.name)) return;
     const now = new Date().toISOString();
     const proj: ResearchProject = {
       id: genId(),
@@ -332,8 +345,16 @@ export function ProjectsView() {
     addProject(proj);
     setCurrentProject(proj.id);
     if (proj.isPrimary) setPrimaryProject(proj.id);
+    if (hasCompleteCountdown(form.countdownLabel, form.countdownDate)) {
+      addCountdown({
+        label: form.countdownLabel.trim(),
+        date: form.countdownDate,
+        color: '#c3272b',
+        projectId: proj.id,
+      });
+    }
     setShowCreate(false);
-    setForm({ name: '', description: '', frameworkId: '', ownerRole: 'lead', makePrimary: false });
+    setForm({ ...EMPTY_FORM });
     setFieldValues({});
     setSelectedFramework(null);
   }
@@ -357,38 +378,64 @@ export function ProjectsView() {
           autoFocus
         />
       </div>
-      <div style={{ marginBottom: 12 }}>
-        <label className="form-label" htmlFor="project-description">项目描述</label>
-        <textarea
-          id="project-description"
-          className="input"
-          placeholder="简述研究背景和目标..."
-          value={form.description}
-          onChange={(event) => setForm({ ...form, description: event.target.value })}
-          rows={2}
-          style={{ resize: 'vertical' }}
-        />
-      </div>
+      <details className="project-create-options">
+        <summary>补充项目资料（可选）</summary>
+        <div className="project-create-options-body">
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label" htmlFor="project-description">项目描述</label>
+            <textarea
+              id="project-description"
+              className="input"
+              placeholder="简述研究背景和目标..."
+              value={form.description}
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+              rows={2}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
 
-      <ProjectOwnershipFields form={form} setForm={setForm} />
+          <ProjectOwnershipFields form={form} setForm={setForm} />
 
-      <FrameworkPicker
-        showFrameworks={showFrameworks}
-        setShowFrameworks={setShowFrameworks}
-        selectedFramework={selectedFramework}
-        selectFramework={selectFramework}
-        clearFramework={clearFramework}
-        loadExample={loadExample}
-        disciplineFilter={disciplineFilter}
-        setDisciplineFilter={setDisciplineFilter}
-        visibleFrameworks={visibleFrameworks}
-        fieldValues={fieldValues}
-        setFieldValues={setFieldValues}
-      />
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label" htmlFor="project-countdown-label">倒数日（可选）</label>
+            <p className="project-create-help">可以稍后在项目卡片上添加截稿、答辩或伦理审查日期。</p>
+            <input
+              id="project-countdown-label"
+              className="input"
+              placeholder="如：投稿截止、答辩日"
+              value={form.countdownLabel}
+              onChange={(event) => setForm({ ...form, countdownLabel: event.target.value })}
+            />
+            <input
+              id="project-countdown-date"
+              className="input"
+              type="date"
+              value={form.countdownDate}
+              onChange={(event) => setForm({ ...form, countdownDate: event.target.value })}
+              aria-label="倒数日日期"
+              style={{ marginTop: 8 }}
+            />
+          </div>
+
+          <FrameworkPicker
+            showFrameworks={showFrameworks}
+            setShowFrameworks={setShowFrameworks}
+            selectedFramework={selectedFramework}
+            selectFramework={selectFramework}
+            clearFramework={clearFramework}
+            loadExample={loadExample}
+            disciplineFilter={disciplineFilter}
+            setDisciplineFilter={setDisciplineFilter}
+            visibleFrameworks={visibleFrameworks}
+            fieldValues={fieldValues}
+            setFieldValues={setFieldValues}
+          />
+        </div>
+      </details>
 
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button type="button" className="btn" onClick={() => setShowCreate(false)}>取消</button>
-        <button type="button" className="btn btn-primary" onClick={handleCreate} disabled={!form.name.trim()}>创建项目</button>
+        <button type="button" className="btn btn-primary" onClick={handleCreate} disabled={!isProjectNameReady(form.name)}>创建项目</button>
       </div>
     </div>
   );
@@ -397,7 +444,7 @@ export function ProjectsView() {
     <div className="projects-workbench">
       <div className="view-header">
         <div>
-          <h1 className="view-title">立题 · 项目</h1>
+          <h1 className="view-title">项目</h1>
           <div
             role="status"
             title={workspaceSyncMessage}
@@ -425,15 +472,6 @@ export function ProjectsView() {
         </div>
       ) : (
         <div className="project-groups">
-          {!visibleMainline && projects.some((project) => project.status !== 'archived') && (
-            <section className="project-mainline-guidance" aria-label="选择首页主线课题">
-              <Icon name="target" size={18} />
-              <div>
-                <strong>请选择首页主线课题</strong>
-                <p>旧项目没有主线标记。请在你主导的课题上选择“设为主线”，首页不会按项目存储顺序猜测。</p>
-              </div>
-            </section>
-          )}
           {[
             visibleMainline ? { key: 'mainline', title: '主线课题', detail: '首页与每日推进优先显示这一项', projects: [visibleMainline] } : null,
             leadProjects.length > 0 ? { key: 'lead', title: '我主导的项目', detail: '由你负责研究决策与推进', projects: leadProjects } : null,
@@ -480,12 +518,13 @@ export function ProjectsView() {
                     )}
                   </h3>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '3px 10px', borderRadius: 10, background: 'var(--accent-light)', color: 'var(--accent)', flexShrink: 0 }}>
-                    {stage && <Icon name={STAGE_ICONS[stage.key]} size={13} />} {stage?.label}
+                    {stage && <Icon name={stage.icon} size={13} />} {stage?.label}
                   </span>
                 </div>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5, maxHeight: 60, overflow: 'hidden' }}>
-                  {project.description || '暂无描述'}
+                <p className="project-card-summary">
+                  {project.description || '还没有摘要。'}
                 </p>
+                <ProjectCountdown projectId={project.id} />
                 {project.pico && (project.pico.population || project.pico.intervention) && (
                   <div className="pico-box">
                     <div className="pico-row"><span className="pico-label">P</span> {project.pico.population || '—'}</div>
@@ -561,6 +600,8 @@ export function ProjectsView() {
           ))}
         </div>
       )}
+
+      <UnassignedProjectCountdowns />
 
       {showCreate && (
         isMobile ? (

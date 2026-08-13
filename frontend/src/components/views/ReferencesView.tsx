@@ -22,6 +22,7 @@ import { BottomSheet } from '@components/layout/BottomSheet';
 import { searchApi, zoteroApi, type ZoteroReferenceCandidate } from '@services/api';
 import { referenceFromZotero } from '@utils/zoteroReference';
 import { ReferenceEvidenceWorkspace } from './references/ReferenceEvidenceWorkspace';
+import { filterReferences } from './references/filterReferences';
 import './references/references-workspace.css';
 
 // PDF 阅读器懒加载（pdfjs-dist ~400KB，只在需要时加载）
@@ -38,6 +39,7 @@ import {
 import { ManualReferenceFields } from './references/ManualReferenceFields';
 import { LiteratureSearchContent } from './references/LiteratureSearchContent';
 import { RefDetailPanel } from './references/RefDetailPanel';
+import { findPdfAttachmentPath, toPdfSource } from './references/referencePdfAttachment';
 
 export function ReferencesView() {
   const {
@@ -45,6 +47,7 @@ export function ReferencesView() {
     addReferences, updateReference, deleteReferenceAndRelations,
     referenceSyncStatus, referenceSyncMessage,
     projects, currentProjectId,
+    pendingPdfOpen, clearPendingPdfOpen,
   } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,8 +59,9 @@ export function ReferencesView() {
   const [doiInput, setDoiInput] = useState('');
   const [doiLoading, setDoiLoading] = useState(false);
   const [webViewerUrl, setWebViewerUrl] = useState<string | null>(null);
-  const [pdfSource, setPdfSource] = useState<ArrayBuffer | null>(null);
+  const [pdfSource, setPdfSource] = useState<string | ArrayBuffer | null>(null);
   const [pdfRefId, setPdfRefId] = useState<string | null>(null);
+  const [pdfInitialPage, setPdfInitialPage] = useState<number | undefined>(undefined);
   const [anydocOpen, setAnydocOpen] = useState(false);
   const [anydocRefId, setAnydocRefId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -100,6 +104,24 @@ export function ReferencesView() {
   }, []);
 
   useEffect(() => {
+    if (!pendingPdfOpen) return;
+    const request = pendingPdfOpen;
+    setPdfRefId(request.referenceId);
+    setSelectedId(request.referenceId);
+    setPdfInitialPage(request.page);
+    const ref = references.find((item) => item.id === request.referenceId);
+    const attachmentPath = findPdfAttachmentPath(ref);
+    if (attachmentPath) {
+      setPdfSource(toPdfSource(attachmentPath));
+      flashToast(`已打开「${ref?.title || '该文献'}」的本地 PDF，第 ${request.page} 页`);
+    } else {
+      flashToast(`请选择「${ref?.title || '该文献'}」的 PDF，将跳到第 ${request.page} 页`);
+      window.setTimeout(() => pdfInputRef.current?.click(), 80);
+    }
+    clearPendingPdfOpen();
+  }, [pendingPdfOpen, references, flashToast, clearPendingPdfOpen]);
+
+  useEffect(() => {
     if (!confirmDeleteId || isMobile) return;
     const focusFrame = window.requestAnimationFrame(() => deleteCancelRef.current?.focus());
     const onKeyDown = (event: KeyboardEvent) => {
@@ -129,31 +151,16 @@ export function ReferencesView() {
   }, [confirmDeleteId, isMobile]);
 
   const filtered = useMemo(() => {
-    let result = references;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((r) =>
-        r.title.toLowerCase().includes(q) ||
-        r.creators.some((c) => `${c.firstName}${c.lastName}`.toLowerCase().includes(q)) ||
-        r.doi.toLowerCase().includes(q) ||
-        r.publication.toLowerCase().includes(q)
-      );
-    }
-    if (filterType !== 'all') {
-      result = result.filter((r) => r.type === filterType);
-    }
-    // 排序
-    if (sortField) {
-      result = [...result].sort((a, b) => {
-        let cmp = 0;
-        if (sortField === 'title') cmp = a.title.localeCompare(b.title, 'zh');
-        else if (sortField === 'year') cmp = Number(a.year || 0) - Number(b.year || 0);
-        else if (sortField === 'doi') cmp = (a.doi || '').localeCompare(b.doi || '');
-        else if (sortField === 'readStatus') cmp = (a.readStatus || '').localeCompare(b.readStatus || '');
-        return sortDir === 'asc' ? cmp : -cmp;
-      });
-    }
-    return result;
+    const matched = filterReferences(references, searchQuery, filterType);
+    if (!sortField) return matched;
+    return [...matched].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'title') cmp = (a.title || '').localeCompare(b.title || '', 'zh');
+      else if (sortField === 'year') cmp = Number(a.year || 0) - Number(b.year || 0);
+      else if (sortField === 'doi') cmp = (a.doi || '').localeCompare(b.doi || '');
+      else if (sortField === 'readStatus') cmp = (a.readStatus || '').localeCompare(b.readStatus || '');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
   }, [references, searchQuery, filterType, sortField, sortDir]);
 
   const savedDois = useMemo(
@@ -837,8 +844,9 @@ export function ReferencesView() {
             source={pdfSource}
             title={pdfRef.title || pdfRef.citeKey}
             annotations={pdfRef.annotations}
+            initialPage={pdfInitialPage}
             onAnnotationsChange={handleAnnotationsChange}
-            onClose={() => { setPdfSource(null); setPdfRefId(null); }}
+            onClose={() => { setPdfSource(null); setPdfRefId(null); setPdfInitialPage(undefined); }}
           />
         </Suspense>
       )}
@@ -1059,7 +1067,7 @@ export function ReferencesView() {
       {isMobile && confirmDeleteId && (
         <BottomSheet open onClose={() => setConfirmDeleteId(null)} title="确认删除">
           <div style={{ textAlign: 'center', padding: '16px 0' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <div style={{ color: 'var(--danger, #c3272b)', display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Icon name="warning" size={40} strokeWidth={1.35} /></div>
             <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>确认删除此文献？</p>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>此操作不可撤销，文献及其笔记/批注将永久删除。</p>
           </div>
@@ -1097,7 +1105,7 @@ export function ReferencesView() {
       {!isMobile && confirmDeleteId && (
         <div className="ref-center-modal" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setConfirmDeleteId(null)}>
           <div ref={deleteDialogRef} role="dialog" aria-modal="true" aria-labelledby="reference-delete-title" aria-describedby="reference-delete-description" style={{ background: 'var(--bg-surface)', borderRadius: 12, maxWidth: 360, width: '100%', padding: 24, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <div style={{ color: 'var(--danger, #c3272b)', display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Icon name="warning" size={40} strokeWidth={1.35} /></div>
             <h3 id="reference-delete-title" style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>确认删除此文献？</h3>
             <p id="reference-delete-description" style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>此操作不可撤销，文献及其笔记/批注将永久删除。</p>
             <div style={{ display: 'flex', gap: 8 }}>

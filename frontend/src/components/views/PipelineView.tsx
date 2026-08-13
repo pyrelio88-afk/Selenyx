@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { PIPELINE_STAGES } from '@apptypes/project';
 import type { PipelineStageKey } from '@apptypes/index';
-import { Icon, STAGE_ICONS } from '@components/ui/Icon';
+import { Icon } from '@components/ui/Icon';
 import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { ThreeColumnWorkbench } from '@components/layout/ThreeColumnWorkbench';
@@ -353,6 +353,9 @@ export function PipelineView() {
     <div className="pipeline-workbench">
       <header className="pipeline-workbench-header">
         <div>
+          <button type="button" className="btn" onClick={() => setView('projects')} style={{ marginBottom: 8 }}>
+            <Icon name="chevronLeft" size={15} /> 返回项目
+          </button>
           <h1>{project.name}</h1>
           <div className="pipeline-project-meta">
             {project.isPrimary && <span className="project-primary-badge">主线课题</span>}
@@ -403,7 +406,7 @@ export function PipelineView() {
                   <strong>{item.label}</strong>
                   <small>{stateLabel}</small>
                 </span>
-                <Icon name={STAGE_ICONS[item.key]} size={17} strokeWidth={1.5} />
+                <Icon name={item.icon} size={17} strokeWidth={1.5} />
               </button>
             );
           })}
@@ -412,7 +415,7 @@ export function PipelineView() {
         center={(
         <main className="pipeline-stage-workspace" aria-labelledby="pipeline-stage-title">
           <div className="pipeline-stage-heading">
-            <div className="pipeline-stage-heading-icon"><Icon name={STAGE_ICONS[stage.key]} size={25} strokeWidth={1.45} /></div>
+            <div className="pipeline-stage-heading-icon"><Icon name={stage.icon} size={25} strokeWidth={1.45} /></div>
             <div>
               <span>第 {stage.order} 阶段 · {project.currentStage === stage.key ? '当前阶段' : '查看阶段'}</span>
               <h2 id="pipeline-stage-title">{stage.label}</h2>
