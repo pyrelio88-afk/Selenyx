@@ -29,18 +29,19 @@
   --raw-radius-xl: 16px;
   --raw-radius-pill: 999px;
 
-  /* 字号 */
+  /* 字号（v0.03 阶梯：11 / 12 / 13.5 / 16 / 20 / 26 / 32） */
   --font-xs: 11px;
-  --font-sm: 13px;
-  --font-base: 14px;
+  --font-sm: 12px;
+  --font-base: 13.5px;
   --font-md: 16px;
-  --font-lg: 18px;
-  --font-xl: 22px;
-  --font-2xl: 28px;
+  --font-lg: 20px;
+  --font-xl: 26px;
+  --font-2xl: 32px;
 
   /* 行高 */
   --leading-tight: 1.25;
   --leading-normal: 1.5;
+  --leading-reading: 1.65;
   --leading-relaxed: 1.7;
 
   /* 字重 */

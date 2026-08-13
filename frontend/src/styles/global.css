@@ -15,28 +15,123 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --transition: 0.2s ease;
+  --cinnabar: #c3272b;
+  --bg-canvas: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f5f5f5;
+  --bg-hover: #ececec;
+  --text-primary: #161823;
+  --text-secondary: #5a5a5a;
+  --text-muted: #8f8f8f;
+  --accent: #161823;
+  --accent-hover: #000000;
+  --accent-light: #f0f0f4;
+  --danger: #c3272b;
+  --danger-light: #f6eaea;
+  --warning: #6b6b6b;
+  --success: #2f6b3a;
+  --border: #e8e8e8;
+  --border-strong: #161823;
+  --shadow: none;
+  --sidebar-bg: #f4f4f4;
 }
 
-/* --- 主题 A: 纸间豆绿 --- */
+/* 纸间豆绿：近白宣纸底，豆青只出现在按钮/激活，禁止整页发绿、禁止牙色泥黄 */
 [data-theme="paper-green"][data-mode="light"] {
-  --bg-canvas: #faf8f2;
-  --bg-surface: #fffcf6;
+  --bg-canvas: #f8f7f3;
+  --bg-surface: #fffcf8;
+  --bg-elevated: #f3f2ed;
+  --bg-hover: #ebeae4;
+  --text-primary: #2a2722;
+  --text-secondary: #5c574e;
+  --text-muted: #8a8478;
+  --accent: #4f7a45;
+  --accent-hover: #3d6236;
+  --accent-light: #e8f0e4;
+  --cinnabar: #c3272b;
+  --danger: #c3272b;
+  --danger-light: #f3e4e2;
+  --warning: #8a6800;
+  --success: #4f7a45;
+  --border: #e2dfd6;
+  --border-strong: #2a2722;
+  --shadow: 2px 2px 0 #e2dfd6;
+  --sidebar-bg: #f3f2ed;
+}
+
+/* 瑞士杂志：铅白栏 + 纯白主区，花青只点按钮 */
+[data-theme="minimal-white"][data-mode="light"] {
+  --bg-canvas: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f0f0f4;
+  --bg-hover: #e8e8e8;
+  --text-primary: #161823;
+  --text-secondary: #525252;
+  --text-muted: #8d8d8d;
+  --accent: #144a74;
+  --accent-hover: #0d3556;
+  --accent-light: #e8eef5;
+  --cinnabar: #c3272b;
+  --danger: #c3272b;
+  --danger-light: #fff0f1;
+  --warning: #b28600;
+  --success: #198038;
+  --border: #e0e0e0;
+  --border-strong: #161823;
+  --shadow: none;
+  --sidebar-bg: #f0f0f4;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+}
+
+/* 粗野主义：ekmas 公式 = 白底 + 墨框 + 4px 硬影 + 朱砂块。牙色不当底 */
+[data-theme="ink-classic"][data-mode="light"] {
+  --bg-canvas: #ffffff;
+  --bg-surface: #ffffff;
   --bg-elevated: #ffffff;
-  --bg-hover: #f0ede5;
-  --text-primary: #2c2a26;
-  --text-secondary: #6b6760;
-  --text-muted: #9a958c;
-  --accent: #7a9b6a;
-  --accent-hover: #688a58;
-  --accent-light: #e8f0e3;
-  --danger: #c0432b;
-  --danger-light: #fce8e4;
-  --warning: #c3a22a;
-  --success: #5a8a4a;
-  --border: #d8d4ca;
-  --border-strong: #2c2a26;
-  --shadow: 3px 3px 0 #d8d4ca;
-  --sidebar-bg: #f5f2eb;
+  --bg-hover: #f0f0f0;
+  --text-primary: #000000;
+  --text-secondary: #2a2a2a;
+  --text-muted: #5a5a5a;
+  --accent: #c3272b;
+  --accent-hover: #9b1d20;
+  --accent-light: #ffe4e0;
+  --cinnabar: #c3272b;
+  --danger: #c3272b;
+  --danger-light: #ffe4e0;
+  --warning: #c49218;
+  --success: #1f7a34;
+  --border: #000000;
+  --border-strong: #000000;
+  --shadow: 4px 4px 0 #000000;
+  --sidebar-bg: #ffffff;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+}
+
+/* 黑白经典：铅白栏、纯白主区、漆黑字，禁止牙色/缃黄 */
+[data-theme="mono"][data-mode="light"] {
+  --bg-canvas: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f7f7f7;
+  --bg-hover: #ececec;
+  --text-primary: #161823;
+  --text-secondary: #5a5a5a;
+  --text-muted: #8f8f8f;
+  --accent: #161823;
+  --accent-hover: #000000;
+  --accent-light: #f0f0f4;
+  --cinnabar: #c3272b;
+  --danger: #c3272b;
+  --danger-light: #f6eaea;
+  --warning: #8a6800;
+  --success: #2f6b3a;
+  --border: #e8e8e8;
+  --border-strong: #161823;
+  --shadow: none;
+  --sidebar-bg: #f0f0f4;
 }
 [data-theme="paper-green"][data-mode="dark"] {
   --bg-canvas: #1a1916;
@@ -89,30 +184,6 @@
   font-weight: 700;
 }
 
-/* --- 主题 B: 瑞士杂志风（Swiss Magazine Style · 白底蓝辅） --- */
-[data-theme="minimal-white"][data-mode="light"] {
-  --bg-canvas: #ffffff;
-  --bg-surface: #f7f9fc;
-  --bg-elevated: #ffffff;
-  --bg-hover: #eef2f8;
-  --text-primary: #0a1929;
-  --text-secondary: #425a6f;
-  --text-muted: #8a9bad;
-  --accent: #1565c0;
-  --accent-hover: #0d47a1;
-  --accent-light: #e3f0fd;
-  --danger: #c62828;
-  --danger-light: #fce8e8;
-  --warning: #ef8c00;
-  --success: #2e7d32;
-  --border: #dde4ec;
-  --border-strong: #0a1929;
-  --shadow: none;
-  --sidebar-bg: #f7f9fc;
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 4px;
-}
 [data-theme="minimal-white"][data-mode="dark"] {
   --bg-canvas: #0a1929;
   --bg-surface: #182a3e;
@@ -140,13 +211,13 @@
 /* 瑞士杂志风组件增强（Swiss Magazine Style · 白底蓝辅） */
 [data-theme="minimal-white"] .card {
   border: 1px solid var(--border);
-  border-top: 3px solid var(--accent);
+  border-left: 3px solid transparent;
   box-shadow: none;
   border-radius: var(--radius-sm);
 }
 [data-theme="minimal-white"] .card:hover {
   border-color: var(--border-strong);
-  border-top-color: var(--accent);
+  border-left-color: var(--accent);
 }
 [data-theme="minimal-white"] .btn {
   border: 1px solid var(--border-strong);
@@ -244,31 +315,6 @@
   font-weight: 700;
 }
 
-/* --- 主题 C: 墨岩（新粗野主义 × 东方墨韵） --- */
-[data-theme="ink-classic"][data-mode="light"] {
-  --bg-canvas: #f7f3e9;
-  --bg-surface: #fdfaf2;
-  --bg-elevated: #ffffff;
-  --bg-hover: #ede8d8;
-  --text-primary: #1a1a1a;
-  --text-secondary: #555;
-  --text-muted: #888;
-  --accent: #c3272b;
-  --accent-hover: #a02020;
-  --accent-light: #fce8e8;
-  --danger: #c3272b;
-  --danger-light: #fce8e8;
-  --warning: #d4a020;
-  --success: #2d8a3e;
-  --border: #1a1a1a;
-  --border-strong: #1a1a1a;
-  --shadow: 4px 4px 0 #1a1a1a;
-  --sidebar-bg: #ede8d8;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --font-sans: var(--font-serif);
-}
 [data-theme="ink-classic"][data-mode="dark"] {
   --bg-canvas: #0f0e0a;
   --bg-surface: #221f1b;
@@ -355,27 +401,6 @@
   border-right: 2px solid var(--border-strong);
 }
 
-/* --- 主题 D: 墨白（mono · 黑白极简，参考 WorkBuddy 黑白设计） --- */
-[data-theme="mono"][data-mode="light"] {
-  --bg-canvas: #ffffff;
-  --bg-surface: #ffffff;
-  --bg-elevated: #fafafa;
-  --bg-hover: #f2f2f2;
-  --text-primary: #111111;
-  --text-secondary: #525252;
-  --text-muted: #a3a3a3;
-  --accent: #111111;
-  --accent-hover: #000000;
-  --accent-light: #f0f0f0;
-  --danger: #b3261e;
-  --danger-light: #f9efef;
-  --warning: #8a6800;
-  --success: #2f6b3a;
-  --border: #e5e5e5;
-  --border-strong: #111111;
-  --shadow: none;
-  --sidebar-bg: #fafafa;
-}
 [data-theme="mono"][data-mode="dark"] {
   --bg-canvas: #0a0a0a;
   --bg-surface: #101010;
@@ -3463,7 +3488,7 @@ tr:hover .row-delete-btn { opacity: 0.6; }
   /* 搜索框全宽 48px */
   .ref-search-row { flex-direction: column; align-items: stretch !important; }
   .ref-search-row .input { width: 100%; min-height: 48px; }
-  .ref-filter-btn { width: 100%; min-height: 44px; margin-top: 8px; }
+  .ref-filter-btn { display: flex !important; width: 100%; min-height: 44px; margin-top: 8px; }
 }
 
 /* 移动端默认隐藏的加载更多按钮(桌面不显示) */

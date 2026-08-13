@@ -86,10 +86,11 @@
 }
 
 .aichat-workbench .aichat-header {
-  min-height: 58px;
-  gap: 8px;
+  min-height: 48px;
+  gap: var(--space-2);
   padding: 8px 12px;
-  background: var(--bg-elevated);
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border);
   backdrop-filter: none;
 }
 
@@ -177,12 +178,7 @@
 .aichat-workbench .aichat-msg:focus-within .aichat-msg-acts { opacity: 1; }
 .aichat-workbench .aichat-msg-acts button { min-width: 30px; min-height: 30px; justify-content: center; }
 
-.aichat-workbench .aichat-empty { max-width: 720px; padding-top: 7vh; }
-.aichat-workbench .aichat-empty-icon { border-radius: 12px; box-shadow: none; animation: none; }
-.aichat-workbench .aichat-empty h2 { font-family: var(--font-serif); font-weight: 650; }
-.aichat-workbench .aichat-quick { margin-top: 26px; gap: 12px; }
-.aichat-workbench .aichat-quick-item { border-radius: 7px; background: var(--bg-elevated); }
-.aichat-workbench .aichat-quick-item:hover { transform: none; box-shadow: none; }
+.aichat-workbench .aichat-empty-home { padding: 8vh 24px 24px; max-width: 860px; margin: 0 auto; }
 
 .aichat-workbench .aichat-composer { padding: 8px 14px 9px; background: var(--bg-surface); }
 .aichat-workbench .aichat-skill-bar { max-width: 840px; margin-bottom: 5px; }

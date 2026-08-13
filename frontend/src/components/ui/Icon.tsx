@@ -33,8 +33,8 @@ export type IconName =
   | 'copy' | 'pencil' | 'retry' | 'branch' | 'pin' | 'trash' | 'send' | 'stop'
   | 'sparkles' | 'chevronDown' | 'chevronLeft' | 'clock' | 'editIn' | 'list'
   | 'paperclip'
-  // v0.02 导航重塑（鹤翅/祥云意象）
-  | 'wingChat' | 'cloudFolder' | 'wingBook' | 'cloudNodes' | 'wingClock' | 'cloudMenu';
+  // v0.03 导航鹤化 2.0（鹤顶朱红 + S 颈 + 翅剪影）
+  | 'craneDraft' | 'wingChat' | 'cloudFolder' | 'wingBook' | 'cloudNodes' | 'wingClock' | 'cloudMenu';
 
 const PATHS: Record<IconName, ReactNode> = {
   // 导航 —— 视觉重量统一，区分度高
@@ -119,19 +119,14 @@ const PATHS: Record<IconName, ReactNode> = {
   // 图表 —— 三柱递增 + 折线，呼应统计/可视化
   chart: (<><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8 20v-6" /><path d="M12 20v-9" /><path d="M16 20v-4" /><path d="M7 14l5-5 3 3 4-6" /></>),
 
-  // v0.02 导航重塑 —— 鹤翅（分层弧线）与祥云（螺旋/云带）意象，线性风格统一
-  // 助理：对话气泡内藏三段上扬翼羽
-  wingChat: (<><path d="M4 4.5h16a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-5 4v-4H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z" /><path d="M7.2 13.4c1.9-1 3.4-2.5 4.3-4.4" /><path d="M9.4 14.2c1.5-.8 2.8-2 3.5-3.5" /><path d="M11.7 14.7c1.1-.6 2-1.4 2.5-2.5" /></>),
-  // 项目：文件夹卧一朵祥云（螺旋云纹）
-  cloudFolder: (<><path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h3.8l1.7 2h8.5a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 18.5 19h-14A1.5 1.5 0 0 1 3 17.5z" /><path d="M10.2 15.4h7" /><path d="M13.2 15.4a2.05 2.05 0 1 1 2.7-1.9" /></>),
-  // 知识库：打开的书，页面弧线如展翼
-  wingBook: (<><path d="M3 6A1.5 1.5 0 0 1 4.5 4.5H10a2 2 0 0 1 2 2v13a2 2 0 0 0-2-1.5H4.5A1.5 1.5 0 0 1 3 16.5z" /><path d="M21 6a1.5 1.5 0 0 0-1.5-1.5H14a2 2 0 0 0-2 2v13a2 2 0 0 1 2-1.5h5.5A1.5 1.5 0 0 0 21 16.5z" /><path d="M11 9.6c-1.8-.8-3.5-1-5-.7" /><path d="M11 12.6c-1.8-.8-3.5-1-5-.7" /><path d="M13 9.6c1.8-.8 3.5-1 5-.7" /><path d="M13 12.6c1.8-.8 3.5-1 5-.7" /></>),
-  // 专家·技能·连接器：三节点 + 底部云带相连
-  cloudNodes: (<><circle cx="12" cy="11" r="2.4" /><circle cx="5.5" cy="5.5" r="1.9" /><circle cx="18.5" cy="5.5" r="1.9" /><path d="M7 6.9c1.6 1.4 2.6 2.4 3 3.4" /><path d="M17 6.9c-1.6 1.4-2.6 2.4-3 3.4" /><path d="M4.5 19.3c1.6-1.3 3.2-1.3 4.8 0s3.2 1.3 4.8 0 3.2-1.3 4.8 0" /></>),
-  // 自动化：时钟，分针弯如鹤颈/翼尖
-  wingClock: (<><circle cx="12" cy="12" r="8.5" /><path d="M12 12V7" /><path d="M12 12c2.1-.6 3.8-1.9 4.8-3.6" /><path d="M12 12c.9 1.6 1 3.2.4 4.8" /></>),
-  // 更多：三条云纹波
-  cloudMenu: (<><path d="M4 7.2c1.7-1.4 3.4-1.4 5 0s3.3 1.4 5 0 3.3-1.4 5 0" /><path d="M4 12.2c1.7-1.4 3.4-1.4 5 0s3.3 1.4 5 0 3.3-1.4 5 0" /><path d="M4 17.2c1.7-1.4 3.4-1.4 5 0s3.3 1.4 5 0" /></>),
+  // v0.03 鹤化 2.0 —— 每枚一处朱红鹤顶 + S 颈 + 翅/云剪影，18px 可辨
+  craneDraft: (<><path d="M5 18c2-3 3.2-7 6.2-9.2 1.6-1.2 3.6-.4 4.2 1.4.6 1.8-.4 3.4-2 4.4" /><path d="M11.4 9.2c3.2-.6 6.4-1.6 8.6-3.6" /><path d="M11.8 10.6c3.4.4 6.2 1.8 8 4" /><circle className="crane-crown" cx="11.2" cy="6.2" r="1.35" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
+  wingChat: (<><path d="M4 5h16a1.4 1.4 0 0 1 1.4 1.4v8.2A1.4 1.4 0 0 1 20 16h-9l-4.6 3.4V16H4A1.4 1.4 0 0 1 2.6 14.6V6.4A1.4 1.4 0 0 1 4 5z" /><path d="M8 13.6c1.2-2.6 2.8-4.6 5.2-5.4 1.6-.5 3 .6 3 2.1 0 1.4-1.2 2.3-2.5 2.6" /><circle className="crane-crown" cx="13.4" cy="6.6" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
+  cloudFolder: (<><path d="M3 8.6A1.5 1.5 0 0 1 4.5 7.1h3.6l1.6 1.8h8.8A1.5 1.5 0 0 1 20 10.4v7.1A1.5 1.5 0 0 1 18.5 19h-14A1.5 1.5 0 0 1 3 17.5z" /><path d="M8.4 16.2c1.6-2.4 3.4-3.4 5.6-3.2 1.8.2 2.8 1.6 2.4 3-.4 1.2-1.6 1.8-2.8 1.6" /><circle className="crane-crown" cx="14.2" cy="11.2" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
+  wingBook: (<><path d="M3 6.2A1.4 1.4 0 0 1 4.4 4.8H10a2 2 0 0 1 2 2v12.6a2 2 0 0 0-2-1.4H4.4A1.4 1.4 0 0 1 3 16.6z" /><path d="M21 6.2a1.4 1.4 0 0 0-1.4-1.4H14a2 2 0 0 0-2 2v12.6a2 2 0 0 1 2-1.4h5.6a1.4 1.4 0 0 0 1.4-1.4z" /><path d="M11 10.2C8.4 8.4 6.4 8.2 5 10" /><path d="M13 10.2c2.6-1.8 4.6-2 6-0.2" /><circle className="crane-crown" cx="12" cy="5.2" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
+  cloudNodes: (<><circle cx="12" cy="12.2" r="2.2" /><path d="M7.2 8.2c1-2 2.4-3.2 4.2-3.4" /><path d="M16.8 8.2c-1-2-2.4-3.2-4.2-3.4" /><circle cx="5.6" cy="7.4" r="1.6" /><circle cx="18.4" cy="7.4" r="1.6" /><path d="M7.4 18.8c1.5-1.2 3.1-1.2 4.6 0s3.1 1.2 4.6 0" /><circle className="crane-crown" cx="12" cy="6.4" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
+  wingClock: (<><circle cx="12" cy="13" r="7.6" /><path d="M12 13c2.2-1 3.8-2.6 4.6-4.6" /><path d="M12 13c.2 2 .1 3.6-.6 5" /><circle className="crane-crown" cx="12" cy="3.8" r="1.3" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
+  cloudMenu: (<><path d="M4 8c2.2-1.8 4.4-1.8 6.4 0 1.8 1.6 3.8 1.6 5.6 0 1.8-1.6 3.8-1.6 5.4 0" /><path d="M4 13c2.2-1.8 4.4-1.8 6.4 0 1.8 1.6 3.8 1.6 5.6 0 1.8-1.6 3.8-1.6 5.4 0" /><path d="M4 18c2.2-1.8 4.4-1.8 6.4 0 1.8 1.6 3.8 1.6 5.6 0" /><circle className="crane-crown" cx="10.4" cy="5.4" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
 };
 
 interface IconProps {
@@ -184,8 +179,8 @@ export const STAGE_ICONS: Record<string, IconName> = {
 
 /** 导航 key → 图标名映射 */
 export const NAV_ICONS: Record<string, IconName> = {
-  // v4 主导航（v0.02 视觉重塑：鹤翅/祥云意象）
-  newTask: 'taskDraft',
+  // Selenyx 导航族：每枚保留具体任务语义，并只点一处朱砂。
+  newTask: 'craneDraft',
   assistant: 'wingChat',
   projects: 'cloudFolder',
   library: 'wingBook',

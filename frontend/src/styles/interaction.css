@@ -1,0 +1,108 @@
+/**
+ * v0.03 交互五态：hover / active / focus-visible / disabled / loading
+ * 只补状态，不改组件几何。动效走 token，prefers-reduced-motion 已在 tokens.css 归零。
+ */
+
+.btn,
+.icon-btn,
+.nav-item,
+.tabbar-btn,
+.dynamic-item,
+.user-popover-item,
+.user-trigger,
+.newtask-template,
+.newtask-chip,
+.newtask-model-chip,
+.newtask-attach,
+.sidebar-search,
+.evidence-card-actions .btn {
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.btn:hover,
+.icon-btn:hover,
+.nav-item:hover,
+.tabbar-btn:hover,
+.dynamic-item:hover,
+.user-popover-item:hover,
+.newtask-template:hover,
+.newtask-chip:hover,
+.newtask-model-chip:hover,
+.newtask-attach:hover,
+.sidebar-search:hover {
+  color: var(--text-primary);
+}
+
+.btn:active,
+.icon-btn:active,
+.nav-item:active,
+.tabbar-btn:active,
+.dynamic-item:active,
+.newtask-template:active,
+.newtask-chip:active,
+.newtask-model-chip:active,
+.newtask-attach:active {
+  transform: translateY(1px);
+}
+
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.nav-item:focus-visible,
+.tabbar-btn:focus-visible,
+.dynamic-item:focus-visible,
+.user-popover-item:focus-visible,
+.user-trigger:focus-visible,
+.newtask-template:focus-visible,
+.newtask-chip:focus-visible,
+.newtask-model-chip:focus-visible,
+.newtask-attach:focus-visible,
+.sidebar-search:focus-visible,
+.tabbar-btn:focus-visible,
+.evidence-card-actions .btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'],
+.icon-btn:disabled,
+.newtask-chip:disabled,
+.newtask-model-chip:disabled,
+.newtask-attach:disabled,
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn.is-loading,
+.icon-btn.is-loading,
+[aria-busy='true'] {
+  pointer-events: none;
+  cursor: progress;
+  opacity: 0.72;
+}
+
+.btn.is-loading::after,
+[data-loading='true']::after {
+  content: '';
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-left: 0.4em;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 99px;
+  vertical-align: -0.05em;
+  animation: v03-spin var(--motion-slow) linear infinite;
+}
+
+@keyframes v03-spin {
+  to { transform: rotate(360deg); }
+}
