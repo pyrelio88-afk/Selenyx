@@ -8,9 +8,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
+import { EmptyGuide } from '@components/ui/EmptyGuide';
+import { pairContradictions } from './contradictionPairs';
 import { evidenceApi, type EvidenceRecord, type PendingEvidenceCard } from '@services/api';
 
 type QueueTab = 'pending' | 'accepted' | 'rejected';
+type LoadState = 'loading' | 'ready' | 'error';
 
 const QUEUE_TABS: { key: QueueTab; label: string }[] = [
   { key: 'pending', label: '待裁决' },
@@ -29,6 +32,7 @@ interface QueueCard {
   confidence: string;
   page: number | null;
   source: string; // 文献标题（未知则空）
+  referenceId: string;
   projectName: string;
   review: 'pending' | 'accepted' | 'rejected';
 }
@@ -42,19 +46,20 @@ function fromPending(card: PendingEvidenceCard): QueueCard {
     confidence: card.confidence,
     page: card.page,
     source: card.referenceTitle,
+    referenceId: card.referenceId,
     projectName: card.projectName,
     review: 'pending',
   };
 }
 
 export function EvidenceReviewPanel() {
-  const { references, projects } = useAppStore();
+  const { references, projects, requestPdfOpen } = useAppStore();
   const [tab, setTab] = useState<QueueTab>('pending');
   const [pendingCards, setPendingCards] = useState<QueueCard[]>([]);
   const [decidedCards, setDecidedCards] = useState<QueueCard[]>([]);
   const [cursor, setCursor] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [offline, setOffline] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
   const [busy, setBusy] = useState(false);
 
   const referenceTitle = useMemo(() => {
@@ -69,6 +74,7 @@ export function EvidenceReviewPanel() {
   }, [projects]);
 
   const load = useCallback(async () => {
+    setLoadState('loading');
     try {
       const [pending, all] = await Promise.all([evidenceApi.pending(), evidenceApi.list()]);
       setPendingCards(pending.items.map(fromPending));
@@ -83,13 +89,14 @@ export function EvidenceReviewPanel() {
             confidence: item.confidence,
             page: item.page,
             source: referenceTitle.get(item.reference_id) ?? '',
+            referenceId: item.reference_id,
             projectName: projectName.get(item.project_id) ?? '',
             review: item.review,
           }))
       );
-      setOffline(false);
+      setLoadState('ready');
     } catch {
-      setOffline(true);
+      setLoadState('error');
     }
   }, [referenceTitle, projectName]);
 
@@ -98,6 +105,7 @@ export function EvidenceReviewPanel() {
   const cards = tab === 'pending'
     ? pendingCards
     : decidedCards.filter((card) => card.review === tab);
+  const contradictionPairs = useMemo(() => pairContradictions(cards), [cards]);
 
   useEffect(() => { setCursor(0); setSelected(new Set()); }, [tab]);
   useEffect(() => { if (cursor >= cards.length) setCursor(Math.max(0, cards.length - 1)); }, [cards.length, cursor]);
@@ -186,9 +194,10 @@ export function EvidenceReviewPanel() {
         )}
       </div>
 
-      {offline && (
-        <div role="alert" style={{ padding: '10px 14px', border: '1px solid var(--warning)', borderRadius: 'var(--radius-md)', fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 12 }}>
-          本机后端未连接，证据卡队列不可用。
+      {loadState === 'error' && (
+        <div role="alert" className="evidence-load-state is-error">
+          <span>本机后端未连接，证据卡队列暂不可用。</span>
+          <button type="button" className="btn btn-sm" onClick={() => void load()}>重试</button>
         </div>
       )}
 
@@ -204,16 +213,41 @@ export function EvidenceReviewPanel() {
         </div>
       )}
 
-      {cards.length === 0 ? (
-        <div className="card v4-placeholder">
-          <h2><Icon name="stageEvidence" size={18} /> {tab === 'pending' ? '没有待裁决的证据卡' : '暂无记录'}</h2>
+      {loadState === 'loading' ? (
+        <div className="evidence-load-state" role="status" aria-live="polite" aria-busy="true">
+          <Icon name="retry" size={15} /> 正在读取证据卡…
+        </div>
+      ) : loadState === 'error' ? null : cards.length === 0 ? (
+        <EmptyGuide title={tab === 'pending' ? '没有待裁决的证据卡' : '暂无记录'}>
           <p>
             {tab === 'pending'
               ? 'agent 在任务中通过 save_evidence 落下的证据卡会出现在这里，等你一锤定音——AI 干活，人签字。'
               : '裁决过的证据卡会归档在这里，可随时撤销回待裁决。'}
           </p>
-        </div>
+        </EmptyGuide>
       ) : (
+        <>
+      {contradictionPairs.length > 0 && (
+        <div className="evidence-pair" role="region" aria-label="矛盾证据对照">
+          {contradictionPairs.map((pair) => (
+            <div key={pair.key} style={{ gridColumn: '1 / -1' }}>
+              <p style={{ margin: '0 0 8px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                同一论断出现支持与反驳，请对照裁决：<b>{pair.claim}</b>
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div className="evidence-pair-col">
+                  <h3>支持 {pair.supports.length}</h3>
+                  {pair.supports.map((card) => <blockquote key={card.id} className="evidence-card-excerpt">{card.excerpt || card.claim}</blockquote>)}
+                </div>
+                <div className="evidence-pair-col is-contra">
+                  <h3>反驳 {pair.contradicts.length}</h3>
+                  {pair.contradicts.map((card) => <blockquote key={card.id} className="evidence-card-excerpt">{card.excerpt || card.claim}</blockquote>)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
         <ul className="evidence-queue">
           {cards.map((card, index) => (
             <li
@@ -238,7 +272,15 @@ export function EvidenceReviewPanel() {
               <blockquote className="evidence-card-excerpt">{card.excerpt}</blockquote>
               <div className="evidence-card-meta">
                 {card.source && <span title={card.source}><Icon name="references" size={12} /> {card.source}</span>}
-                {card.page !== null && <span>p.{card.page}</span>}
+                {card.page !== null && card.referenceId ? (
+                  <button
+                    type="button"
+                    className="evidence-source-btn"
+                    onClick={(event) => { event.stopPropagation(); requestPdfOpen(card.referenceId, card.page ?? 1); }}
+                  >
+                    回原文 p.{card.page}
+                  </button>
+                ) : card.page !== null ? <span>p.{card.page}</span> : null}
                 {card.projectName && <span><Icon name="projects" size={12} /> {card.projectName}</span>}
               </div>
               <div className="evidence-card-actions">
@@ -260,6 +302,7 @@ export function EvidenceReviewPanel() {
             </li>
           ))}
         </ul>
+        </>
       )}
     </div>
   );

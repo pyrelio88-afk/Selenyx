@@ -61,6 +61,8 @@ interface PdfReaderProps {
   onClose?: () => void;
   /** 文献标题（标题栏展示） */
   title?: string;
+  /** 打开时跳到的页码（1-based，证据卡回跳） */
+  initialPage?: number;
 }
 
 interface PageViewport {
@@ -148,7 +150,7 @@ async function detectImradOutline(doc: PdfjsLibType.PDFDocumentProxy): Promise<O
   return found;
 }
 
-export function PdfReader({ source, annotations = [], onAnnotationsChange, onClose, title }: PdfReaderProps) {
+export function PdfReader({ source, annotations = [], onAnnotationsChange, onClose, title, initialPage }: PdfReaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const pageWrapRef = useRef<HTMLDivElement>(null);
@@ -224,7 +226,8 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
         if (cancelled) return;
         setDoc(d);
         setNumPages(d.numPages);
-        setPageNum(1);
+        const wanted = initialPage && initialPage >= 1 ? Math.min(initialPage, d.numPages) : 1;
+        setPageNum(wanted);
         setLoading(false);
         // R77：解析大纲目录树；R78：无大纲时回退 IMRaD 启发式识别
         try {
@@ -245,7 +248,7 @@ export function PdfReader({ source, annotations = [], onAnnotationsChange, onClo
       });
     })(); // end async IIFE
     return () => { cancelled = true; };
-  }, [source]);
+  }, [source, initialPage]);
 
   // ===== 渲染当前页（Canvas + textLayer 文本层）=====
   useEffect(() => {

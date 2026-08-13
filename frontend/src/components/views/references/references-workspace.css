@@ -337,9 +337,10 @@
 .reference-hit-actions .btn { text-decoration: none; }
 .reference-char-offset { margin-left: auto; color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; }
 
+.ref-filter-btn { display: none; }
 .references-workspace .reference-search-cluster {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-columns: 1fr;
   gap: 10px;
   margin-bottom: 12px;
   padding: 12px;
