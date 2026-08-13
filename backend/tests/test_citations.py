@@ -28,7 +28,7 @@ def seed() -> tuple[str, str, str]:
         session.refresh(project)
         accepted = EvidenceItem(
             project_id=project.id, reference_id="r1",
-            claim="集束化护理降低谵妄发生率", excerpt="ABCDE 集束…", review="accepted",
+            claim="集束化护理降低谵妄发生率", excerpt="ABCDE 集束…", review="accepted", status="accepted",
         )
         pending = EvidenceItem(
             project_id=project.id, reference_id="r2",
@@ -72,6 +72,36 @@ def test_foreign_project_ref_is_rejected(tmp_path, monkeypatch):
     assert report.invalid_ids == [accepted_id]
 
 
+def test_projectless_ref_is_rejected_without_library_fallback(tmp_path, monkeypatch):
+    """No project scope may never resolve an otherwise accepted local card."""
+    reset_backend(tmp_path, monkeypatch)
+    _, accepted_id, _ = seed()
+    with Session(get_engine()) as session:
+        report = analyze_citations(session, None, f"无项目引用[^e:{accepted_id}]。")
+    assert not report.ok
+    assert report.invalid_ids == [accepted_id]
+
+
+def test_rejected_ref_is_rejected(tmp_path, monkeypatch):
+    reset_backend(tmp_path, monkeypatch)
+    project_id, _, _ = seed()
+    with Session(get_engine()) as session:
+        rejected = EvidenceItem(
+            project_id=project_id,
+            reference_id="r3",
+            claim="已驳回",
+            excerpt="不应进入成稿",
+            review="rejected",
+            status="rejected",
+        )
+        session.add(rejected)
+        session.commit()
+        session.refresh(rejected)
+        report = analyze_citations(session, project_id, f"已驳回卡[^e:{rejected.id}]。")
+    assert not report.ok
+    assert report.invalid_ids == [rejected.id]
+
+
 def test_coverage_stats(tmp_path, monkeypatch):
     reset_backend(tmp_path, monkeypatch)
     project_id, accepted_id, pending_id = seed()
@@ -83,9 +113,10 @@ def test_coverage_stats(tmp_path, monkeypatch):
     )
     with Session(get_engine()) as session:
         report = analyze_citations(session, project_id, text)
-    assert report.ok
+    assert not report.ok
+    assert report.invalid_ids == [pending_id]
     assert report.sentences == 3
-    assert report.supported == 2
+    assert report.supported == 1
     assert report.fully_accepted == 1  # 仅 accepted 证据的句子
     assert report.unsourced == 1
-    assert abs(report.coverage - 2 / 3) < 1e-9
+    assert abs(report.coverage - 1 / 3) < 1e-9

@@ -35,7 +35,7 @@ async def lifespan(_: FastAPI):
 startup_settings = get_settings()
 app = FastAPI(
     title="Selenyx API",
-    version="0.2.0",
+    version="0.3.0",
     description="Local-first research workspace backend (SQLite + RAG + scholarly connectors).",
     lifespan=lifespan,
 )

@@ -140,6 +140,11 @@ def test_payload_column_migration_keeps_legacy_project_and_task(tmp_path, monkey
     engine = get_engine()
     with Session(engine) as session:
         session.add(ResearchProject(id="legacy-project", name="Keep me"))
+        # Foreign keys are now enforced for every SQLite connection.  The
+        # migration fixture is about dropping/re-adding payload columns, not
+        # about relying on ORM insert ordering, so make the legacy parent row
+        # durable before seeding its child task.
+        session.flush()
         session.add(KanbanTask(id="legacy-task", project_id="legacy-project", title="Keep task"))
         session.commit()
 

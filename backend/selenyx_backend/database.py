@@ -3,6 +3,7 @@
 from collections.abc import Generator
 from functools import lru_cache
 
+from sqlalchemy import event
 from sqlmodel import SQLModel, Session, create_engine
 
 from selenyx_backend.settings import get_settings
@@ -12,10 +13,19 @@ from selenyx_backend.settings import get_settings
 def get_engine():
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
-    return create_engine(
+    engine = create_engine(
         f"sqlite:///{settings.database_path.as_posix()}",
         connect_args={"check_same_thread": False},
     )
+
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_guards(dbapi_connection, _connection_record) -> None:  # noqa: ANN001
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    return engine
 
 
 def init_db() -> None:

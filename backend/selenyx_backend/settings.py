@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     embed_query_prefix: str = ""
     embed_document_prefix: str = ""
     embed_timeout_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
+    # Agent loop hard token gate. 0 = unlimited (default).
+    llm_token_budget: int = Field(default=0, ge=0)
     # OpenAlex polite pool
     openalex_mailto: str = "selenyx@research.local"
     openalex_api_key: str = ""

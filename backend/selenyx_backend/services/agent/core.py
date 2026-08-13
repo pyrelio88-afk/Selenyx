@@ -19,6 +19,7 @@ from sqlalchemy import func
 
 from selenyx_backend.models import EvidenceItem, Reference, ResearchProject
 from selenyx_backend.routers.ai import _auth_headers, _completion_content, _completion_url, llm_is_configured
+from selenyx_backend.services.agent.budget import estimate_tokens, record_usage
 from selenyx_backend.services.artifacts import list_notes as list_notes_svc
 from selenyx_backend.services.artifacts import read_note as read_note_svc
 from selenyx_backend.services.rag import semantic_search
@@ -97,9 +98,26 @@ async def complete(messages: list[dict[str, str]]) -> str:
     if response.status_code != 200:
         raise HTTPException(502, f"LLM 请求失败（HTTP {response.status_code}）。")
     try:
-        return _completion_content(response.json())
+        data = response.json()
     except ValueError as exc:
         raise HTTPException(502, "LLM 返回了无法解析的响应。") from exc
+    usage = data.get("usage") if isinstance(data, dict) else None
+    tokens = 0
+    if isinstance(usage, dict):
+        try:
+            tokens = int(usage.get("total_tokens") or 0)
+            if tokens <= 0:
+                tokens = int(usage.get("prompt_tokens") or 0) + int(usage.get("completion_tokens") or 0)
+        except (TypeError, ValueError):
+            tokens = 0
+    try:
+        text = _completion_content(data)
+    except ValueError as exc:
+        raise HTTPException(502, "LLM 返回了无法解析的响应。") from exc
+    if tokens <= 0:
+        tokens = estimate_tokens(messages, text)
+    record_usage(tokens)
+    return text
 
 
 def truncate(value: str, limit: int = 1200) -> str:
@@ -188,6 +206,7 @@ def _tool_project_context(session: Session, project_id: str | None, args: dict[s
 def _evidence_filters(project_id: str, accepted_only: bool) -> list[Any]:
     filters: list[Any] = [EvidenceItem.project_id == project_id]
     if accepted_only:
+        filters.append(EvidenceItem.status == "accepted")
         filters.append(EvidenceItem.review == "accepted")
     return filters
 

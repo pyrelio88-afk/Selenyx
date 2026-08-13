@@ -24,7 +24,7 @@ def seed_project() -> str:
         session.add(project)
         session.commit()
         session.refresh(project)
-        session.add(EvidenceItem(project_id=project.id, reference_id="r1", claim="集束化护理降低谵妄发生率", excerpt="ABCDE 集束…", review="accepted"))
+        session.add(EvidenceItem(project_id=project.id, reference_id="r1", claim="集束化护理降低谵妄发生率", excerpt="ABCDE 集束…", review="accepted", status="accepted"))
         session.commit()
         return project.id
 
@@ -56,21 +56,21 @@ async def test_loop_tool_then_final(tmp_path, monkeypatch):
     run_id = make_run("总结项目证据", project_id)
     script_llm(monkeypatch, [
         json.dumps({"thought": "先看证据", "tool": "list_evidence", "args": {"acceptedOnly": True}}),
-        json.dumps({"thought": "够了", "final": "结论：集束化护理有效。"}),
+        json.dumps({"thought": "够了", "final": "结论：集束化护理有效[^none]。"}),
     ])
     events: list[dict] = []
 
     await agent_loop.execute_run(run_id, "总结项目证据", project_id, events.append, lambda: False)
 
     kinds = [e.get("kind") for e in events if e.get("type") == "step"]
-    assert kinds == ["thought", "tool", "observation", "thought", "final"]
+    assert kinds == ["thought", "tool", "observation", "thought", "coverage", "final"]
     observation = next(e for e in events if e.get("kind") == "observation")
     assert observation["result"]["count"] == 1
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
         assert run is not None
         assert run.status == "completed"
-        assert run.output_text == "结论：集束化护理有效。"
+        assert run.output_text == "结论：集束化护理有效[^none]。"
         assert run.completed_at
         audit = json.loads(run.audit_log_json)
         assert [e["kind"] for e in audit] == kinds
@@ -90,6 +90,23 @@ async def test_loop_non_json_reply_falls_back_to_final(tmp_path, monkeypatch):
         assert run is not None
         assert run.status == "completed"
         assert run.output_text == "这是一段不遵守协议的普通回答。"
+
+
+async def test_project_scoped_small_talk_final_does_not_require_provenance(tmp_path, monkeypatch):
+    """A project context alone must not turn a greeting into a research draft."""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("你好", project_id)
+    script_llm(monkeypatch, [json.dumps({"final": "你好！我可以帮你整理接下来的任务。"})])
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "你好", project_id, events.append, lambda: False)
+
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None and run.status == "completed"
+        assert run.output_text == "你好！我可以帮你整理接下来的任务。"
+    assert not [event for event in events if event.get("kind") == "coverage"]
 
 
 async def test_loop_unknown_tool_gets_error_observation(tmp_path, monkeypatch):
@@ -138,7 +155,7 @@ async def test_plan_action_recorded_and_replayed(tmp_path, monkeypatch):
     run_id = make_run("综述现状", project_id)
     calls = script_llm(monkeypatch, [
         json.dumps({"thought": "先规划", "plan": ["摸底项目", "检索文献", "成稿"]}),
-        json.dumps({"thought": "够了", "final": "综述成稿。"}),
+        json.dumps({"thought": "够了", "final": "综述成稿[^none]。"}),
     ])
     events: list[dict] = []
 
@@ -153,7 +170,7 @@ async def test_plan_action_recorded_and_replayed(tmp_path, monkeypatch):
         run = session.get(AgentRun, run_id)
         assert run is not None and run.status == "completed"
         audit = json.loads(run.audit_log_json)
-        assert [e["kind"] for e in audit] == ["thought", "plan", "thought", "final"]
+        assert [e["kind"] for e in audit] == ["thought", "plan", "thought", "coverage", "final"]
 
 
 async def test_review_gate_revises_final(tmp_path, monkeypatch):
@@ -166,8 +183,8 @@ async def test_review_gate_revises_final(tmp_path, monkeypatch):
     run_id = make_run("写结论", project_id)
 
     main_replies = iter([
-        json.dumps({"thought": "直接成稿", "final": "草稿 v1"}),
-        json.dumps({"thought": "按意见修订", "final": "终稿 v2"}),
+        json.dumps({"thought": "直接成稿", "final": "草稿 v1[^none]。"}),
+        json.dumps({"thought": "按意见修订", "final": "终稿 v2[^none]。"}),
     ])
     calls = 0
 
@@ -189,7 +206,7 @@ async def test_review_gate_revises_final(tmp_path, monkeypatch):
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
         assert run is not None and run.status == "completed"
-        assert run.output_text == "终稿 v2"
+        assert run.output_text == "终稿 v2[^none]。"
 
 
 async def test_review_gate_off_by_default(tmp_path, monkeypatch):
@@ -203,7 +220,7 @@ async def test_review_gate_off_by_default(tmp_path, monkeypatch):
 
     async def fake_complete(messages):
         assert not any("审阅以下草稿" in m.get("content", "") for m in messages)
-        return json.dumps({"thought": "成稿", "final": "直接终稿。"})
+        return json.dumps({"thought": "成稿", "final": "直接终稿[^none]。"})
 
     monkeypatch.setattr(agent_loop, "_complete", fake_complete)
     events: list[dict] = []
@@ -213,7 +230,7 @@ async def test_review_gate_off_by_default(tmp_path, monkeypatch):
     assert not [e for e in events if e.get("kind") == "review"]
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
-        assert run is not None and run.output_text == "直接终稿。"
+        assert run is not None and run.output_text == "直接终稿[^none]。"
 
 
 async def test_observation_folding(tmp_path, monkeypatch):
@@ -320,7 +337,7 @@ async def test_max_steps_forces_wrap_up(tmp_path, monkeypatch):
     replies = [
         json.dumps({"thought": f"第 {i} 查", "tool": "list_references", "args": {}})
         for i in range(agent_loop.MAX_STEPS)
-    ] + [json.dumps({"thought": "被迫收尾", "final": "阶段性结论：证据不足。"})]
+    ] + [json.dumps({"thought": "被迫收尾", "final": "阶段性结论：证据不足[^none]。"})]
     calls = script_llm(monkeypatch, replies)
     events: list[dict] = []
 
@@ -331,7 +348,55 @@ async def test_max_steps_forces_wrap_up(tmp_path, monkeypatch):
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
         assert run is not None and run.status == "completed"
-        assert run.output_text == "阶段性结论：证据不足。"
+        assert run.output_text == "阶段性结论：证据不足[^none]。"
+
+
+async def test_max_steps_invalid_wrap_up_fails_closed(tmp_path, monkeypatch):
+    """The forced-final path must not bypass the same evidence gate."""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("超长任务", project_id)
+    replies = [
+        json.dumps({"thought": f"第 {i} 查", "tool": "list_references", "args": {}})
+        for i in range(agent_loop.MAX_STEPS)
+    ] + [json.dumps({"final": "不能放行[^e:ghost-wrap-up]。"})]
+    script_llm(monkeypatch, replies)
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "超长任务", project_id, events.append, lambda: False)
+
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None
+        assert run.status == "failed"
+        assert run.output_text == ""
+    assert any("ghost-wrap-up" in e.get("message", "") for e in events if e.get("kind") == "error")
+    assert not [e for e in events if e.get("kind") == "final"]
+
+
+async def test_max_steps_markerless_wrap_up_gets_one_repair_turn(tmp_path, monkeypatch):
+    """Forced finalization cannot bypass the one-repair marker policy."""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("撰写研究结论", project_id)
+    replies = [
+        json.dumps({"thought": f"第 {i} 查", "tool": "list_references", "args": {}})
+        for i in range(agent_loop.MAX_STEPS)
+    ] + [
+        json.dumps({"final": "集束化护理可以降低谵妄发生率。"}),
+        json.dumps({"final": "当前尚无可接受证据[^none]。"}),
+    ]
+    calls = script_llm(monkeypatch, replies)
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "撰写研究结论", project_id, events.append, lambda: False)
+
+    assert len(calls) == agent_loop.MAX_STEPS + 2
+    assert len([event for event in events if event.get("kind") == "review" and event.get("critic") == "证据门校验"]) == 1
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None and run.status == "completed"
+        assert run.output_text == "当前尚无可接受证据[^none]。"
 
 
 async def test_max_steps_wrap_up_failure_falls_back(tmp_path, monkeypatch):

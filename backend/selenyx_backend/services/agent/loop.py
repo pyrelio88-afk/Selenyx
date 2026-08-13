@@ -39,6 +39,7 @@ from selenyx_backend.services.agent.core import (
     run_tool as _run_tool,
     truncate as _truncate,
 )
+from selenyx_backend.services.agent.budget import TokenBudgetExceeded, start_budget
 from selenyx_backend.services.agent.registry import PLAN_CONFIRM_TIMEOUT_S, RunControls
 from selenyx_backend.services.agent.subagents import get_expert, run_subagent
 from selenyx_backend.services.artifacts import write_artifact as _write_artifact
@@ -47,6 +48,11 @@ from selenyx_backend.services.citations import (
     analyze_citations as _analyze_citations,
     has_evidence_markers as _has_evidence_markers,
     rejection_message as _rejection_message,
+    requires_evidence_markers as _requires_evidence_markers,
+)
+from selenyx_backend.services.evidence_appendix import (
+    EvidenceAppendixValidationError,
+    with_evidence_appendix as _with_evidence_appendix,
 )
 from selenyx_backend.services.connectors import agent_mcp_prompt
 from selenyx_backend.services.memory import (
@@ -194,6 +200,18 @@ def _record_artifact(run_id: str, entry: dict[str, Any]) -> None:
         session.commit()
 
 
+def _evidence_gate_error(operation: str, exc: EvidenceAppendixValidationError) -> dict[str, Any]:
+    """Stable tool payload for both invalid cards and omitted provenance."""
+    return {
+        "error": f"证据门拒绝{operation}：{exc}",
+        # Keep the established ids field and expose a concise alias for
+        # clients that only need to decide whether an evidence repair is due.
+        "invalidEvidenceIds": exc.report.invalid_ids,
+        "invalidEvidence": exc.report.invalid_ids,
+        "missingCitationMarkers": exc.report.missing_markers,
+    }
+
+
 async def _dispatch_tool(run_id: str, project_id: str | None, tool: str, args: dict[str, Any], record: Callable[..., None]) -> Any:
     if tool == "ask_expert":
         return await _ask_expert(project_id, args, record)
@@ -205,12 +223,45 @@ async def _dispatch_tool(run_id: str, project_id: str | None, tool: str, args: d
         return result
     # 写工具（V4 模块 B）：loop 层处理——需要 run_id 归属工件并落 audit
     if tool == "write_note":
-        result = _write_note(str(args.get("title", "")), str(args.get("content", "")))
+        content = str(args.get("content", ""))
+        try:
+            with Session(get_engine()) as session:
+                # A note containing evidence citations is a writing product,
+                # not an escape hatch: validate it and attach the same
+                # authoritative appendix as an exported artifact.
+                content = _with_evidence_appendix(
+                    session,
+                    project_id,
+                    content,
+                    require_markers=_requires_evidence_markers(
+                        content,
+                        project_id=project_id,
+                        writing_product=True,
+                    ),
+                )
+        except EvidenceAppendixValidationError as exc:
+            return _evidence_gate_error("写入笔记", exc)
+        result = _write_note(str(args.get("title", "")), content)
         if result.get("saved"):
             _record_artifact(run_id, {"kind": "note", "name": result["name"], "title": result.get("title", "")})
         return result
     if tool == "export_artifact":
-        result = _write_artifact(run_id, str(args.get("name", "")), str(args.get("content", "")))
+        content = str(args.get("content", ""))
+        try:
+            with Session(get_engine()) as session:
+                content = _with_evidence_appendix(
+                    session,
+                    project_id,
+                    content,
+                    require_markers=_requires_evidence_markers(
+                        content,
+                        project_id=project_id,
+                        writing_product=True,
+                    ),
+                )
+        except EvidenceAppendixValidationError as exc:
+            return _evidence_gate_error("导出", exc)
+        result = _write_artifact(run_id, str(args.get("name", "")), content)
         if result.get("saved"):
             _record_artifact(run_id, {"kind": "artifact", "name": result["name"], "path": result["path"]})
         return result
@@ -278,8 +329,63 @@ async def _wrap_up(messages: list[dict[str, str]], timeline: _RunTimeline, contr
     except HTTPException as exc:
         timeline.record("error", message=f"收尾调用失败：{exc.detail}")
     final_text = draft or _WRAP_UP_FALLBACK
-    timeline.record("final", text=final_text)
     return final_text
+
+
+async def _repair_final_after_evidence_rejection(
+    messages: list[dict[str, str]],
+    timeline: _RunTimeline,
+    rejection: str,
+    controls: RunControls | None = None,
+) -> str:
+    """Give a forced wrap-up the same single provenance repair turn as final."""
+    timeline.next_step()
+    _fold_observations(messages)
+    messages.append({
+        "role": "user",
+        "content": f"{rejection}\n修订后直接输出最终 JSON 动作（{{\"thought\": ..., \"final\": 修订稿}}）。",
+    })
+    reply = await _complete_cancellable(messages, controls)
+    action = _extract_action(reply)
+    thought = str(action.get("thought", "")).strip()
+    if thought:
+        timeline.record("thought", text=_truncate(thought, 600))
+    messages.append({"role": "assistant", "content": reply})
+    return str(action.get("final", "")).strip()
+
+
+def _validate_draft_citations(
+    timeline: _RunTimeline,
+    project_id: str | None,
+    goal: str,
+    draft: str,
+):
+    """Use the same provenance gate for normal and forced finalization."""
+    require_markers = _requires_evidence_markers(
+        draft,
+        project_id=project_id,
+        goal=goal,
+    )
+    if not draft or (not require_markers and not _has_evidence_markers(draft)):
+        return None
+    with Session(get_engine()) as session:
+        report = _analyze_citations(
+            session,
+            project_id,
+            draft,
+            require_markers=require_markers,
+        )
+    timeline.record(
+        "coverage",
+        sentences=report.sentences,
+        supported=report.supported,
+        fullyAccepted=report.fully_accepted,
+        unsourced=report.unsourced,
+        coverage=round(report.coverage, 4),
+        invalidEvidenceIds=report.invalid_ids,
+        missingCitationMarkers=report.missing_markers,
+    )
+    return report
 
 
 async def execute_run(
@@ -310,6 +416,9 @@ async def execute_run(
     skill_directive 注入技能指令正文，allowed_tools 裁剪本 run 的工具白名单；
     custom_instructions 为用户在设置里写的全局自定义指令。
     """
+    from selenyx_backend.settings import get_settings
+
+    start_budget(get_settings().llm_token_budget)
     timeline = _RunTimeline(run_id, emit)
     system_content = SYSTEM_PROMPT
     digest = _memory_digest(project_id)
@@ -335,7 +444,7 @@ async def execute_run(
     final_text = ""
     status = "completed"
     reviewed = False
-    citation_bounced = False  # 染色校验打回上限一次，防编造-打回死循环
+    citation_bounced = False  # One repair turn; a second invalid draft fails closed.
     plan_confirmed = False  # plan 确认门只拦首个计划
     try:
         for _ in range(MAX_STEPS):
@@ -393,35 +502,26 @@ async def execute_run(
 
             if "final" in action:
                 draft = str(action.get("final", "")).strip()
-                # 证据染色校验（V4 模块 C）：带标记的成稿先验真实性——
-                # 编造 [^e:id] 一律打回修订一次；二次仍编造则审计存证、前端染红，不再打回。
-                # 无项目 run 同样校验（scope=""）：save_evidence 要求项目上下文，
-                # 此时任何 [^e:id] 都不可能真实存在，必须打回而不是放行。
-                if draft and _has_evidence_markers(draft):
-                    with Session(get_engine()) as session:
-                        report = _analyze_citations(session, project_id or "", draft)
+                # Every [^e:id] must resolve to human-accepted evidence in
+                # this project.  One repair turn is allowed; a second failure
+                # is terminal and never becomes a final output.
+                report = _validate_draft_citations(timeline, project_id, goal, draft)
+                if report is not None and not report.ok:
+                    message = _rejection_message(report)
+                    if not citation_bounced:
+                        citation_bounced = True
+                        timeline.record("review", critic="证据门校验", text=message, error=True)
+                        messages.append({
+                            "role": "user",
+                            "content": f"{message}\n修订后重新输出最终 JSON 动作（{{\"thought\": ..., \"final\": 修订稿}}）。",
+                        })
+                        continue
+                    status = "failed"
                     timeline.record(
-                        "coverage",
-                        sentences=report.sentences,
-                        supported=report.supported,
-                        fullyAccepted=report.fully_accepted,
-                        unsourced=report.unsourced,
-                        coverage=round(report.coverage, 4),
+                        "error",
+                        message=f"成稿二次未通过证据门，未写入 final：{message}",
                     )
-                    if not report.ok:
-                        message = _rejection_message(report)
-                        if not citation_bounced:
-                            citation_bounced = True
-                            timeline.record("review", critic="证据门校验", text=message, error=True)
-                            messages.append({
-                                "role": "user",
-                                "content": f"{message}\n修订后重新输出最终 JSON 动作（{{\"thought\": ..., \"final\": 修订稿}}）。",
-                            })
-                            continue
-                        timeline.record(
-                            "error",
-                            message=f"成稿仍含未通过校验的引用：{'、'.join(report.invalid_ids)}（已按无据标记展示）",
-                        )
+                    break
                 if review and not reviewed and draft:
                     reviewed = True
                     try:
@@ -461,10 +561,34 @@ async def execute_run(
             })
         else:
             # 步数耗尽（非取消、非 final）：强制收尾一次，失败落兜底文案
-            final_text = await _wrap_up(messages, timeline, controls)
+            draft = await _wrap_up(messages, timeline, controls)
+            report = _validate_draft_citations(timeline, project_id, goal, draft)
+            if report is not None and not report.ok:
+                message = _rejection_message(report)
+                timeline.record("review", critic="证据门校验", text=message, error=True)
+                repaired = await _repair_final_after_evidence_rejection(messages, timeline, message, controls)
+                repaired_report = _validate_draft_citations(timeline, project_id, goal, repaired)
+                if not repaired or (repaired_report is not None and not repaired_report.ok):
+                    status = "failed"
+                    timeline.record(
+                        "error",
+                        message=(
+                            "收尾成稿二次未通过证据门，未写入 final："
+                            f"{_rejection_message(repaired_report) if repaired_report is not None else message}"
+                        ),
+                    )
+                else:
+                    final_text = repaired
+                    timeline.record("final", text=final_text)
+            else:
+                final_text = draft
+                timeline.record("final", text=final_text)
     except _RunCancelled:
         status = "cancelled"
         timeline.record("error", message="已被用户取消")
+    except TokenBudgetExceeded as exc:
+        status = "failed"
+        timeline.record("error", message=f"已达 token 预算硬闸（已用 {exc.used} / 上限 {exc.limit}）")
     except HTTPException as exc:
         status = "failed"
         timeline.record("error", message=str(exc.detail))
