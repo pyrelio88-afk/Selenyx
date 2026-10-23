@@ -11,7 +11,7 @@ import { ConnectorsView } from '@components/views/ConnectorsView';
 const TABS: { key: ExtensionsTab; label: string; icon: IconName }[] = [
   { key: 'experts', label: '专家', icon: 'sparkles' },
   { key: 'skills', label: '技能', icon: 'skills' },
-  { key: 'connectors', label: '连接器', icon: 'cloudNodes' },
+  { key: 'connectors', label: '连接器', icon: 'connector' },
 ];
 
 export function ExtensionsView() {

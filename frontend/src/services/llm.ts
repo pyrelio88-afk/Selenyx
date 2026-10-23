@@ -89,7 +89,7 @@ interface PreparedRequest {
 }
 
 function isOpenAICompat(p: LLMConfig['provider']): boolean {
-  return p === 'openai' || p === 'openrouter' || p === 'ollama' || p === 'agnes' || p === 'custom';
+  return p === 'openai' || p === 'openrouter' || p === 'ollama' || p === 'magpie' || p === 'agnes' || p === 'custom';
 }
 
 function prepare(config: LLMConfig, messages: LLMMessage[], stream: boolean): PreparedRequest {
@@ -307,6 +307,7 @@ export const PROVIDER_DEFAULTS: Record<LLMConfig['provider'], { baseUrl: string;
   anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5', hint: '已自动加浏览器直连头' },
   google: { baseUrl: 'https://generativelanguage.googleapis.com', model: 'gemini-2.0-flash', hint: '免费额度友好' },
   ollama: { baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b', hint: '本地运行；桌面版通过本机网关连接' },
+  magpie: { baseUrl: 'http://127.0.0.1:3425/v1', model: '', hint: '本机 Magpie；从目录选择模型' },
   agnes: { baseUrl: 'https://apihub.agnes-ai.com/v1', model: 'agnes-2.5-flash', hint: 'Agnes OpenAI 兼容网关（推荐走本地后端密钥）' },
   custom: { baseUrl: '', model: '', hint: '任何 OpenAI 兼容端点（/chat/completions）' },
 };

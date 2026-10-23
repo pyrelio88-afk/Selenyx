@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseSkillPrefix } from '@services/skills';
+import { parseSkillPrefix, resolveGoalSkill } from '@services/skills';
 
 describe('parseSkillPrefix（输入框 /技能名）', () => {
   it('解析技能名与目标', () => {
@@ -24,5 +24,19 @@ describe('parseSkillPrefix（输入框 /技能名）', () => {
 
   it('路径样式文本不误判', () => {
     expect(parseSkillPrefix('看 /usr/local 这个目录')).toEqual({ skill: null, goal: '看 /usr/local 这个目录' });
+  });
+});
+
+describe('resolveGoalSkill（加号菜单 + /前缀）', () => {
+  it('菜单显式选择的技能优先于前缀，并剥掉前缀', () => {
+    expect(resolveGoalSkill('/文献速读 帮我梳理证据', '综述')).toEqual({ skill: '综述', goal: '帮我梳理证据' });
+  });
+
+  it('未显式选择时沿用前缀技能', () => {
+    expect(resolveGoalSkill('/文献速读 帮我梳理证据', null)).toEqual({ skill: '文献速读', goal: '帮我梳理证据' });
+  });
+
+  it('显式选择技能时保留普通输入原文', () => {
+    expect(resolveGoalSkill('帮我梳理证据', '文献速读')).toEqual({ skill: '文献速读', goal: '帮我梳理证据' });
   });
 });

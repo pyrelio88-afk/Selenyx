@@ -25,7 +25,7 @@ async function bootView(viewKey) {
   await ctx.addInitScript((vk) => {
     try {
       localStorage.setItem('selenyx-v2', JSON.stringify({
-        state: { currentView: vk, mode: 'light', theme: 'paper-green' },
+        state: { currentView: vk, mode: 'light', theme: 'forest' },
         version: 0,
       }));
     } catch (e) {}

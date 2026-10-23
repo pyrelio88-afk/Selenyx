@@ -629,7 +629,7 @@ function DesignChecker() {
         研究设计自检清单——在开题/基金申请前逐项核对，确保设计严谨性。当前完成度：<strong style={{ color: pct === 100 ? 'var(--success, #21a675)' : 'var(--accent)' }}>{pct}%</strong>
       </p>
       <div style={{ height: 6, background: 'var(--bg-canvas)', borderRadius: 3, marginBottom: 16, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#21a675' : 'var(--accent)', transition: 'width 0.3s' }} />
+        <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--success)' : 'var(--accent)', transition: 'width 0.3s' }} />
       </div>
       <div style={{ display: 'grid', gap: 8 }}>
         {checks.map((c) => (

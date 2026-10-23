@@ -18,6 +18,7 @@ import { CalendarView } from '@components/datagrid/CalendarView';
 import type { Annotation } from '@apptypes/reference';
 import { useIsMobile } from '@lib/useIsMobile';
 import { usePersistentWorkbenchColumns } from '@lib/usePersistentWorkbenchColumns';
+import { rawErrorText } from '@lib/userFacingError';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { searchApi, zoteroApi, type ZoteroReferenceCandidate } from '@services/api';
 import { referenceFromZotero } from '@utils/zoteroReference';
@@ -48,6 +49,7 @@ export function ReferencesView() {
     referenceSyncStatus, referenceSyncMessage,
     projects, currentProjectId,
     pendingPdfOpen, clearPendingPdfOpen,
+    pendingReferenceId, clearPendingReferenceOpen,
   } = useAppStore();
   const [filterType, setFilterType] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -74,6 +76,7 @@ export function ReferencesView() {
   const [zoteroCandidates, setZoteroCandidates] = useState<ZoteroReferenceCandidate[]>([]);
   const [zoteroSelected, setZoteroSelected] = useState<Set<string>>(new Set());
   const [zoteroMessage, setZoteroMessage] = useState('');
+  const [zoteroErrorDetail, setZoteroErrorDetail] = useState('');
   // A1 导出预览弹窗（先在应用内展示，支持复制或另存）
   const [exportPreview, setExportPreview] = useState<{ format: string; content: string; referenceCount: number } | null>(null);
   // A2 删除二次确认（使用应用内确认弹窗）
@@ -120,6 +123,17 @@ export function ReferencesView() {
     }
     clearPendingPdfOpen();
   }, [pendingPdfOpen, references, flashToast, clearPendingPdfOpen]);
+
+  useEffect(() => {
+    if (!pendingReferenceId) return;
+    if (references.some((reference) => reference.id === pendingReferenceId)) {
+      setSelectedId(pendingReferenceId);
+      setPdfSource(null);
+      setPdfRefId(null);
+      setWebViewerUrl(null);
+    }
+    clearPendingReferenceOpen();
+  }, [pendingReferenceId, references, clearPendingReferenceOpen]);
 
   useEffect(() => {
     if (!confirmDeleteId || isMobile) return;
@@ -405,6 +419,7 @@ export function ReferencesView() {
     setZoteroLoading(true);
     setZoteroCandidates([]);
     setZoteroSelected(new Set());
+    setZoteroErrorDetail('');
     setZoteroMessage('正在检查本机 Zotero…');
     try {
       await zoteroApi.status();
@@ -417,9 +432,9 @@ export function ReferencesView() {
           : 'Zotero 可连接，但没有可导入的顶层文献条目。',
       );
     } catch (error) {
+      setZoteroErrorDetail(rawErrorText(error));
       setZoteroMessage(
-        `${error instanceof Error ? error.message : '无法连接本机 Zotero'} `
-        + '请启动 Zotero，并在“设置 → 高级”启用“允许本机其他应用与 Zotero 通信”；也可改用 BibTeX/RIS 文件导入。',
+        '无法读取本机 Zotero 条目。请启动 Zotero，并在“设置 → 高级”启用“允许本机其他应用与 Zotero 通信”；也可改用 BibTeX/RIS 文件导入。',
       );
     } finally {
       setZoteroLoading(false);
@@ -580,8 +595,8 @@ export function ReferencesView() {
       <div className="view-header">
         <div className="reference-view-heading">
           <div>
-            <h1 className="view-title">文献库 / 证据检索与 RAG</h1>
-            <p className="reference-view-description">左栏筛选文献，中栏读摘要与原文，右栏做本机证据检索；模型不会把空结果编成证据。</p>
+            <h1 className="view-title">文献库</h1>
+            <p className="reference-view-description">管理文献、阅读原文，核对研究中的每一条证据。</p>
             <div role="status" title={referenceSyncMessage} className={`reference-header-status is-${referenceSyncStatus}`}>
               {referenceSyncStatus === 'synced' ? 'SQLite 文献库已同步' : referenceSyncStatus === 'syncing' ? '正在同步 SQLite' : referenceSyncStatus === 'offline' ? '本机后端离线，仅使用缓存' : referenceSyncStatus === 'error' ? '同步异常，仅使用缓存' : '等待本机后端同步'}
             </div>
@@ -731,7 +746,7 @@ export function ReferencesView() {
                 {r.tags.length > 0 && (
                   <div className="scroll-x" style={{ display: 'flex', gap: 4, flex: 1, marginLeft: 8 }}>
                     {r.tags.slice(0, 4).map((t) => (
-                      <span key={t} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{t}</span>
+                      <span key={t} style={{ fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{t}</span>
                     ))}
                   </div>
                 )}
@@ -763,18 +778,18 @@ export function ReferencesView() {
             <thead>
               <tr>
                 <th className="sortable-th" onClick={() => toggleSort('title')} style={{ cursor: 'pointer' }}>
-                  {FIELD_LABELS.title}{sortField === 'title' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  {FIELD_LABELS.title}{sortField === 'title' && <span style={{ fontSize: 'var(--font-xs)', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                 </th>
                 <th>{FIELD_LABELS.creators}</th>
                 <th>{FIELD_LABELS.publication}</th>
                 <th className="sortable-th" onClick={() => toggleSort('year')} style={{ cursor: 'pointer' }}>
-                  {FIELD_LABELS.year}{sortField === 'year' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  {FIELD_LABELS.year}{sortField === 'year' && <span style={{ fontSize: 'var(--font-xs)', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                 </th>
                 <th className="sortable-th" onClick={() => toggleSort('doi')} style={{ cursor: 'pointer' }}>
-                  DOI{sortField === 'doi' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  DOI{sortField === 'doi' && <span style={{ fontSize: 'var(--font-xs)', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                 </th>
                 <th className="sortable-th" onClick={() => toggleSort('readStatus')} style={{ cursor: 'pointer' }}>
-                  状态{sortField === 'readStatus' && <span style={{ fontSize: 10, marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  状态{sortField === 'readStatus' && <span style={{ fontSize: 'var(--font-xs)', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                 </th>
                 <th style={{ width: 140 }}>操作</th>
               </tr>
@@ -899,7 +914,7 @@ export function ReferencesView() {
               <Icon name="link" size={14} /> 新窗口打开
             </a>
           </div>
-          <div style={{ padding: '6px 16px', fontSize: 11.5, color: 'var(--text-muted)', background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ padding: '6px 16px', fontSize: 'var(--font-xs)', color: 'var(--text-muted)', background: 'var(--bg-canvas)', borderBottom: '1px solid var(--border)' }}>
             提示：多数期刊网站禁止被嵌入，若下方空白请点「新窗口打开」；本地 PDF 全文请用「获取全文」在阅读器中查看。
           </div>
           <iframe
@@ -943,7 +958,7 @@ export function ReferencesView() {
               <button className="icon-btn" onClick={() => setZoteroOpen(false)} aria-label="关闭 Zotero 导入"><Icon name="close" size={18} /></button>
             </div>
             <div style={{ padding: 20 }}>
-              <div role="status" style={{ fontSize: 12.5, color: zoteroCandidates.length ? 'var(--text-secondary)' : 'var(--text-muted)', marginBottom: 12 }}>{zoteroMessage}</div>
+              <div role="status" title={zoteroErrorDetail || undefined} style={{ fontSize: 'var(--font-sm)', color: zoteroCandidates.length ? 'var(--text-secondary)' : 'var(--text-muted)', marginBottom: 12 }}>{zoteroMessage}</div>
               {zoteroLoading && <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>正在读取候选文献…</div>}
               {!zoteroLoading && zoteroCandidates.length > 0 && (
                 <>
@@ -966,7 +981,7 @@ export function ReferencesView() {
                         />
                         <span>
                           <strong style={{ display: 'block', fontSize: 13 }}>{candidate.title || '[无标题]'}</strong>
-                          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                          <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
                             {[candidate.creators.map((creator) => creator.lastName || creator.firstName).filter(Boolean).join(', '), candidate.publication, candidate.year, candidate.doi].filter(Boolean).join(' · ')}
                           </span>
                         </span>
@@ -1054,7 +1069,7 @@ export function ReferencesView() {
       {isMobile && exportPreview && (
         <BottomSheet open onClose={() => setExportPreview(null)} title={`导出 ${exportPreview.format}`}>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>共 {exportPreview.referenceCount} 条文献</p>
-          <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ width: '100%', height: 280, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.6, resize: 'none' }} />
+          <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ width: '100%', height: 280, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-sm)', lineHeight: 1.6, resize: 'none' }} />
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button className="btn btn-primary" style={{ flex: 1, height: 48 }} onClick={handleExportCopy}><Icon name="import" size={18} /> 复制全部</button>
             <button className="btn" style={{ height: 48 }} onClick={handleExportDownload}><Icon name="download" size={18} /> 下载</button>
@@ -1091,7 +1106,7 @@ export function ReferencesView() {
               <h3 style={{ fontSize: 16, fontWeight: 600 }}>导出 {exportPreview.format} · {exportPreview.referenceCount} 条文献</h3>
               <button className="icon-btn" onClick={() => setExportPreview(null)} aria-label="关闭"><Icon name="close" size={18} /></button>
             </div>
-            <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ flex: 1, margin: 16, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.6, resize: 'none', minHeight: 200 }} />
+            <textarea id="export-textarea" readOnly value={exportPreview.content} style={{ flex: 1, margin: 16, padding: 12, background: 'var(--bg-canvas)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-sm)', lineHeight: 1.6, resize: 'none', minHeight: 200 }} />
             <div style={{ display: 'flex', gap: 8, padding: '0 20px 16px', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" onClick={handleExportCopy}><Icon name="import" size={15} /> 复制全部</button>
               <button className="btn" onClick={handleExportDownload}><Icon name="download" size={15} /> 下载 .{exportPreview.format === 'RIS' ? 'ris' : 'bib'}</button>

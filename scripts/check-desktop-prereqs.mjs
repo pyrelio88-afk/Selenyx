@@ -123,9 +123,16 @@ try {
 }
 
 const msvcLinkerAvailable = process.platform !== 'win32' || (() => {
-  const probe = spawnSync('where', ['link.exe'], { encoding: 'utf8', shell: false, env: environment });
-  const buildToolsRoot = join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Microsoft Visual Studio', '2022', 'BuildTools', 'VC', 'Tools', 'MSVC');
-  return (!probe.error && probe.status === 0 && /Microsoft Visual Studio/i.test(probe.stdout)) || existsSync(buildToolsRoot);
+  const vswhere = join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
+  const probe = spawnSync(vswhere, [
+    '-latest', '-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64',
+    '-property', 'installationPath',
+  ], { encoding: 'utf8', shell: false, env: environment });
+  if (probe.error || probe.status !== 0 || !probe.stdout.trim()) return false;
+  const toolsRoot = join(probe.stdout.trim(), 'VC', 'Tools', 'MSVC');
+  return existsSync(toolsRoot) && readdirSync(toolsRoot).some((version) =>
+    existsSync(join(toolsRoot, version, 'bin', 'Hostx64', 'x64', 'link.exe')),
+  );
 })();
 
 if (!msvcLinkerAvailable) missing.push('Visual Studio C++ Build Tools (MSVC linker: link.exe)');

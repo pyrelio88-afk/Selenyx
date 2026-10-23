@@ -1,350 +1,476 @@
-/**
- * 新建任务主页（v4 · ClawsGO 式）
- *
- * 时段问候语 + 任务模板卡（点击填入输入框）+ 底部任务输入框。
- * 提交即创建 agent run 并跳任务详情；下方保留最近运行动态。
- * 侧边栏不再设「任务」一级项——本页即任务入口。
- */
-
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppStore } from '@stores/appStore';
-import { Icon, type IconName } from '@components/ui/Icon';
+import { Icon } from '@components/ui/Icon';
+import { Crane } from '@components/ui/Crane';
 import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
 import { agentApi, type AgentRunSummary } from '@services/agent';
-import { parseSkillPrefix } from '@services/skills';
-import { evidenceApi } from '@services/api';
+import { skillsApi, resolveGoalSkill, type AgentSkill } from '@services/skills';
+import { polishResearchPrompt, splitPolishInput } from '@services/promptPolish';
+import { aiApi, evidenceApi } from '@services/api';
 import { Composer } from '@components/assistant/Composer';
-import { handoffNewTaskToAssistant } from '@components/assistant/handoffNewTask';
 import { withReplyStyle } from '@components/assistant/chatShared';
+import { TASK_RECIPE_OPTIONS, recipeOption } from '@lib/taskRecipes';
+import { serviceErrorMessage } from '@lib/userFacingError';
 
-interface TaskTemplate {
-  icon: IconName;
-  title: string;
-  desc: string;
-  prompt: string;
-  review: boolean;
-  /** 内置流水线（V4 模块 E）：综述流水线 = 综述员起草→批评员审→修订→染色成稿 */
-  recipe?: string;
+const ADD_MENU_WIDTH = 328;
+const ADD_MENU_WIDTH_WIDE = 600;
+
+interface AddMenuPosition {
+  top?: number;
+  bottom?: number;
+  left: number;
+  width: number;
+  maxHeight: number;
 }
 
-const TEMPLATES: TaskTemplate[] = [
-  {
-    icon: 'stageLiterature',
-    title: '文献综述',
-    desc: '系统检索与评估，梳理领域研究现状与证据。',
-    prompt: '帮我梳理这个项目文献库的核心证据，产出一份结构化综述提纲（含研究缺口）。',
-    review: true,
-    recipe: 'review-pipeline',
-  },
-  {
-    icon: 'stageEvidence',
-    title: '证据梳理',
-    desc: '提取关键证据，建立结构化证据表格。',
-    prompt: '盘点当前项目的证据链：哪些主张证据充分，哪些还缺支撑？给出补强建议。',
-    review: false,
-  },
-  {
-    icon: 'stageWriting',
-    title: '论文提纲',
-    desc: '构建论文结构与论点，形成写作提纲。',
-    prompt: '基于项目资料生成论文提纲：背景、方法、结果、讨论，每节列出要点与所需证据。',
-    review: true,
-  },
-  {
-    icon: 'chart',
-    title: '数据解读',
-    desc: '分析数据与可视化，提炼结论与洞察。',
-    prompt: '解读项目数据表中的关键结果：主要发现、异常值、可以写进论文的结论。',
-    review: false,
-  },
-];
-
-function greeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 6) return '夜深了';
-  if (hour < 12) return '上午好';
-  if (hour < 14) return '中午好';
-  if (hour < 18) return '下午好';
-  return '晚上好';
-}
-
-export function NewTaskHome({
-  onStarted,
-}: {
-  onStarted?: (goal: string, projectId: string | null, runId: string) => void;
+export function NewTaskHome({ onStarted }: {
+  onStarted?: (runId: string, projectId: string | null) => void;
 } = {}) {
-  const { projects, currentProjectId, nickname, setView, setLibraryTab, customInstructions, replyStyle, llmConfig, openSettings, requestRunFocus } = useAppStore();
+  const { projects, currentProjectId, setView, setLibraryTab, customInstructions, replyStyle, settingsOpen, openSettings, requestRunFocus } = useAppStore();
   const [goal, setGoal] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
+  const [projectId, setProjectId] = useState(currentProjectId ?? '');
   const [review, setReview] = useState(false);
-  const [confirmPlan, setConfirmPlan] = useState(false);
+  const [confirmPlan, setConfirmPlan] = useState(true);
+  const [backendModel, setBackendModel] = useState<{ configured: boolean; model: string } | null>(null);
   const [recipe, setRecipe] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [backendOffline, setBackendOffline] = useState(false);
+  const [checkingBackend, setCheckingBackend] = useState(true);
+  const [error, setError] = useState('');
   const [recent, setRecent] = useState<AgentRunSummary[]>([]);
   const [pendingEvidence, setPendingEvidence] = useState(0);
-  const attachInputRef = useRef<HTMLInputElement>(null);
 
-  const activeProjects = projects.filter((p) => p.status !== 'archived');
+  const [addOpen, setAddOpen] = useState(false);
+  const [addPosition, setAddPosition] = useState<AddMenuPosition | null>(null);
+  const [addAtEnd, setAddAtEnd] = useState(false);
+  const [skills, setSkills] = useState<AgentSkill[]>([]);
+  const [skillsState, setSkillsState] = useState<'loading' | 'ready' | 'offline'>('loading');
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [polishing, setPolishing] = useState(false);
+  const [prePolishGoal, setPrePolishGoal] = useState<string | null>(null);
+
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const goalRef = useRef<HTMLTextAreaElement>(null);
+  const preflightRef = useRef<AbortController | null>(null);
+  const addTriggerRef = useRef<HTMLButtonElement>(null);
+  const addAnchorRef = useRef<HTMLDivElement>(null);
+  const addPopoverRef = useRef<HTMLDivElement>(null);
+  const addRestoreFocusRef = useRef(false);
+  const polishAbortRef = useRef<AbortController | null>(null);
+  const activeProjects = projects.filter((project) => project.status !== 'archived');
+  const selectedProject = activeProjects.find((project) => project.id === projectId);
+  const activeRecipe = recipeOption(recipe);
+  const reviewForced = activeRecipe?.forcesReview ?? false;
+  const addConfigured = Boolean(activeRecipe || selectedSkill || review || !confirmPlan);
+  const polishTarget = splitPolishInput(goal).target;
 
   const loadRecent = useCallback(async () => {
+    preflightRef.current?.abort();
+    const request = new AbortController();
+    preflightRef.current = request;
+    setCheckingBackend(true);
     try {
-      const { runs } = await agentApi.list();
-      setRecent(runs.slice(0, 6));
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(8000)]);
+      const [{ runs }, model] = await Promise.all([
+        agentApi.list(signal),
+        aiApi.config(signal).catch(() => null),
+      ]);
+      if (request.signal.aborted) return;
+      setRecent(runs.slice(0, 4));
+      setBackendModel(model);
       setBackendOffline(false);
     } catch {
-      setBackendOffline(true);
+      if (!request.signal.aborted) { setBackendOffline(true); setBackendModel(null); }
+    } finally {
+      if (!request.signal.aborted) setCheckingBackend(false);
     }
   }, []);
 
-  useEffect(() => { void loadRecent(); }, [loadRecent]);
+  const loadSkills = useCallback(async () => {
+    setSkillsState('loading');
+    try {
+      const { skills: list } = await skillsApi.list(projectId || undefined);
+      setSkills(list.filter((skill) => skill.enabled));
+      setSkillsState('ready');
+    } catch {
+      setSkills([]);
+      setSkillsState('offline');
+    }
+  }, [projectId]);
 
-  /* 证据门角标：待裁决证据卡计数（朱砂点睛） */
+  useEffect(() => {
+    if (!settingsOpen) void loadRecent();
+    return () => { preflightRef.current?.abort(); };
+  }, [loadRecent, settingsOpen]);
+
+  useEffect(() => {
+    void loadSkills();
+  }, [loadSkills]);
+
+  useEffect(() => {
+    if (skillsState !== 'ready' || !selectedSkill) return;
+    if (!skills.some((skill) => skill.name === selectedSkill)) setSelectedSkill(null);
+  }, [selectedSkill, skills, skillsState]);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
         const summary = await evidenceApi.summary();
         if (!cancelled) setPendingEvidence(Number(summary.pending ?? 0));
-      } catch { /* 后端离线时不显示角标 */ }
+      } catch { /* Evidence counts are unavailable offline. */ }
     };
     void load();
     const timer = window.setInterval(load, 15000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, []);
 
-  const openEvidenceQueue = () => {
-    setLibraryTab('evidence');
-    setView('library');
-  };
+  useEffect(() => () => polishAbortRef.current?.abort(), []);
 
-  const applyTemplate = (template: TaskTemplate) => {
-    setGoal(template.prompt);
-    setSelectedTemplate(template.title);
-    setReview(template.review);
-    setRecipe(template.recipe);
-  };
+  const updateAddPosition = useCallback(() => {
+    const rect = (addTriggerRef.current ?? addAnchorRef.current)?.getBoundingClientRect();
+    if (!rect) return;
+    const gutter = 10;
+    const preferredWidth = window.innerWidth >= 760 ? ADD_MENU_WIDTH_WIDE : ADD_MENU_WIDTH;
+    const width = Math.min(preferredWidth, Math.max(0, window.innerWidth - gutter * 2));
+    const left = Math.min(Math.max(rect.left, gutter), Math.max(gutter, window.innerWidth - width - gutter));
+    const topbarBottom = document.querySelector('.workspace-topbar')?.getBoundingClientRect().bottom ?? 0;
+    const maxHeight = Math.max(0, Math.min(480, rect.top - topbarBottom - gutter - 8));
+    if (!maxHeight) return;
+    setAddPosition({
+      bottom: Math.round(window.innerHeight - rect.top + 8),
+      left: Math.round(left),
+      width,
+      maxHeight,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!addOpen) return;
+    setAddAtEnd(false);
+    updateAddPosition();
+    window.addEventListener('resize', updateAddPosition);
+    window.addEventListener('scroll', updateAddPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateAddPosition);
+      window.removeEventListener('scroll', updateAddPosition, true);
+    };
+  }, [addOpen, updateAddPosition, goal]);
+
+  useEffect(() => {
+    if (!addOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      addRestoreFocusRef.current = true;
+      setAddOpen(false);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (addTriggerRef.current?.contains(target) || addPopoverRef.current?.contains(target)) return;
+      setAddOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('pointerdown', onPointerDown);
+    const frame = window.requestAnimationFrame(() => {
+      addPopoverRef.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
+    });
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('pointerdown', onPointerDown);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [addOpen]);
+
+  useEffect(() => {
+    if (addOpen || !addRestoreFocusRef.current) return;
+    addRestoreFocusRef.current = false;
+    addTriggerRef.current?.focus();
+  }, [addOpen]);
 
   const updateGoal = (nextGoal: string) => {
     setGoal(nextGoal);
-    if (selectedTemplate && nextGoal !== TEMPLATES.find((template) => template.title === selectedTemplate)?.prompt) {
-      setSelectedTemplate(null);
+    setPrePolishGoal(null);
+  };
+
+  const toggleAddMenu = () => {
+    setAddOpen((open) => {
+      if (!open && skillsState === 'offline') void loadSkills();
+      return !open;
+    });
+  };
+
+  const chooseRecipe = (key: string | undefined) => {
+    setRecipe(key);
+    if (key && recipeOption(key)?.forcesReview) setReview(true);
+  };
+
+  const chooseSkill = (name: string) => {
+    const next = selectedSkill === name ? null : name;
+    setSelectedSkill(next);
+    if (next) {
+      setAddOpen(false);
+      goalRef.current?.focus();
     }
   };
 
-  /* 附件（设计稿 📎）：文本类材料读入本地并附进任务目标，不出本机 */
-  const ATTACH_MAX_CHARS = 8000;
+  const manageSkills = () => {
+    setAddOpen(false);
+    setView('skills');
+  };
+
   const attachFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
       const raw = typeof reader.result === 'string' ? reader.result : '';
-      const truncated = raw.length > ATTACH_MAX_CHARS;
-      const excerpt = raw.slice(0, ATTACH_MAX_CHARS).trim();
-      if (!excerpt) {
-        alert(`「${file.name}」没有可读取的文本内容。`);
-        return;
-      }
-      const block = `\n\n【附加材料：${file.name}】\n${excerpt}${truncated ? '\n…（材料较长，已截取前 8000 字）' : ''}`;
-      updateGoal(`${goal.trimEnd()}${block}`);
+      const excerpt = raw.slice(0, 8000).trim();
+      if (!excerpt) { setError(`「${file.name}」没有可读取的文本内容。`); return; }
+      const block = `\n\n【附加材料：${file.name}】\n${excerpt}${raw.length > 8000 ? '\n…（材料较长，已截取前 8000 字）' : ''}`;
+      setGoal((current) => `${current.trimEnd()}${block}`);
+      setPrePolishGoal(null);
+      setError('');
+      goalRef.current?.focus();
     };
-    reader.onerror = () => alert(`读取「${file.name}」失败，请确认是可读文本文件。`);
+    reader.onerror = () => setError(`无法读取「${file.name}」，请选择文本文件。`);
     reader.readAsText(file);
+  };
+
+  const polishGoal = async () => {
+    const text = goal.trim();
+    if (!text || !splitPolishInput(text).target || polishing || submitting || backendOffline || checkingBackend) return;
+    polishAbortRef.current?.abort();
+    const request = new AbortController();
+    polishAbortRef.current = request;
+    setPolishing(true);
+    setError('');
+    try {
+      const polished = await polishResearchPrompt(text, selectedProject?.id ?? null, request.signal);
+      if (request.signal.aborted) return;
+      setPrePolishGoal(goal);
+      setGoal(polished);
+      goalRef.current?.focus();
+    } catch (cause) {
+      if (!request.signal.aborted) {
+        setError(`提示词优化失败：${serviceErrorMessage(cause, '请稍后重试。')}`);
+      }
+    } finally {
+      if (polishAbortRef.current === request) polishAbortRef.current = null;
+      if (!request.signal.aborted) setPolishing(false);
+    }
+  };
+
+  const undoPolish = () => {
+    if (prePolishGoal === null) return;
+    setGoal(prePolishGoal);
+    setPrePolishGoal(null);
+    goalRef.current?.focus();
   };
 
   const submit = async () => {
     const text = goal.trim();
-    if (!text || submitting) return;
+    if (!text || submitting || backendOffline || checkingBackend) return;
     setSubmitting(true);
+    setError('');
     try {
-      // 输入框 /技能名 前缀（模块 F）：解析后随 run 注入指令并裁剪工具白名单
-      const parsed = parseSkillPrefix(text);
-      const { runId } = await agentApi.start(parsed.goal, projectId || null, {
-        review,
-        confirmPlan,
-        recipe,
-        skill: parsed.skill,
+      const { goal: goalText, skill } = resolveGoalSkill(text, selectedSkill);
+      const linkedProjectId = selectedProject?.id ?? null;
+      const { runId } = await agentApi.start(goalText, linkedProjectId, {
+        review, confirmPlan, recipe, skill,
         customInstructions: withReplyStyle(customInstructions, replyStyle),
       });
       setGoal('');
-      if (onStarted) {
-        onStarted(parsed.goal, projectId || null, runId);
-      } else {
-        handoffNewTaskToAssistant(parsed.goal, projectId || null, runId);
-      }
-    } catch (error) {
-      setBackendOffline(true);
-      alert(`任务创建失败：${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setSubmitting(false);
-    }
+      setPrePolishGoal(null);
+      if (onStarted) onStarted(runId, linkedProjectId);
+      else requestRunFocus(runId);
+    } catch (cause) {
+      setError(`任务未能创建：${serviceErrorMessage(cause, '请稍后重试。')}`);
+    } finally { setSubmitting(false); }
   };
 
-  return (
-    <div className="newtask-home">
-      {pendingEvidence > 0 && (
-        <button
-          type="button"
-          className="evidence-pending-badge"
-          onClick={openEvidenceQueue}
-          title="前往证据卡队列裁决"
-        >
-          <span className="dot" aria-hidden="true" /> 待证据梳理 {pendingEvidence}
-          <Icon name="chevronRight" size={13} />
-        </button>
-      )}
-
-      <header className="newtask-hero">
-        <h1>{greeting()}，{nickname || '研究者'}</h1>
-        <p>从一个可信的研究问题开始，让每个结论都能回到证据。</p>
-      </header>
-
-      {backendOffline && (
-        <div role="alert" className="local-offline-alert">
-          本机后端还没连上。桌面版会自动拉起；开发时在本机启动后端即可。
-        </div>
-      )}
-
-      <section className="newtask-workflow" aria-labelledby="newtask-workflow-heading">
-        <h2 id="newtask-workflow-heading">从常用研究任务开始</h2>
-        <div className="newtask-templates">
-          {TEMPLATES.map((template) => (
-            <button
-              key={template.title}
-              type="button"
-              className={`newtask-template ${selectedTemplate === template.title ? 'is-selected' : ''}`}
-              onClick={() => applyTemplate(template)}
-              aria-pressed={selectedTemplate === template.title}
-            >
-              <span className="newtask-template-icon"><Icon name={template.icon} size={28} /></span>
-              <span className="newtask-template-title">{template.title}</span>
-              <span className="newtask-template-desc">{template.desc}</span>
-              <span className="newtask-template-arrow" aria-hidden="true"><Icon name="arrowRight" size={18} /></span>
+  const addMenu = addOpen && addPosition ? createPortal((
+    <div
+      ref={addPopoverRef}
+      id="newtask-add-menu"
+      className="newtask-add-popover"
+      role="dialog"
+      aria-label="任务设置"
+      style={{ position: 'fixed', ...addPosition }}
+      onScroll={(event) => {
+        const panel = event.currentTarget;
+        setAddAtEnd(panel.scrollHeight - panel.scrollTop - panel.clientHeight <= 8);
+      }}
+    >
+      <section className="newtask-add-section newtask-add-flows" aria-label="研究流程">
+        <div className="newtask-add-heading">研究流程</div>
+        <div role="radiogroup" aria-label="研究流程">
+          <button type="button" role="radio" aria-checked={!recipe} className="newtask-add-option"
+            onClick={() => chooseRecipe(undefined)}>
+            <Icon name="sparkles" size={16} />
+            <span className="newtask-add-copy"><strong>标准执行</strong><small>按当前目标直接执行，不追加流程指令</small></span>
+            <Icon name="check" size={15} className="newtask-add-check" />
+          </button>
+          {TASK_RECIPE_OPTIONS.map((option) => (
+            <button key={option.key} type="button" role="radio" aria-checked={recipe === option.key}
+              className="newtask-add-option" onClick={() => chooseRecipe(option.key)}>
+              <Icon name={option.icon} size={16} />
+              <span className="newtask-add-copy"><strong>{option.name}</strong><small>{option.hint}</small></span>
+              <Icon name="check" size={15} className="newtask-add-check" />
             </button>
           ))}
         </div>
       </section>
 
+      <section className="newtask-add-section newtask-add-options" aria-label="执行选项">
+        <div className="newtask-add-heading">执行选项</div>
+        <button type="button" role="switch" aria-checked={confirmPlan} className="newtask-add-option"
+          onClick={() => setConfirmPlan((value) => !value)}>
+          <Icon name="target" size={16} />
+          <span className="newtask-add-copy"><strong>执行前确认计划</strong><small>先审阅执行计划，再开始动手</small></span>
+          <span className="newtask-add-switch" aria-hidden="true" />
+        </button>
+        <button type="button" role="switch" aria-checked={review} className="newtask-add-option"
+          disabled={reviewForced} onClick={() => setReview((value) => !value)}>
+          <Icon name="shield" size={16} />
+          <span className="newtask-add-copy">
+            <strong>成稿前批评审查</strong>
+            <small>{reviewForced ? '综述流水线已强制开启' : '额外 1–2 次模型调用，先批评再成稿'}</small>
+          </span>
+          <span className="newtask-add-switch" aria-hidden="true" />
+        </button>
+      </section>
+
+      <section className="newtask-add-section newtask-add-skills" aria-label="科研技能">
+        <div className="newtask-add-heading">
+          科研技能
+          <button type="button" className="newtask-add-manage" onClick={manageSkills}>管理</button>
+        </div>
+        {skillsState === 'loading' && <p className="newtask-add-note">正在读取本机技能…</p>}
+        {skillsState === 'offline' && (
+          <p className="newtask-add-note">本机服务未连接，技能暂不可用。<button type="button" onClick={() => void loadSkills()}>重试</button></p>
+        )}
+        {skillsState === 'ready' && skills.length === 0 && (
+          <p className="newtask-add-note">还没有技能。<button type="button" onClick={manageSkills}>新建技能</button></p>
+        )}
+        {skillsState === 'ready' && skills.map((skill) => (
+          <button key={`${skill.scope}-${skill.name}`} type="button" className="newtask-add-option"
+            aria-pressed={selectedSkill === skill.name} onClick={() => chooseSkill(skill.name)}
+            title={skill.description || skill.name}>
+            <Icon name="skills" size={16} />
+            <span className="newtask-add-copy"><strong>/{skill.name}</strong><small>{skill.description || '本机研究技能'}</small></span>
+            <Icon name="check" size={15} className="newtask-add-check" />
+          </button>
+        ))}
+      </section>
+
+      <div className={`newtask-add-scroll-hint${addAtEnd ? ' is-hidden' : ''}`} aria-hidden="true">
+        <Icon name="chevronDown" size={13} /> 滚动查看更多
+      </div>
+    </div>
+  ), document.body) : null;
+
+  return (
+    <div className={`newtask-home${addOpen ? ' has-add-menu' : ''}`}>
+      <header className="newtask-hero">
+        <Crane size={48} className="newtask-crane" />
+        <div className="newtask-hero-copy">
+          <h1>{selectedProject ? '继续这项研究' : '开始研究'}</h1>
+          {selectedProject && <p>{selectedProject.name}</p>}
+        </div>
+      </header>
+
       <div className="newtask-composer-stage">
-        <Composer
-          value={goal}
-          onChange={updateGoal}
-          onSubmit={() => void submit()}
-          ariaLabel="任务目标"
-          placeholder="一句话开始干活，例如：帮我梳理这个项目文献库里关于谵妄预防的证据"
-          rows={3}
-          className="newtask-composer"
-          inputWrapClassName="newtask-composer-input-wrap"
-          inputRowClassName="newtask-composer-input-row"
-          textareaClassName="newtask-composer-textarea"
+        <Composer value={goal} onChange={updateGoal} onSubmit={() => void submit()} textareaRef={goalRef}
+          ariaLabel="任务目标" placeholder="你想研究什么？输入问题，或附上一份材料…" rows={3} autoResize maxHeight={220}
+          className="newtask-composer" inputWrapClassName="newtask-composer-input-wrap"
+          inputRowClassName="newtask-composer-input-row" textareaClassName="newtask-composer-textarea"
           controls={(
-            <div className="newtask-composer-controls" aria-label="任务配置">
+            <div ref={addAnchorRef} className="newtask-composer-controls" aria-label="任务配置">
               <div className="newtask-composer-settings">
-                <label className="newtask-project-control">
-                  <Icon name="projects" size={16} />
-                  <span>选择项目</span>
-                  <select value={projectId} onChange={(event) => setProjectId(event.target.value)} aria-label="选择项目">
+                <button ref={addTriggerRef} type="button" className="newtask-attach newtask-add-trigger"
+                  onClick={toggleAddMenu} aria-haspopup="dialog" aria-expanded={addOpen}
+                  aria-controls={addOpen ? 'newtask-add-menu' : undefined}
+                  aria-label="任务设置" title="研究流程、计划确认与科研技能">
+                  <Icon name="plus" size={18} />
+                  {addConfigured && <span className="newtask-add-dot" aria-hidden="true" />}
+                </button>
+                <button type="button" className="newtask-attach" onClick={() => attachInputRef.current?.click()}
+                  aria-label="附加文本材料" title="添加文本材料（最多 8000 字，提交时发送给所选模型）"><Icon name="paperclip" size={18} /></button>
+                <input ref={attachInputRef} type="file" accept=".txt,.md,.markdown,.csv,.tsv,.json,text/plain,text/markdown,text/csv,application/json" hidden
+                  onChange={(event) => { const file = event.target.files?.[0]; if (file) attachFile(file); event.target.value = ''; }} />
+                <label className="newtask-project-control" title={selectedProject?.name ?? '为任务关联一个研究项目'}>
+                  <Icon name="projects" size={15} /><span>{selectedProject?.name ?? '选择项目'}</span><Icon name="chevronDown" size={12} />
+                  <select value={selectedProject?.id ?? ''} onChange={(event) => setProjectId(event.target.value)} aria-label="选择项目">
                     <option value="">不关联项目</option>
-                    {activeProjects.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
+                    {activeProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
                   </select>
                 </label>
-                <button
-                  type="button"
-                  className={`newtask-chip ${review ? 'is-on' : ''}`}
-                  onClick={() => setReview(!review)}
-                  aria-pressed={review}
-                  title="成稿前由批评员审查（多 1-2 次模型调用）"
-                >
-                  {review && <Icon name="check" size={13} />}
-                  <span>成稿前批评审查</span>
-                </button>
-                <button
-                  type="button"
-                  className={`newtask-chip ${confirmPlan ? 'is-on' : ''}`}
-                  onClick={() => setConfirmPlan(!confirmPlan)}
-                  aria-pressed={confirmPlan}
-                  title="计划产出后先给你确认，再开始执行"
-                >
-                  {confirmPlan && <Icon name="check" size={13} />}
-                  <span>计划先给我确认</span>
-                </button>
-                {recipe ? (
-                  <span className="newtask-recipe-chip">
-                    <Icon name="stageLiterature" size={14} /> 流水线：综述流水线
-                    <button type="button" onClick={() => setRecipe(undefined)} aria-label="移除流水线">×</button>
-                  </span>
-                ) : null}
               </div>
               <div className="newtask-composer-actions">
-                <button
-                  type="button"
-                  className="newtask-model-chip"
-                  onClick={() => openSettings('model')}
-                  title={llmConfig ? `当前模型 ${llmConfig.provider} / ${llmConfig.model}，前往设置调整` : '尚未配置模型，前往设置（BYOK）'}
-                >
-                  <span>{llmConfig?.model || '未配置模型'}</span>
-                  <Icon name="chevronDown" size={12} />
+                <button type="button" className="newtask-model-chip" onClick={() => openSettings('model')}
+                  title={backendModel?.configured ? `研究后端当前模型：${backendModel.model}` : '查看研究后端实际使用的模型配置'}>
+                  <span>{backendModel?.configured ? backendModel.model : '配置模型'}</span><Icon name="chevronDown" size={12} />
                 </button>
-                <button
-                  type="button"
-                  className="newtask-attach"
-                  onClick={() => attachInputRef.current?.click()}
-                  aria-label="附加文本材料"
-                  title="附加文本材料（.txt/.md/.csv，截取前 8000 字，不离开本机）"
-                >
-                  <Icon name="paperclip" size={16} />
+                <button type="button" className="newtask-polish" onClick={() => void polishGoal()}
+                  disabled={!polishTarget || polishing || submitting || backendOffline || checkingBackend}
+                  aria-label="优化提示词" aria-busy={polishing}
+                  title={!polishTarget && goal.trim() ? '先写研究目标再优化；技能名与附件原文会原样保留' : '优化提示词（调用一次模型，只改写法不补事实）'}>
+                  <Icon name="polish" size={17} />
                 </button>
-                <input
-                  ref={attachInputRef}
-                  type="file"
-                  accept=".txt,.md,.markdown,.csv,.tsv,.json,text/plain,text/markdown,text/csv,application/json"
-                  style={{ display: 'none' }}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) attachFile(file);
-                    event.target.value = '';
-                  }}
-                />
-                <button
-                  type="button"
-                  className="newtask-submit"
-                  onClick={() => void submit()}
-                  disabled={!goal.trim() || submitting || backendOffline}
-                >
-                  <Icon name="send" size={17} /> {submitting ? '创建中…' : '交给 Selenyx'}
+                <button type="button" className="newtask-submit" onClick={() => void submit()}
+                  disabled={!goal.trim() || submitting || backendOffline || checkingBackend}
+                  aria-label={submitting ? '正在创建任务' : '开始研究'} title="开始研究（Enter）">
+                  {submitting ? <Icon name="clock" size={18} /> : <Icon name="arrowRight" size={19} />}
                 </button>
               </div>
             </div>
           )}
         />
+        <div className="newtask-composer-meta">
+          <div className="newtask-config-chips">
+            {activeRecipe && <span className="newtask-config-chip">
+              <Icon name={activeRecipe.icon} size={13} />{activeRecipe.name}
+              <button type="button" onClick={() => setRecipe(undefined)} aria-label={`移除${activeRecipe.name}`}><Icon name="close" size={10} /></button>
+            </span>}
+            {review && <span className="newtask-config-chip">
+              <Icon name="shield" size={13} />批评审查
+              <button type="button" onClick={() => setReview(false)} aria-label="关闭成稿前批评审查"><Icon name="close" size={10} /></button>
+            </span>}
+            {selectedSkill && <span className="newtask-config-chip">
+              <Icon name="skills" size={13} />/{selectedSkill}
+              <button type="button" onClick={() => setSelectedSkill(null)} aria-label={`取消技能 ${selectedSkill}`}><Icon name="close" size={10} /></button>
+            </span>}
+            {prePolishGoal !== null && <span className="newtask-config-chip">
+              <Icon name="polish" size={13} />已润色
+              <button type="button" className="newtask-config-undo" onClick={undoPolish}>撤销</button>
+            </span>}
+          </div>
+          <span className="newtask-keyboard-hint">Enter 开始研究 <span>·</span> Shift + Enter 换行</span>
+        </div>
+        {backendOffline && <div role="status" className="newtask-connection-note">
+          <Icon name="warning" size={15} /><span>本机服务未连接，项目和文献仍可离线管理。</span>
+          <button type="button" onClick={() => void loadRecent()} disabled={checkingBackend}>{checkingBackend ? '连接中…' : '重新连接'}</button>
+        </div>}
+        {error && <div role="alert" className="newtask-error"><span>{error}</span><button type="button" onClick={() => openSettings('model')}>检查模型配置</button></div>}
       </div>
 
-      {recent.length > 0 && (
-        <section className="newtask-recent" aria-label="最近运行">
-          <h2>最近运行</h2>
-          <div className="newtask-recent-list">
-            {recent.map((run) => (
-              <button
-                key={run.id}
-                type="button"
-                className="newtask-recent-item"
-                onClick={() => requestRunFocus(run.id)}
-                title={run.goal}
-              >
-                <span
-                  className="newtask-recent-status"
-                  style={{ color: STATUS_COLOR[run.status] ?? 'var(--text-muted)' }}
-                >
-                  {STATUS_LABEL[run.status] ?? run.status}
-                </span>
-                <span className="newtask-recent-goal">{run.goal}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+      {(recent.length > 0 || pendingEvidence > 0) && <section className="newtask-recent" aria-label="最近研究">
+        <div className="newtask-section-heading"><h2>最近研究</h2><button type="button" onClick={() => setView('tasks')}>查看全部 <Icon name="arrowRight" size={13} /></button></div>
+        <div className="newtask-recent-list">
+          {pendingEvidence > 0 && <button type="button" className="newtask-recent-item newtask-recent-review" onClick={() => { setLibraryTab('evidence'); setView('library'); }}>
+            <Icon name="stageEvidence" size={16} /><span className="newtask-recent-goal">{pendingEvidence} 条证据等待审核</span><Icon name="chevronRight" size={13} />
+          </button>}
+          {recent.map((run) => (
+            <button key={run.id} type="button" className="newtask-recent-item" onClick={() => requestRunFocus(run.id)} title={run.goal}>
+              <Icon name="clock" size={15} /><span className="newtask-recent-goal">{run.goal}</span>
+              <span className="newtask-recent-status" style={{ color: STATUS_COLOR[run.status] ?? 'var(--text-muted)' }}>{STATUS_LABEL[run.status] ?? run.status}</span>
+              <Icon name="chevronRight" size={13} />
+            </button>
+          ))}
+        </div>
+      </section>}
+
+      {addMenu}
     </div>
   );
 }

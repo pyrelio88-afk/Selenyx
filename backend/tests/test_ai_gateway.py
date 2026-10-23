@@ -170,3 +170,74 @@ def test_packaged_sidecar_uses_the_fixed_desktop_loopback_endpoint(monkeypatch):
 
     assert sidecar.sidecar_host() == "127.0.0.1"
     assert sidecar.sidecar_port() == 8770
+
+
+@pytest.mark.asyncio
+async def test_magpie_catalog_is_read_only_and_does_not_expose_or_forward_a_saved_remote_key(tmp_path, monkeypatch):
+    test_key = "private-remote-test-key"
+    configure_local_llm(tmp_path, monkeypatch, api_key=test_key, base_url="https://provider.invalid/v1")
+    seen_requests = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        seen_requests.append(request)
+        return httpx.Response(200, json={"data": [
+            {"id": "deepseek/deepseek-flash", "private": test_key},
+            {"id": "openrouter/nvidia/nemotron-3.5-lightning:free"},
+            {"id": "deepseek/deepseek-flash"},
+            {"id": 123},
+        ], "secret": test_key})
+
+    monkeypatch.setattr(
+        ai_router,
+        "_new_http_client",
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(upstream), timeout=timeout, follow_redirects=False),
+    )
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/api/ai/magpie/models")
+
+    assert response.status_code == 200
+    assert response.json() == {"models": ["deepseek/deepseek-flash", "openrouter/nvidia/nemotron-3.5-lightning:free"]}
+    assert test_key not in response.text
+    assert len(seen_requests) == 1
+    assert seen_requests[0].method == "GET"
+    assert str(seen_requests[0].url) == "http://127.0.0.1:3425/v1/models"
+    assert seen_requests[0].headers.get("authorization") is None
+
+
+@pytest.mark.asyncio
+async def test_magpie_catalog_fails_closed_when_local_gateway_is_unavailable(tmp_path, monkeypatch):
+    configure_local_llm(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        ai_router,
+        "_new_http_client",
+        lambda timeout: httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(503, text="private diagnostic")),
+            timeout=timeout,
+        ),
+    )
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get("/api/ai/magpie/models")
+
+    assert response.status_code == 502
+    assert "private diagnostic" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_magpie_completion_does_not_forward_a_previous_remote_key(tmp_path, monkeypatch):
+    configure_local_llm(tmp_path, monkeypatch, api_key="private-remote-test-key", base_url="http://127.0.0.1:3425/v1")
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        assert request.headers.get("authorization") is None
+        assert request.url.path == "/v1/chat/completions"
+        return httpx.Response(200, json={"choices": [{"message": {"content": "research result"}}]})
+
+    monkeypatch.setattr(
+        ai_router,
+        "_new_http_client",
+        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(upstream), timeout=timeout),
+    )
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.post("/api/ai/chat", json={"messages": [{"role": "user", "content": "fixture"}]})
+
+    assert response.status_code == 200
+    assert response.json()["content"] == "research result"

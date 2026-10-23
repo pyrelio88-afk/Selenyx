@@ -140,5 +140,5 @@ export async function resolveTerminalRunBacklinks(
 }
 
 function isActiveRunStatus(status: string): boolean {
-  return status === 'running' || status === 'cancelling' || status === 'waiting_confirm';
+  return status === 'running' || status === 'cancelling' || status === 'waiting_confirm' || status === 'waiting_evidence';
 }

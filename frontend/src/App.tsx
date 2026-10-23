@@ -9,6 +9,8 @@ import { AIChatView } from '@components/views/AIChatView';
 import { TasksView } from '@components/views/TasksView';
 import { AutomationsView } from '@components/views/AutomationsView';
 import { SettingsModal } from '@components/settings/SettingsModal';
+import { KnowledgeSearch } from '@components/search/KnowledgeSearch';
+import { AppFeedback } from '@components/ui/AppFeedback';
 import { useAppStore, type ViewKey } from '@stores/appStore';
 import { ThemeProvider } from '@hooks/useTheme';
 import { clearSelenyxBrowserStorage } from '@services/workspaceBackup';
@@ -17,9 +19,7 @@ import { isDesktopTauri, setPetVisible } from '@services/nativeRuntime';
 import { PetCompanionBridge } from '@components/pet/PetCompanionBridge';
 import { bootstrapReferenceRepository } from '@services/referenceRepository';
 import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
-import './styles/tokens.css';
-import './styles/interaction.css';
-import './styles/shell-v4.css';
+import { Icon } from '@components/ui/Icon';
 
 export type { ViewKey } from '@stores/appStore';
 
@@ -57,6 +57,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
+const VIEW_LABELS: Record<ViewKey, string> = {
+  newTask: '研究', assistant: '研究', projects: '研究项目', library: '文献与证据',
+  extensions: '专家与技能', automations: '定时任务', more: '工具与统计', tasks: '研究记录', pipeline: '科研流水线',
+};
+
 const VIEWS: Record<ViewKey, () => ReactNode> = {
   newTask: () => <AIChatView />,
   assistant: () => <AIChatView />,
@@ -65,15 +70,14 @@ const VIEWS: Record<ViewKey, () => ReactNode> = {
   extensions: () => <ExtensionsView />,
   automations: () => <AutomationsView />,
   more: () => <MoreView />,
-  // 不在侧边栏一级导航、经深链进入的视图
   tasks: () => <TasksView />,
   pipeline: () => <PipelineView />,
 };
 
 export default function App() {
   const {
-    currentView, theme, mode, density, setLLMConfig, petEnabled, fontScale, setView, requestNewTask,
-    openSettings, closeSettings,
+    currentView, theme, mode, density, setLLMConfig, petEnabled, fontScale, requestNewTask,
+    openSettings, closeSettings, openKnowledgeSearch,
     replaceReferences, setReferenceSync, replaceWorkspace, setWorkspaceSync,
   } = useAppStore();
   // 桌面桌宠窗口创建失败（如 Wayland 透明支持不佳）时降级为应用内漂浮鹤
@@ -92,18 +96,32 @@ export default function App() {
     return () => { document.body.style.removeProperty('zoom'); };
   }, [fontScale]);
 
-  // v4 全局快捷键：Ctrl+, 设置弹窗；Ctrl+N 新建任务主页；Esc 关闭弹窗
+  // v4 全局快捷键：Ctrl+, 设置弹窗；Ctrl+N 新建任务主页；K / Ctrl+K 搜索工作区
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === ',') {
         event.preventDefault();
         if (useAppStore.getState().settingsOpen) closeSettings();
-        else openSettings();
+        else {
+          useAppStore.getState().closeKnowledgeSearch();
+          openSettings();
+        }
         return;
       }
       if ((event.ctrlKey || event.metaKey) && (event.key === 'n' || event.key === 'N')) {
         event.preventDefault();
         requestNewTask();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && (event.key === 'k' || event.key === 'K')) {
+        event.preventDefault();
+        const state = useAppStore.getState();
+        if (state.settingsOpen) return;
+        if (state.knowledgeSearchOpen) {
+          document.querySelector<HTMLInputElement>('.knowledge-search-field input')?.focus();
+          return;
+        }
+        state.openKnowledgeSearch();
         return;
       }
       if (event.key === 'Escape' && useAppStore.getState().settingsOpen) {
@@ -117,19 +135,15 @@ export default function App() {
         const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
         const state = useAppStore.getState();
         const adjudicating = state.currentView === 'library' && state.libraryTab === 'evidence';
-        if (!typing && !state.settingsOpen && !adjudicating) {
+        if (!typing && !state.settingsOpen && !state.knowledgeSearchOpen && !adjudicating) {
           event.preventDefault();
-          setView('references');
-          window.setTimeout(() => {
-            const box = document.querySelector<HTMLInputElement>('input[aria-label="搜索文献"]');
-            box?.focus();
-          }, 40);
+          openKnowledgeSearch();
         }
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [openSettings, closeSettings, requestNewTask, setView]);
+  }, [openSettings, closeSettings, requestNewTask, openKnowledgeSearch]);
 
   // A local build may opt into direct AI requests through .env.local.  This
   // overwrites stale UI configuration on every launch and keeps keys out of
@@ -184,14 +198,26 @@ export default function App() {
       <a className="skip-to-content" href="#workspace-main">跳到主要内容</a>
       <div className="app-shell">
         <Sidebar />
-        <main id="workspace-main" className="app-main" tabIndex={-1}>
-          <div className="app-view-region">
-            <ErrorBoundary>{renderView()}</ErrorBoundary>
-          </div>
-        </main>
+        <div className="app-workspace">
+          <header className="workspace-topbar">
+            <div className="workspace-breadcrumb"><span>工作区</span><span aria-hidden="true">/</span><strong>{VIEW_LABELS[currentView]}</strong></div>
+            <div className="workspace-topbar-actions">
+              <span className="workspace-local-label"><Icon name="shield" size={13} /> 本地优先</span>
+              <button type="button" className="icon-btn" onClick={() => openSettings('appearance')} aria-label="外观设置" title="外观设置"><Icon name={mode === 'dark' ? 'moon' : 'sun'} size={16} /></button>
+              <button type="button" className="icon-btn" onClick={() => openSettings()} aria-label="打开设置" title="设置（Ctrl+,）"><Icon name="settings" size={16} /></button>
+            </div>
+          </header>
+          <main id="workspace-main" className="app-main" tabIndex={-1}>
+            <div className="app-view-region">
+              <ErrorBoundary>{renderView()}</ErrorBoundary>
+            </div>
+          </main>
+        </div>
         <PetCompanionBridge nativeActive={desktopPetActive} />
       </div>
       <SettingsModal />
+      <KnowledgeSearch />
+      <AppFeedback />
     </ThemeProvider>
   );
 }

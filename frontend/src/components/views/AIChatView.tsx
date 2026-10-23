@@ -8,13 +8,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { useIsMobile } from '@lib/useIsMobile';
+import { serviceErrorMessage } from '@lib/userFacingError';
 import { ThreeColumnWorkbench } from '@components/layout/ThreeColumnWorkbench';
 import { agentApi, type AgentRunDetail } from '@services/agent';
 import { type LLMMessage } from '@services/llm';
 import { evidenceApi, type EvidenceRecord } from '@services/api';
 import { Icon } from '@components/ui/Icon';
 import { NewTaskHome } from '@components/views/NewTaskHome';
-import { handoffNewTaskToAssistant } from '@components/assistant/handoffNewTask';
 import { RESEARCH_SKILLS } from '@data/skills';
 import { persistChatSessions } from '@services/chatSessionStorage';
 import { PIPELINE_STAGES } from '@apptypes/project';
@@ -101,6 +101,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     claimTaskLaunch,
     pendingChatOpen,
     clearPendingChatOpen,
+    setChatStreamBusy,
   } = useAppStore();
   const isMobile = useIsMobile();
   const narrowDesktop = useNarrowDesktop();
@@ -203,7 +204,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
         projectId,
         items: [],
         status: 'error',
-        message: error instanceof Error ? error.message : '本地证据服务不可用',
+        message: serviceErrorMessage(error, '本地证据服务不可用'),
       });
     }
   }, []);
@@ -322,6 +323,12 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   });
 
   useEffect(() => {
+    setChatStreamBusy(busy);
+  }, [busy, setChatStreamBusy]);
+
+  useEffect(() => () => setChatStreamBusy(false), [setChatStreamBusy]);
+
+  useEffect(() => {
     try {
       const skillPrompt = sessionStorage.getItem('selenyx_skill_prompt');
       const skillName = sessionStorage.getItem('selenyx_skill_name');
@@ -358,24 +365,26 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   const startRunWatcher = useCallback((link: PendingRunBacklink) => {
     if (runWatchersRef.current.has(link.runId)) return;
     const close = watchRunOutput(link, {
-      onTerminal: (run) => applyTerminalRunOutput(link, run),
+      onTerminal: (run) => {
+        applyTerminalRunOutput(link, run);
+        setTaskNotice((notice) => (notice?.runId === run.id ? null : notice));
+      },
+      onWaiting: (run) => {
+        setTaskNotice({
+          runId: run.id,
+          text: run.status === 'waiting_evidence'
+            ? '任务引用了待裁决证据，已暂停；在证据卡上接受或驳回后会自动继续。'
+            : '任务在等待你确认计划；打开研究记录批准后继续。',
+        });
+      },
     });
     runWatchersRef.current.set(link.runId, close);
   }, [applyTerminalRunOutput]);
 
-  const absorbStartedTask = useCallback((goal: string, projectId: string | null, runId: string) => {
-    const nextScope = projectId || 'global';
-    handoffNewTaskToAssistant(goal, projectId, runId);
-    const loaded = loadSessions(nextScope);
-    if (projectId && projectId !== currentProjectId) {
-      setCurrentProject(projectId);
-    } else {
-      setSessionState(loaded);
-      setSessionScope(nextScope);
-    }
-    setSidebarOpen(true);
-    if (loaded.activeId) startRunWatcher({ runId, sessionId: loaded.activeId, scope: nextScope });
-  }, [currentProjectId, setCurrentProject, startRunWatcher]);
+  const openStartedResearch = useCallback((runId: string, projectId: string | null) => {
+    setCurrentProject(projectId);
+    requestRunFocus(runId);
+  }, [requestRunFocus, setCurrentProject]);
 
   useEffect(() => {
     let cancelled = false;
@@ -675,7 +684,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
       setTaskNotice({
         runId: '',
         error: true,
-        text: `转为任务失败：${error instanceof Error ? error.message : String(error)}`,
+        text: `转为任务失败：${serviceErrorMessage(error, '请稍后重试。')}`,
       });
     } finally {
       setTaskStarting(false);
@@ -687,7 +696,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   }, [requestRunFocus]);
 
   if (messages.length === 0) {
-    return <NewTaskHome onStarted={absorbStartedTask} />;
+    return <NewTaskHome onStarted={openStartedResearch} />;
   }
 
   return (
@@ -803,10 +812,6 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
               messages={messages}
               busy={busy}
               configured={configured}
-              onPickPrompt={(prompt) => {
-                setInput(prompt);
-                window.setTimeout(() => inputRef.current?.focus(), 20);
-              }}
               onCopy={(content) => { void navigator.clipboard?.writeText(content); }}
               onEdit={startEdit}
               onRetry={regenerate}

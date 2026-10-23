@@ -20,7 +20,7 @@ use tauri_plugin_shell::ShellExt;
 #[cfg(all(not(mobile), any(not(debug_assertions), test)))]
 use std::io::Read;
 #[cfg(all(not(mobile), any(not(debug_assertions), test)))]
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 #[cfg(all(not(mobile), any(not(debug_assertions), test)))]
 use std::time::Duration;
 
@@ -125,16 +125,24 @@ fn read_limited_health_response(stream: &mut TcpStream) -> Option<Vec<u8>> {
 /// Probe only the fixed IPv4 loopback endpoint used by the packaged sidecar.
 /// This deliberately performs no DNS lookup and never probes a LAN address.
 #[cfg(all(not(mobile), any(not(debug_assertions), test)))]
+fn vacant_or_occupied_port(address: SocketAddr) -> LocalBackendProbe {
+    match TcpListener::bind(address) {
+        Ok(listener) => {
+            drop(listener);
+            LocalBackendProbe::VacantPort
+        }
+        Err(_) => LocalBackendProbe::OccupiedOrUnhealthy,
+    }
+}
+
+#[cfg(all(not(mobile), any(not(debug_assertions), test)))]
 fn probe_local_backend() -> LocalBackendProbe {
     let address: SocketAddr = LOCAL_BACKEND_ADDR
         .parse()
         .expect("the fixed loopback backend address must parse");
     let mut stream = match TcpStream::connect_timeout(&address, HEALTH_PROBE_TIMEOUT) {
         Ok(stream) => stream,
-        Err(error) if error.kind() == ErrorKind::ConnectionRefused => {
-            return LocalBackendProbe::VacantPort;
-        }
-        Err(_) => return LocalBackendProbe::OccupiedOrUnhealthy,
+        Err(_) => return vacant_or_occupied_port(address),
     };
 
     if stream.set_read_timeout(Some(HEALTH_PROBE_TIMEOUT)).is_err()
@@ -438,7 +446,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             export_state,
@@ -574,6 +581,22 @@ mod tests {
         assert_eq!(
             local_backend_start_action(LocalBackendProbe::OccupiedOrUnhealthy),
             LocalBackendStartAction::LeaveUnavailable
+        );
+    }
+
+    #[cfg(not(mobile))]
+    #[test]
+    fn a_bindable_loopback_port_is_vacant_even_when_connect_times_out() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        assert_eq!(
+            super::vacant_or_occupied_port(address),
+            LocalBackendProbe::OccupiedOrUnhealthy
+        );
+        drop(listener);
+        assert_eq!(
+            super::vacant_or_occupied_port(address),
+            LocalBackendProbe::VacantPort
         );
     }
 

@@ -181,9 +181,10 @@ export function UserPanel({ collapsed }: { collapsed: boolean }) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls="user-menu"
+        aria-label={`${nickname || '本地研究者'}，账户与设置`}
         title="账户与设置"
       >
-        <span className="user-avatar" aria-hidden="true"><Crane size={46} /></span>
+        <span className="user-avatar" aria-hidden="true">{nickname.trim().slice(0, 1) || 'S'}</span>
         {!collapsed && <span className="user-name">{nickname || '本地研究者'}</span>}
         {!collapsed && <Icon name="chevronDown" size={13} />}
       </button>

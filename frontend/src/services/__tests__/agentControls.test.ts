@@ -6,10 +6,11 @@ import { describe, expect, it } from 'vitest';
 import { isActiveRun } from '@services/agent';
 
 describe('isActiveRun（模块 D 状态语义）', () => {
-  it('运行中/取消中/待确认计划都算活动态', () => {
+  it('运行中/取消中/待确认计划/等待证据裁决都算活动态', () => {
     expect(isActiveRun('running')).toBe(true);
     expect(isActiveRun('cancelling')).toBe(true);
     expect(isActiveRun('waiting_confirm')).toBe(true);
+    expect(isActiveRun('waiting_evidence')).toBe(true);
   });
 
   it('终态不再活动（轮询停止、SSE 关流）', () => {

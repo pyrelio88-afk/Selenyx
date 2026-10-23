@@ -9,7 +9,7 @@ const browser = await chromium.launch();
 async function bootView(viewKey) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await ctx.addInitScript((vk) => {
-    try { localStorage.setItem('selenyx-v2', JSON.stringify({ state: { currentView: vk, mode: 'light', theme: 'paper-green' }, version: 0 })); } catch (e) {}
+    try { localStorage.setItem('selenyx-v2', JSON.stringify({ state: { currentView: vk, mode: 'light', theme: 'forest' }, version: 0 })); } catch (e) {}
   }, viewKey);
   const page = await ctx.newPage();
   await page.goto(url, { waitUntil: 'networkidle' });

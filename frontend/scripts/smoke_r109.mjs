@@ -12,7 +12,7 @@ const browser = await chromium.launch({ executablePath: '/usr/bin/chromium-brows
 async function boot() {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await ctx.addInitScript(() => {
-    try { localStorage.setItem('selenyx-v2', JSON.stringify({ state: { currentView: 'aiChat', mode: 'light', theme: 'paper-green' }, version: 0 })); } catch (e) {}
+    try { localStorage.setItem('selenyx-v2', JSON.stringify({ state: { currentView: 'aiChat', mode: 'light', theme: 'forest' }, version: 0 })); } catch (e) {}
   });
   const page = await ctx.newPage();
   const errors = [];

@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { Icon } from '@components/ui/Icon';
+import { Crane } from '@components/ui/Crane';
 import { MarkdownView } from '@components/chat/MarkdownView';
 import { nowHHMM, type Msg } from './chatShared';
 
@@ -17,7 +18,6 @@ export function MessageBubble({ msg, isLast, busy, onCopy, onEdit, onRetry, onBr
   const streaming = !isUser && busy && isLast;
   const thinking = streaming && !msg.content;
   const [copied, setCopied] = useState(false);
-  const [assistantAvatarFailed, setAssistantAvatarFailed] = useState(false);
 
   function handleCopy() {
     onCopy();
@@ -30,16 +30,7 @@ export function MessageBubble({ msg, isLast, busy, onCopy, onEdit, onRetry, onBr
       <div className="aichat-msg-avatar">
         {isUser ? (
           <Icon name="stageProblem" size={15} strokeWidth={1.7} />
-        ) : assistantAvatarFailed ? (
-          <Icon name="sparkles" size={15} strokeWidth={1.7} aria-label="Selenyx 助理头像加载失败" />
-        ) : (
-          <img
-            className="aichat-assistant-avatar-image"
-            src="/brand-crane-cloud-512-v1.png"
-            alt="Selenyx 助理头像"
-            onError={() => setAssistantAvatarFailed(true)}
-          />
-        )}
+        ) : <Crane size={28} title="Selenyx 助理" />}
       </div>
       <div className="aichat-msg-body">
         <div className="aichat-msg-meta">

@@ -207,9 +207,10 @@ export const evidenceApi = {
 
 // === AI / LLM API ===
 export const aiApi = {
-  config: () => request<{ configured: boolean; baseUrl: string; model: string }>('/ai/config'),
-  chat: (messages: Omit<ChatMessage, 'id' | 'timestamp'>[], projectId?: string) =>
-    request<ChatMessage>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, projectId }) }),
+  config: (signal?: AbortSignal) => request<{ configured: boolean; baseUrl: string; model: string }>('/ai/config', { signal }),
+  magpieModels: (signal?: AbortSignal) => request<{ models: string[] }>('/ai/magpie/models', { signal }),
+  chat: (messages: { role: 'system' | 'user' | 'assistant'; content: string }[], projectId?: string, signal?: AbortSignal) =>
+    request<ChatMessage>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages, projectId }), signal }),
   testConnection: () => request<{ ok: boolean; model: string }>('/ai/test'),
 };
 

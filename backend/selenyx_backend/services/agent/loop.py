@@ -11,7 +11,7 @@
   进程重启后已完成步骤不丢失。
 - 可选 finalize 批评审查门（review=True）：final 前先由内置批评员审一轮，
   意见回灌修订一次；默认关闭（按量计费的额外调用，显式 opt-in）。
-- 步数耗尽时强制模型基于已收集信息收尾一次，收尾也失败才落兜底文案。
+- 步数耗尽时，仅无需确认或已获人工确认的 run 可以强制收尾；未获确认则失败关闭。
 
 共享件（LLM 调用 / 动作解析 / 工具白名单 / 观察折叠）在 core.py；
 本模块以私有别名引入，保持测试 monkeypatch 落点（agent_loop._complete 等）稳定。
@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Callable
+import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -39,14 +40,27 @@ from selenyx_backend.services.agent.core import (
     run_tool as _run_tool,
     truncate as _truncate,
 )
-from selenyx_backend.services.agent.budget import TokenBudgetExceeded, start_budget
-from selenyx_backend.services.agent.registry import PLAN_CONFIRM_TIMEOUT_S, RunControls
+from selenyx_backend.services.agent.budget import (
+    TokenBudgetExceeded, record_usage, start_budget, token_limit, tokens_used,
+)
+from selenyx_backend.services.agent.plan_checkpoint import (
+    MAX_STEPS,
+    PLAN_ITEM_CHARS as _PLAN_ITEM_CHARS,
+    PLAN_MAX_ITEMS as _PLAN_MAX_ITEMS,
+    PLAN_REQUIRED_PROMPT as _PLAN_REQUIRED_PROMPT,
+    WAITING_TEXT,
+    PlanCheckpoint,
+    is_pure_plan,
+    validate_checkpoint,
+)
+from selenyx_backend.services.agent.registry import RunControls
 from selenyx_backend.services.agent.subagents import get_expert, run_subagent
 from selenyx_backend.services.artifacts import write_artifact as _write_artifact
 from selenyx_backend.services.artifacts import write_note as _write_note
 from selenyx_backend.services.citations import (
     analyze_citations as _analyze_citations,
     has_evidence_markers as _has_evidence_markers,
+    pending_evidence_refs as _pending_evidence_refs,
     rejection_message as _rejection_message,
     requires_evidence_markers as _requires_evidence_markers,
 )
@@ -61,10 +75,6 @@ from selenyx_backend.services.memory import (
     read_memory as _read_memory,
 )
 
-MAX_STEPS = 12
-
-_PLAN_MAX_ITEMS = 8
-_PLAN_ITEM_CHARS = 120
 _REVIEW_TEXT_CHARS = 1500
 
 _WRAP_UP_PROMPT = (
@@ -73,33 +83,44 @@ _WRAP_UP_PROMPT = (
 )
 _WRAP_UP_FALLBACK = "已达到最大步数，本次任务未能成稿；已完成的检索与观察可见于运行时间线。"
 
+# 成稿引用了待裁决证据时暂停，轮询本机 SQLite 等人工接受/驳回后自动续跑。
+EVIDENCE_WAIT_POLL_S = 0.25
+EVIDENCE_WAIT_TIMEOUT_S = 15 * 60
+
 Emit = Callable[[dict[str, Any]], None]
 CancelCheck = Callable[[], bool]
 
 
 class _RunCancelled(Exception):
-    """取消事件触发的即时中断（LLM 调用进行中被取消时抛出）。"""
+    """取消事件触发的即时中断。"""
+
+
+_T = TypeVar("_T")
+
+
+async def _await_cancellable(operation: Awaitable[_T], controls: RunControls | None) -> _T:
+    if controls is None:
+        return await operation
+    task = asyncio.ensure_future(operation)
+    cancel_watcher = asyncio.create_task(controls.cancel_event.wait())
+    try:
+        done, _ = await asyncio.wait({task, cancel_watcher}, return_when=asyncio.FIRST_COMPLETED)
+        if task in done:
+            return task.result()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        raise _RunCancelled()
+    except asyncio.CancelledError:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        raise
+    finally:
+        cancel_watcher.cancel()
+        await asyncio.gather(cancel_watcher, return_exceptions=True)
 
 
 async def _complete_cancellable(messages: list[dict[str, str]], controls: RunControls | None) -> str:
-    """LLM 调用包可取消 task：取消事件一置位立刻中断在飞的 HTTP 请求。
-
-    controls 缺省（测试/调度旧路径）时保持原样——逐步顶部的取消检查兜底。
-    """
-    if controls is None:
-        return await _complete(messages)
-    llm_task = asyncio.ensure_future(_complete(messages))
-    cancel_watcher = asyncio.ensure_future(controls.cancel_event.wait())
-    try:
-        done, _pending = await asyncio.wait(
-            {llm_task, cancel_watcher}, return_when=asyncio.FIRST_COMPLETED
-        )
-        if cancel_watcher in done:
-            llm_task.cancel()
-            raise _RunCancelled()
-        return llm_task.result()
-    finally:
-        cancel_watcher.cancel()
+    return await _await_cancellable(_complete(messages), controls)
 
 
 def _persist(run_id: str, **fields: Any) -> None:
@@ -133,11 +154,32 @@ class _RunTimeline:
         _persist(self.run_id, audit_log_json=json.dumps(self.audit, ensure_ascii=False))
         self.emit({"type": "step", **entry})
 
+    def wait_for_plan(self, snapshot: PlanCheckpoint) -> None:
+        entry = {"step": self.step_no, "kind": "waiting", "ts": datetime.now().isoformat(), "text": WAITING_TEXT}
+        self.audit.append(entry)
+        validate_checkpoint(snapshot, self.audit)
+        _persist(
+            self.run_id,
+            status="waiting_confirm",
+            checkpoint_json=snapshot.model_dump_json(),
+            audit_log_json=json.dumps(self.audit, ensure_ascii=False),
+        )
+        self.emit({"type": "step", **entry})
+
+    def approve_plan(self, messages: list[dict[str, str]], items: list[str], adjustment: str | None) -> None:
+        if adjustment:
+            self.record("steer", text=_truncate(adjustment, 600))
+            content = f"用户调整了计划（请按调整后的方向执行）：{adjustment}"
+        else:
+            content = f"已收到你的计划（{len(items)} 步）。请按计划执行，输出下一个 JSON 动作。"
+        messages.append({"role": "user", "content": content})
+
     def finalize(self, status: str, output: str) -> None:
         try:
             _persist(
                 self.run_id,
                 status=status,
+                checkpoint_json="{}",
                 output_text=output,
                 audit_log_json=json.dumps(self.audit, ensure_ascii=False),
                 completed_at=datetime.now().isoformat(),
@@ -145,7 +187,7 @@ class _RunTimeline:
         except Exception:
             # 最终落库失败保底重试一次；再失败则由重启时的 stale 清理收敛
             try:
-                _persist(self.run_id, status=status, output_text=output, completed_at=datetime.now().isoformat())
+                _persist(self.run_id, status=status, checkpoint_json="{}", output_text=output, completed_at=datetime.now().isoformat())
             except Exception:
                 pass
         self.emit({"type": "status", "status": status, "output": output})
@@ -354,6 +396,50 @@ async def _repair_final_after_evidence_rejection(
     return str(action.get("final", "")).strip()
 
 
+def _pending_citations(project_id: str | None, draft: str) -> list[str]:
+    if not project_id:
+        return []
+    with Session(get_engine()) as session:
+        return _pending_evidence_refs(session, project_id, draft)
+
+
+async def _await_evidence_adjudication(
+    run_id: str,
+    project_id: str | None,
+    draft: str,
+    timeline: _RunTimeline,
+    controls: RunControls | None,
+    is_cancelled: CancelCheck,
+) -> None:
+    """Pause before the evidence gate while cited cards still await a human decision.
+
+    The loop polls the local database rather than accepting evidence itself:
+    only the user's accept/reject changes the citation verdict. Saved evidence
+    that is unrelated to the draft never blocks finalization.
+    """
+    pending = _pending_citations(project_id, draft)
+    if not pending:
+        return
+    # Persist the pause first: clients refresh on the emitted step event.
+    _persist(run_id, status="waiting_evidence")
+    timeline.record("evidence_wait", ids=pending)
+    deadline = time.monotonic() + EVIDENCE_WAIT_TIMEOUT_S
+    while _pending_citations(project_id, draft):
+        if is_cancelled() or (controls is not None and controls.cancelled):
+            raise _RunCancelled()
+        if time.monotonic() >= deadline:
+            raise HTTPException(409, "等待证据人工裁决超时，未写入最终成稿。")
+        if controls is not None:
+            try:
+                await asyncio.wait_for(controls.cancel_event.wait(), timeout=EVIDENCE_WAIT_POLL_S)
+            except asyncio.TimeoutError:
+                pass
+        else:
+            await asyncio.sleep(EVIDENCE_WAIT_POLL_S)
+    _persist(run_id, status="running")
+    timeline.record("evidence_resume", ids=pending)
+
+
 def _validate_draft_citations(
     timeline: _RunTimeline,
     project_id: str | None,
@@ -400,6 +486,7 @@ async def execute_run(
     skill_directive: str | None = None,
     allowed_tools: set[str] | None = None,
     custom_instructions: str | None = None,
+    resume_snapshot: PlanCheckpoint | None = None,
 ) -> None:
     """执行一个 agent run：自循环直到 final / 达到步数上限 / 被取消 / 出错。
 
@@ -407,47 +494,74 @@ async def execute_run(
     意见回灌修订一次后再收尾（reviewed 标志防循环）。
 
     controls（V4 模块 D）挂载运行中干预面：steer 插话在每步顶部消费、
-    confirm_plan=True 时首个计划在 plan_gate 等待人工确认、取消事件
-    即刻中断在飞的 LLM 调用。缺省时行为与旧路径完全一致。
+    confirm_plan=True 时必须先提交有效的纯计划并在 plan_gate 等待人工确认，
+    确认前不执行工具、成稿、审查或强制收尾。取消事件即刻中断在飞的 LLM 调用。
+    缺省时行为与旧路径完全一致。
 
     recipe_directive（V4 模块 E）：流水线的角色接力指令，随目标消息注入。
 
-    模块 F 注入面：启动时自动附上两层记忆摘要（永不外发，只进 prompt）；
+    模块 F 注入面：启动时自动附上两层记忆摘要，作为上下文发送给配置的模型
+    （若使用云端模型，摘要也会发送到云端）；
     skill_directive 注入技能指令正文，allowed_tools 裁剪本 run 的工具白名单；
     custom_instructions 为用户在设置里写的全局自定义指令。
     """
     from selenyx_backend.settings import get_settings
 
-    start_budget(get_settings().llm_token_budget)
+    start_budget(resume_snapshot.token_limit if resume_snapshot else get_settings().llm_token_budget)
     timeline = _RunTimeline(run_id, emit)
-    system_content = SYSTEM_PROMPT
-    digest = _memory_digest(project_id)
-    if digest:
-        system_content += f"\n\n# 本机记忆（上下文参考，勿外发）\n{digest}"
-    if custom_instructions:
-        system_content += f"\n\n# 用户自定义指令\n{custom_instructions.strip()[:1500]}"
-    if skill_directive:
-        system_content += f"\n\n# 技能约束（本任务必须遵守）\n{skill_directive}"
-    # MCP 能力来自此前用户显式探测并持久化的本机快照；这里不会为了列工具
-    # 而联网或启动进程。服务端会二次核验名称，所以 prompt 只是可见性而非授权。
-    mcp_prompt = agent_mcp_prompt()
-    if mcp_prompt:
-        system_content += f"\n\n{mcp_prompt}"
-    goal_message = f"我的目标：{goal}"
-    if recipe_directive:
-        goal_message = f"{goal_message}\n\n{recipe_directive}"
-    messages = [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": goal_message},
-    ]
+    plan_required = resume_snapshot is not None or (controls is not None and controls.confirm_plan)
+    if resume_snapshot is not None:
+        messages = resume_snapshot.message_dicts()
+        review = resume_snapshot.review
+        allowed_tools = None if resume_snapshot.allowed_tools is None else set(resume_snapshot.allowed_tools)
+    else:
+        system_content = SYSTEM_PROMPT
+        if plan_required:
+            system_content += f"\n\n{_PLAN_REQUIRED_PROMPT}"
+        digest = _memory_digest(project_id)
+        if digest:
+            system_content += f"\n\n# 本机记忆（发送给配置模型的上下文参考）\n{digest}"
+        if custom_instructions:
+            system_content += f"\n\n# 用户自定义指令\n{custom_instructions.strip()[:1500]}"
+        if skill_directive:
+            system_content += f"\n\n# 技能约束（本任务必须遵守）\n{skill_directive}"
+        # MCP 能力来自此前用户显式探测并持久化的本机快照；这里不会为了列工具
+        # 而联网或启动进程。服务端会二次核验名称，所以 prompt 只是可见性而非授权。
+        mcp_prompt = agent_mcp_prompt()
+        if mcp_prompt:
+            system_content += f"\n\n{mcp_prompt}"
+        goal_message = f"我的目标：{goal}"
+        if recipe_directive:
+            goal_message = f"{goal_message}\n\n{recipe_directive}"
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": goal_message},
+        ]
 
     final_text = ""
     status = "completed"
     reviewed = False
     citation_bounced = False  # One repair turn; a second invalid draft fails closed.
-    plan_confirmed = False  # plan 确认门只拦首个计划
+    plan_confirmed = False  # 仅在等待中的计划实际获得人工确认后置位
+    step_limit = MAX_STEPS
     try:
-        for _ in range(MAX_STEPS):
+        if resume_snapshot is not None:
+            with Session(get_engine()) as session:
+                run = session.get(AgentRun, run_id)
+                if run is None:
+                    raise ValueError("Plan run no longer exists")
+                timeline.audit = json.loads(run.audit_log_json)
+                validate_checkpoint(resume_snapshot, timeline.audit)
+                timeline.step_no = resume_snapshot.consumed_steps
+                if is_cancelled() or (controls is not None and controls.cancelled):
+                    raise _RunCancelled()
+                if run.status != "running" or run.checkpoint_json != "{}":
+                    raise ValueError("Plan checkpoint must be consumed before execution")
+            record_usage(resume_snapshot.tokens_used)
+            step_limit = min(step_limit, resume_snapshot.max_steps)
+            plan_confirmed = True
+            timeline.approve_plan(messages, resume_snapshot.plan_items(), controls.plan_adjustment if controls else None)
+        for _ in range(timeline.step_no, step_limit):
             timeline.next_step()
             if is_cancelled() or (controls is not None and controls.cancelled):
                 status = "cancelled"
@@ -469,39 +583,49 @@ async def execute_run(
                 timeline.record("thought", text=_truncate(thought, 600))
             messages.append({"role": "assistant", "content": reply})
 
-            # 规划动作：不落工具、不额外计步，回灌确认后继续
+            # 确认前只允许有效的纯计划动作；每次拒绝仍消耗一个 MAX_STEPS 步。
+            if plan_required and not plan_confirmed:
+                if not is_pure_plan(action):
+                    message = f"计划确认门拒绝当前动作：{_PLAN_REQUIRED_PROMPT}"
+                    timeline.record("error", message=message)
+                    messages.append({"role": "user", "content": message})
+                    continue
+
+            # 规划动作：不落工具，回灌确认后继续。
             if "plan" in action and "final" not in action and "tool" not in action:
                 items = _plan_items(action)
                 timeline.record("plan", items=items)
-                # plan 确认门（V4 模块 D）：waiting_confirm → 人工放行/调整/取消
-                if controls is not None and controls.confirm_plan and not plan_confirmed:
+                if controls is not None and plan_required and not plan_confirmed:
+                    # 丢弃计划进入等待前的确认；断连或无人响应不代表授权。
+                    controls.plan_adjustment = None
+                    controls.plan_gate.clear()
+                    timeline.wait_for_plan(PlanCheckpoint.model_validate({
+                        "version": 1,
+                        "boundary": "first_plan_approval",
+                        "messages": messages,
+                        "review": review,
+                        "allowed_tools": None if allowed_tools is None else sorted(allowed_tools),
+                        "consumed_steps": timeline.step_no,
+                        "max_steps": MAX_STEPS,
+                        "tokens_used": tokens_used(),
+                        "token_limit": token_limit(),
+                    }))
+                    if controls.cancelled or is_cancelled():
+                        raise _RunCancelled()
+                    # Event 挂起不调用模型、不消耗 token；仅确认或取消会唤醒。
+                    await controls.plan_gate.wait()
+                    if controls.cancelled or is_cancelled():
+                        raise _RunCancelled()
                     plan_confirmed = True
-                    _persist(run_id, status="waiting_confirm")
-                    timeline.record("waiting", text="等待人工确认计划")
-                    try:
-                        await asyncio.wait_for(controls.plan_gate.wait(), timeout=PLAN_CONFIRM_TIMEOUT_S)
-                    except asyncio.TimeoutError:
-                        timeline.record("error", message="计划确认超时（30 分钟），按计划继续执行")
-                    if controls.cancelled:
-                        status = "cancelled"
-                        timeline.record("error", message="已被用户取消")
-                        break
-                    _persist(run_id, status="running")
-                    if controls.plan_adjustment:
-                        timeline.record("steer", text=_truncate(controls.plan_adjustment, 600))
-                        messages.append({
-                            "role": "user",
-                            "content": f"用户调整了计划（请按调整后的方向执行）：{controls.plan_adjustment}",
-                        })
-                        continue
-                messages.append({
-                    "role": "user",
-                    "content": f"已收到你的计划（{len(items)} 步）。请按计划执行，输出下一个 JSON 动作。",
-                })
+                    _persist(run_id, status="running", checkpoint_json="{}")
+                    timeline.approve_plan(messages, items, controls.plan_adjustment)
+                else:
+                    timeline.approve_plan(messages, items, None)
                 continue
 
             if "final" in action:
                 draft = str(action.get("final", "")).strip()
+                await _await_evidence_adjudication(run_id, project_id, draft, timeline, controls, is_cancelled)
                 # Every [^e:id] must resolve to human-accepted evidence in
                 # this project.  One repair turn is allowed; a second failure
                 # is terminal and never becomes a final output.
@@ -553,20 +677,26 @@ async def execute_run(
                     "allowedTools": sorted(allowed_tools),
                 }
             else:
-                observation = await _dispatch_tool(run_id, project_id, tool, args, timeline.record)
+                observation = await _await_cancellable(
+                    _dispatch_tool(run_id, project_id, tool, args, timeline.record), controls
+                )
             timeline.record("observation", tool=tool, result=observation)
             messages.append({
                 "role": "user",
                 "content": f"工具 {tool} 的观察结果：\n{json.dumps(observation, ensure_ascii=False)}\n\n请继续：输出下一个 JSON 动作。",
             })
         else:
-            # 步数耗尽（非取消、非 final）：强制收尾一次，失败落兜底文案
+            if plan_required and not plan_confirmed:
+                raise HTTPException(409, "规划步数已耗尽，未获得人工确认；任务已停止，未执行工具或生成成稿。")
+            # 仅无需确认或已获确认的 run 可强制收尾。
             draft = await _wrap_up(messages, timeline, controls)
+            await _await_evidence_adjudication(run_id, project_id, draft, timeline, controls, is_cancelled)
             report = _validate_draft_citations(timeline, project_id, goal, draft)
             if report is not None and not report.ok:
                 message = _rejection_message(report)
                 timeline.record("review", critic="证据门校验", text=message, error=True)
                 repaired = await _repair_final_after_evidence_rejection(messages, timeline, message, controls)
+                await _await_evidence_adjudication(run_id, project_id, repaired, timeline, controls, is_cancelled)
                 repaired_report = _validate_draft_citations(timeline, project_id, goal, repaired)
                 if not repaired or (repaired_report is not None and not repaired_report.ok):
                     status = "failed"

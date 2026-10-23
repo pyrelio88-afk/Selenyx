@@ -1,5 +1,6 @@
 import { useAppStore } from '@stores/appStore';
 import type { KanbanTask, ResearchProject } from '@apptypes/index';
+import { normalizeTheme } from '@lib/themes';
 import { mergeMirroredWorkspace } from './workspaceRepository';
 
 export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2;
@@ -18,8 +19,8 @@ const ID_COLLECTION_KEYS = [
 ] as const;
 
 const EMPTY_DATA: Record<(typeof DATA_KEYS)[number], unknown> = {
-  currentView: 'dashboard',
-  theme: 'mono',
+  currentView: 'newTask',
+  theme: 'forest',
   mode: 'light',
   density: 'comfortable',
   references: [],
@@ -370,6 +371,7 @@ export function parseWorkspaceBackup(text: string): WorkspaceBackup {
     || typeof data.searchQuery !== 'string') {
     throw new Error('Backup contains invalid display state');
   }
+  data.theme = normalizeTheme(data.theme);
   if (data.llmConfig !== null && !isRecord(data.llmConfig)) throw new Error('Backup LLM configuration is invalid');
   data.llmConfig = cloneWithoutApiKey(data.llmConfig);
   normalizeWorkspaceEntities(data);

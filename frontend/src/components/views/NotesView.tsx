@@ -8,6 +8,7 @@ import { NOTE_CATEGORIES, NOTE_MOODS } from '@apptypes/index';
 import type { Note, PipelineStageKey, Reference, ResearchProject } from '@apptypes/index';
 import { renderMarkdown } from '@utils/markdown';
 import { ThreeColumnWorkbench } from '@components/layout/ThreeColumnWorkbench';
+import { confirmAction } from '@lib/appFeedback';
 import './notes-workbench.css';
 
 const STAGE_LABEL: Record<string, string> = Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage.key, stage.label]));
@@ -87,14 +88,32 @@ export function NotesView() {
   useEffect(() => {
     if (!pendingNoteId) return;
     const note = useAppStore.getState().notes.find((candidate) => candidate.id === pendingNoteId);
-    if (note) {
+    if (!note || note.id === selectedId) {
+      setPendingNoteId(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const proceed = !hasUnsavedChanges || await confirmAction({
+        title: '放弃未保存的修改？',
+        message: '当前笔记有未保存的内容，放弃后无法恢复。',
+        danger: true,
+        confirmLabel: '放弃修改',
+        cancelLabel: '继续编辑',
+      });
+      if (cancelled || useAppStore.getState().pendingNoteId !== pendingNoteId) return;
+      if (!proceed) {
+        setPendingNoteId(null);
+        return;
+      }
       setSelectedId(note.id);
       setEditing(true);
       setPreview(false);
       setDraft({ ...note });
-    }
-    setPendingNoteId(null);
-  }, [pendingNoteId, setPendingNoteId]);
+      setPendingNoteId(null);
+    })();
+    return () => { cancelled = true; };
+  }, [pendingNoteId, setPendingNoteId, selectedId, hasUnsavedChanges]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -107,12 +126,19 @@ export function NotesView() {
   const allCategories = useMemo(() => [...new Set<string>([...NOTE_CATEGORIES, ...notes.map((note) => note.category).filter(Boolean)])], [notes]);
   const filtered = useMemo(() => filterAndSortNotes(notes, query, filterCat, filterTag, sort), [notes, query, filterCat, filterTag, sort]);
 
-  function confirmDiscard(): boolean {
-    return !hasUnsavedChanges || window.confirm('当前笔记有未保存的修改。确定放弃这些修改吗？');
+  function confirmDiscard(): Promise<boolean> {
+    if (!hasUnsavedChanges) return Promise.resolve(true);
+    return confirmAction({
+      title: '放弃未保存的修改？',
+      message: '当前笔记有未保存的内容，放弃后无法恢复。',
+      danger: true,
+      confirmLabel: '放弃修改',
+      cancelLabel: '继续编辑',
+    });
   }
 
-  function startNew(partial: Partial<Note> = {}) {
-    if (!confirmDiscard()) return;
+  async function startNew(partial: Partial<Note> = {}) {
+    if (!(await confirmDiscard())) return;
     const id = addNote(partial);
     const note = useAppStore.getState().notes.find((candidate) => candidate.id === id) ?? null;
     setSelectedId(id);
@@ -121,9 +147,9 @@ export function NotesView() {
     setDraft(note ? { ...note } : null);
   }
 
-  function openNote(note: Note) {
+  async function openNote(note: Note) {
     if (note.id === selectedId) return;
-    if (!confirmDiscard()) return;
+    if (!(await confirmDiscard())) return;
     setSelectedId(note.id);
     setEditing(false);
     setPreview(false);
@@ -137,8 +163,8 @@ export function NotesView() {
     setPreview(false);
   }
 
-  function cancelEdit() {
-    if (!confirmDiscard()) return;
+  async function cancelEdit() {
+    if (!(await confirmDiscard())) return;
     setEditing(false);
     setPreview(false);
     setDraft(selected ? { ...selected } : null);
@@ -153,16 +179,23 @@ export function NotesView() {
     setPreview(false);
   }
 
-  function removeNote() {
-    if (!selected || !window.confirm('确定删除这条笔记吗？此操作不可恢复。')) return;
+  async function removeNote() {
+    if (!selected) return;
+    const confirmed = await confirmAction({
+      title: '删除这条笔记？',
+      message: '笔记会从本机移除，此操作不可恢复。',
+      danger: true,
+      confirmLabel: '确认删除',
+    });
+    if (!confirmed) return;
     deleteNote(selected.id);
     setSelectedId(null);
     setDraft(null);
     setEditing(false);
   }
 
-  function closeMobileNote() {
-    if (!confirmDiscard()) return;
+  async function closeMobileNote() {
+    if (!(await confirmDiscard())) return;
     setSelectedId(null);
     setDraft(null);
     setEditing(false);

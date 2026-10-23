@@ -12,6 +12,8 @@ import { EmptyGuide } from '@components/ui/EmptyGuide';
 import { automationsApi, type AutomationDef, type AutomationRunEntry } from '@services/extensions';
 import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
 import { validateCronExpression } from '@services/cron';
+import { serviceErrorMessage } from '@lib/userFacingError';
+import { confirmAction, notify } from '@lib/appFeedback';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -69,7 +71,7 @@ export function AutomationsView() {
       setName(''); setPrompt(''); setEditingId(null);
       await refresh();
     } catch (error) {
-      alert(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`保存失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
@@ -111,7 +113,13 @@ export function AutomationsView() {
   };
 
   const remove = async (item: AutomationDef) => {
-    if (!window.confirm(`删除自动化「${item.name}」？`)) return;
+    const confirmed = await confirmAction({
+      title: `删除自动化「${item.name}」？`,
+      message: '已排队的运行会被取消，历史记录不受影响。',
+      danger: true,
+      confirmLabel: '确认删除',
+    });
+    if (!confirmed) return;
     try {
       await automationsApi.remove(item.id);
       await refresh();
@@ -123,15 +131,15 @@ export function AutomationsView() {
       await automationsApi.runNow(item.id);
       setView('tasks');
     } catch (error) {
-      alert(`触发失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`触发失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
   return (
     <div className="auto-page">
-      <header className="newtask-hero">
-        <h1>定时任务</h1>
-        <p>到点在这台电脑上跑一条任务，比如每天扫文献。建了就能删。</p>
+      <header className="auto-header">
+        <h1 className="view-title">定时任务</h1>
+        <p>按时间自动运行研究，在研究记录中查看结果。</p>
       </header>
 
       {loadState === 'error' && (
@@ -143,8 +151,8 @@ export function AutomationsView() {
 
       <section className="auto-composer" aria-labelledby="auto-compose-heading">
         <h2 id="auto-compose-heading">{editingId ? '编辑自动化' : '新建自动化'}</h2>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="名称，如：每日 AI 文献动态" aria-label="自动化名称" />
-        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="触发时执行的任务描述…" rows={2} aria-label="任务描述" />
+        <label className="auto-field"><span>任务名称</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：每日文献动态" aria-label="自动化名称" /></label>
+        <label className="auto-field"><span>任务内容</span><textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="描述需要定期执行的研究任务…" rows={3} aria-label="任务描述" /></label>
         <div className="auto-row">
           <label>
             节奏
@@ -204,7 +212,9 @@ export function AutomationsView() {
           <div className="auto-load-state" role="status" aria-live="polite" aria-busy="true">
             <Icon name="retry" size={15} /> 正在读取自动化…
           </div>
-        ) : loadState === 'error' ? null : items.length === 0 ? (
+        ) : loadState === 'error' ? (
+          <p className="auto-load-state" role="status">本机后端离线，暂时无法读取已创建的自动化。恢复连接后点击上方「重试」。</p>
+        ) : items.length === 0 ? (
           <EmptyGuide title="还没有自动化">
             <p>写名称和要跑的任务，选每天或间隔。到点会在这台电脑上执行，不喜欢可以删。</p>
           </EmptyGuide>

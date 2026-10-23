@@ -7,7 +7,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LLMConfig } from '@apptypes/index';
-import { agentApi, isActiveRun, subscribeRunEvents, type AgentRunDetail } from '@services/agent';
+import { isActiveRun, type AgentRunDetail } from '@services/agent';
+import { observeRun } from '@services/runObserver';
 import { LLMError, streamChat, type LLMMessage } from '@services/llm';
 
 export interface PendingRunBacklink {
@@ -112,7 +113,7 @@ export function useChatStreamController({
       if (mountedRef.current) setBusy(false);
       if (mountedRef.current) {
         onFinish();
-        onScrollToBottom(true);
+        onScrollToBottom();
       }
     }
   }, [llmConfig, onDelta, onError, onFinish, onScrollToBottom, onStart, onUsage]);
@@ -122,55 +123,27 @@ export function useChatStreamController({
 
 interface RunWatchOptions {
   onTerminal: (run: AgentRunDetail) => void;
+  onWaiting?: (run: AgentRunDetail) => void;
 }
 
-/**
- * Watches a converted agent run. EventSource remains the low-latency path;
- * a single interval is created only after its connection fails.
- */
-export function watchRunOutput(link: PendingRunBacklink, { onTerminal }: RunWatchOptions): () => void {
-  let disposed = false;
-  let settled = false;
-  let polling = false;
-  let pollTimer: number | null = null;
-  let closeEvents: (() => void) | null = null;
-
-  const clear = () => {
-    if (pollTimer !== null) window.clearInterval(pollTimer);
-    pollTimer = null;
-    closeEvents?.();
-    closeEvents = null;
-  };
-
-  const checkTerminal = async () => {
-    try {
-      const run = await agentApi.get(link.runId);
-      if (disposed || settled || isActiveRun(run.status)) return;
-      settled = true;
-      clear();
-      onTerminal(run);
-    } catch {
-      // Keep a fallback interval alive. A temporary local-backend restart must
-      // not turn a pending output into a fabricated assistant response.
-    }
-  };
-
-  const startPolling = () => {
-    if (disposed || polling) return;
-    polling = true;
-    closeEvents?.();
-    closeEvents = null;
-    void checkTerminal();
-    pollTimer = window.setInterval(() => void checkTerminal(), 1500);
-  };
-
-  closeEvents = subscribeRunEvents(link.runId, {
-    onStatus: () => void checkTerminal(),
-    onError: startPolling,
-  });
-
-  return () => {
-    disposed = true;
-    clear();
-  };
+/** Watches persisted terminal output through the shared SSE/polling observer. */
+export function watchRunOutput(link: PendingRunBacklink, { onTerminal, onWaiting }: RunWatchOptions): () => void {
+  let notifiedStatus = '';
+  return observeRun(link.runId, {
+    onUpdate: (run) => {
+      if (!isActiveRun(run.status)) {
+        onTerminal(run);
+        return;
+      }
+      const waiting = run.status === 'waiting_evidence' || run.status === 'waiting_confirm';
+      if (!waiting) {
+        notifiedStatus = '';
+        return;
+      }
+      if (onWaiting && notifiedStatus !== run.status) {
+        notifiedStatus = run.status;
+        onWaiting(run);
+      }
+    },
+  }).close;
 }

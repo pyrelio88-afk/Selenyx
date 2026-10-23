@@ -29,14 +29,13 @@
   --raw-radius-xl: 16px;
   --raw-radius-pill: 999px;
 
-  /* 字号（v0.03 阶梯：11 / 12 / 13.5 / 16 / 20 / 26 / 32） */
-  --font-xs: 11px;
-  --font-sm: 12px;
-  --font-base: 13.5px;
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-base: 14px;
   --font-md: 16px;
   --font-lg: 20px;
-  --font-xl: 26px;
-  --font-2xl: 32px;
+  --font-xl: 24px;
+  --font-2xl: 30px;
 
   /* 行高 */
   --leading-tight: 1.25;

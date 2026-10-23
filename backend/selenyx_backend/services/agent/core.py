@@ -17,7 +17,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 from sqlalchemy import func
 
-from selenyx_backend.models import EvidenceItem, Reference, ResearchProject
+from selenyx_backend.models import DocumentChunk, EvidenceItem, Reference, ResearchProject
 from selenyx_backend.routers.ai import _auth_headers, _completion_content, _completion_url, llm_is_configured
 from selenyx_backend.services.agent.budget import estimate_tokens, record_usage
 from selenyx_backend.services.artifacts import list_notes as list_notes_svc
@@ -45,7 +45,7 @@ SYSTEM_PROMPT = """你是 Selenyx 的本机研究 agent。你通过「规划→�
 3. project_context — 查看当前项目概况（阶段、文献数、证据数）。args: {}
 4. list_evidence — 列出项目证据链（默认仅人工已接受）。args: {"acceptedOnly": true}
 5. ask_expert — 把子问题委托给专家子代理（独立人格与上下文）。args: {"expert": "专家 key 或名称", "question": "子问题"}
-6. save_evidence — 把一条可核验的证据存为证据卡（进人工待裁决队列）。args: {"claim": "论断", "excerpt": "原文摘录", "referenceId": "文献 id（可空）", "page": 页码（可空）, "relation": "supports|contradicts|qualifies"}
+6. save_evidence — 把摘录存为待人工裁决的证据卡。args: {"claim": "论断", "excerpt": "原文摘录", "referenceId": "当前项目文献 id（可空）", "chunkId": "search_library 返回的真实文本块 id（可空）", "page": 页码（可空）, "relation": "supports|contradicts|qualifies"}。有 chunkId 时核对文献归属与摘录原文；无 chunkId 时摘录未核验。原文匹配不代表论断获得支持，均须人工裁决。
 7. list_pending_evidence — 查看当前待人工裁决的证据卡。args: {}
 8. write_note — 把成稿/要点写入本机笔记（.md 落盘）。args: {"title": "标题", "content": "正文"}
 9. export_artifact — 把本次运行的成稿导出为工件文件。args: {"name": "draft.md", "content": "正文"}
@@ -164,15 +164,44 @@ def _clamp_int(raw: Any, default: int, upper: int) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _project_reference_ids(project: ResearchProject) -> set[str]:
+    try:
+        ids = json.loads(project.reference_ids_json or "[]")
+    except (TypeError, ValueError):
+        return set()
+    return {value for value in ids if isinstance(value, str)} if isinstance(ids, list) else set()
+
+
 async def _tool_search_library(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
     query = str(args.get("query", "")).strip()
     if not query:
         return {"error": "query 不能为空"}
+    allowed_ids = None
+    if project_id is not None:
+        project = session.get(ResearchProject, project_id)
+        if project is None:
+            return {"error": "项目不存在"}
+        allowed_ids = _project_reference_ids(project)
+        if not allowed_ids:
+            return {"hits": [], "count": 0}
     top_k = _clamp_int(args.get("topK"), 6, 12)
     hits = await semantic_search(session, query, project_id=project_id, top_k=top_k)
+    if allowed_ids is not None:
+        hits = [hit for hit in hits if hit.reference_id in allowed_ids]
     return {
         "hits": [
-            {"title": h.title, "excerpt": truncate(h.excerpt, 500), "page": h.page, "score": h.score}
+            {
+                "referenceId": h.reference_id,
+                "chunkId": h.chunk_id,
+                "title": h.title,
+                "excerpt": h.excerpt,
+                "page": h.page,
+                "section": h.section,
+                "charStart": h.char_start,
+                "charEnd": h.char_end,
+                "score": h.score,
+                "source": h.source,
+            }
             for h in hits
         ],
         "count": len(hits),
@@ -181,7 +210,13 @@ async def _tool_search_library(session: Session, project_id: str | None, args: d
 
 def _tool_list_references(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
     limit = _clamp_int(args.get("limit"), 30, 100)
-    refs = list(session.exec(select(Reference).limit(limit)).all())
+    statement = select(Reference)
+    if project_id is not None:
+        project = session.get(ResearchProject, project_id)
+        if project is None:
+            return {"error": "项目不存在"}
+        statement = statement.where(Reference.id.in_(_project_reference_ids(project)))
+    refs = list(session.exec(statement.limit(limit)).all())
     return {"references": [{"id": r.id, "title": r.title, "year": r.year} for r in refs], "count": len(refs)}
 
 
@@ -219,7 +254,18 @@ def _tool_list_evidence(session: Session, project_id: str | None, args: dict[str
     total = session.exec(select(func.count(EvidenceItem.id)).where(*filters)).one()
     return {
         "evidence": [
-            {"claim": truncate(item.claim, 300), "excerpt": truncate(item.excerpt, 400), "relation": item.relation, "review": item.review}
+            {
+                "id": item.id,
+                "referenceId": item.reference_id,
+                "chunkId": item.chunk_id,
+                "page": item.page,
+                "anchorId": item.anchor_id,
+                "claim": truncate(item.claim, 300),
+                "excerpt": truncate(item.excerpt, 400),
+                "relation": item.relation,
+                "review": item.review,
+                "status": item.status,
+            }
             for item in items
         ],
         "count": total,
@@ -230,34 +276,63 @@ def _tool_save_evidence(session: Session, project_id: str | None, args: dict[str
     # 证据门：agent 只能落 pending 卡，接受/驳回权永远在人
     if not project_id:
         return {"error": "任务未关联项目，无法保存证据卡"}
-    excerpt = truncate(str(args.get("excerpt", "")).strip(), 2000)
+    project = session.get(ResearchProject, project_id)
+    if project is None:
+        return {"error": "项目不存在"}
+    excerpt = str(args.get("excerpt") or "").strip()
     if not excerpt:
         return {"error": "excerpt 不能为空：证据卡必须附原文摘录"}
     claim = truncate(str(args.get("claim", "")).strip(), 300)
-    reference_id = str(args.get("referenceId", "")).strip()
-    if reference_id and not session.get(Reference, reference_id):
-        return {"error": f"文献不存在：{reference_id}（先用 list_references 取真实 id）"}
+    reference_id = str(args.get("referenceId") or "").strip()
+    if reference_id:
+        if not session.get(Reference, reference_id):
+            return {"error": f"文献不存在：{reference_id}（先用 list_references 取真实 id）"}
+        if reference_id not in _project_reference_ids(project):
+            return {"error": f"文献不属于当前项目：{reference_id}"}
     relation = str(args.get("relation", "supports"))
     if relation not in ("supports", "contradicts", "qualifies"):
         return {"error": f"relation 非法：{relation}"}
     page_raw = args.get("page")
-    page = page_raw if isinstance(page_raw, int) and page_raw > 0 else None
+    page = page_raw if type(page_raw) is int and page_raw > 0 else None
+    chunk_id = str(args.get("chunkId") or "").strip() or None
+    if chunk_id:
+        if not reference_id:
+            return {"error": "chunkId 必须同时提供 referenceId"}
+        chunk = session.get(DocumentChunk, chunk_id)
+        if chunk is None:
+            return {"error": f"文本块不存在：{chunk_id}"}
+        if chunk.reference_id != reference_id:
+            return {"error": f"文本块不属于该文献：{chunk_id}"}
+        # Only whitespace is normalized; matching an excerpt does not validate the claim.
+        if " ".join(excerpt.split()) not in " ".join(chunk.text.split()):
+            return {"error": f"excerpt 与文本块原文不匹配：{chunk_id}"}
+        if page is not None and page != chunk.page:
+            return {"error": f"page 与文本块页码不匹配：{chunk_id}"}
+        page = chunk.page
     item = EvidenceItem(
         project_id=project_id,
         reference_id=reference_id,
+        chunk_id=chunk_id,
         claim=claim,
-        excerpt=excerpt,
+        excerpt=excerpt[:2000],
         relation=relation,
         review="pending",
         status="pending",
         confidence="medium",
         page=page,
-        notes="agent 产出，待人工裁决",
+        notes=("agent 产出，仅核对摘录原文，论断待人工裁决" if chunk_id
+               else "agent 产出，摘录原文未核验，待人工裁决"),
     )
     session.add(item)
     session.commit()
     session.refresh(item)
-    return {"saved": True, "evidenceId": item.id, "status": "pending", "message": "证据卡已进入待裁决队列"}
+    return {
+        "saved": True,
+        "evidenceId": item.id,
+        "status": "pending",
+        "excerptVerification": "matched_chunk_text" if chunk_id else "unverified",
+        "message": "证据卡已进入待裁决队列",
+    }
 
 
 def _tool_list_pending_evidence(session: Session, project_id: str | None, args: dict[str, Any]) -> Any:
@@ -268,7 +343,15 @@ def _tool_list_pending_evidence(session: Session, project_id: str | None, args: 
     total = session.exec(select(func.count(EvidenceItem.id)).where(*pending_filters)).one()
     return {
         "pending": [
-            {"id": item.id, "claim": item.claim, "excerpt": truncate(item.excerpt, 300), "page": item.page}
+            {
+                "id": item.id,
+                "referenceId": item.reference_id,
+                "chunkId": item.chunk_id,
+                "anchorId": item.anchor_id,
+                "claim": item.claim,
+                "excerpt": truncate(item.excerpt, 300),
+                "page": item.page,
+            }
             for item in items
         ],
         "count": total,

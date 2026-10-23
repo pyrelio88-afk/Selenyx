@@ -87,7 +87,7 @@ interface SkillDirectoryProps {
 function SkillDirectory({ skills, selectedId, onSelect, category, onCategoryChange, query, onQueryChange, categoryCounts, mobile }: SkillDirectoryProps) {
   return (
     <aside className={`skills-directory ${mobile ? 'is-mobile' : ''}`} aria-label="科研能力目录">
-      <div className="skills-directory-title"><h1>科研能力</h1><span>{skills.length} 项</span></div>
+      <div className="skills-directory-title"><h2>科研能力</h2><span>{skills.length} 项</span></div>
       <label className="skills-search">
         <Icon name="search" size={15} />
         <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索名称、说明或标签" aria-label="搜索科研能力" />
@@ -252,6 +252,14 @@ export function SkillsView() {
 
   return (
     <div className="skills-workbench">
+      <div className="view-header" style={{ padding: '16px 16px 0', margin: 0 }}>
+        <div>
+          <h1 className="view-title">技能</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
+            本机 SKILL.md 技能包与科研能力目录；任务输入框以 /技能名 开头即可调用。
+          </p>
+        </div>
+      </div>
       {/* 模块 F：Agent 技能（本机 SKILL.md 真管理）与静态能力目录分区 */}
       <div style={{ display: 'flex', gap: 6, padding: '10px 16px 0' }} role="group" aria-label="技能分区">
         <button

@@ -10,6 +10,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
 import { AGENT_TOOL_LABELS, skillsApi, type AgentSkill } from '@services/skills';
+import { serviceErrorMessage } from '@lib/userFacingError';
+import { confirmAction, notify } from '@lib/appFeedback';
 
 export function AgentSkillsPanel() {
   const currentProjectId = useAppStore((s) => s.currentProjectId);
@@ -42,17 +44,23 @@ export function AgentSkillsPanel() {
       await skillsApi.toggle(skill.name, !skill.enabled, skill.scope === 'project' ? currentProjectId : null);
       await refresh();
     } catch (error) {
-      alert(`切换失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`切换失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
   const remove = async (skill: AgentSkill) => {
-    if (!window.confirm(`删除技能「${skill.name}」？`)) return;
+    const confirmed = await confirmAction({
+      title: `删除技能「${skill.name}」？`,
+      message: '技能文件会从本机移除；正在运行的任务不受影响。',
+      danger: true,
+      confirmLabel: '确认删除',
+    });
+    if (!confirmed) return;
     try {
       await skillsApi.remove(skill.name, skill.scope === 'project' ? currentProjectId : null);
       await refresh();
     } catch (error) {
-      alert(`删除失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`删除失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
@@ -70,7 +78,7 @@ export function AgentSkillsPanel() {
       setShowForm(false);
       await refresh();
     } catch (error) {
-      alert(`创建失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`创建失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
@@ -82,7 +90,7 @@ export function AgentSkillsPanel() {
     <div style={{ display: 'grid', gap: 14, alignContent: 'start', padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <p style={{ margin: 0, flex: 1, fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          本机 SKILL.md 技能包：指令注入 agent 运行、白名单裁剪工具边界。任务输入框以 <code>/技能名</code> 开头即可调用。
+          技能指令会注入 agent 运行；工具白名单只保留需要的工具。
         </p>
         <button type="button" className="btn btn-primary" onClick={() => setShowForm((v) => !v)} style={{ minHeight: 36 }}>
           <Icon name="plus" size={14} /> 新建技能

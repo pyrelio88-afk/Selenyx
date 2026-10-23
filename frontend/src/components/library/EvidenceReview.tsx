@@ -145,6 +145,7 @@ export function EvidenceReviewPanel() {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === 'ArrowDown') { event.preventDefault(); setCursor((c) => Math.min(c + 1, cards.length - 1)); }
       else if (event.key === 'ArrowUp') { event.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
       else if (tab === 'pending' && (event.key === 'j' || event.key === 'J')) { event.preventDefault(); decideCurrent('accepted'); }

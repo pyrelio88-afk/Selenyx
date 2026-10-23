@@ -1,6 +1,8 @@
 .stattools-view {
   min-width: 0;
   color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-base);
 }
 
 .stattools-view-header {
@@ -13,8 +15,8 @@
   padding: 0 0 14px;
   border-bottom: 1px solid var(--border);
 }
-.stattools-view-header h1 { margin: 0; font-family: var(--font-serif); font-size: 25px; font-weight: 680; line-height: 1.25; }
-.stattools-view-header p { max-width: 680px; margin: 5px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
+.stattools-view-header h1 { margin: 0; font-family: var(--font-sans); font-size: var(--font-xl); font-weight: 600; line-height: 1.35; }
+.stattools-view-header p { max-width: 680px; margin: 5px 0 0; color: var(--text-secondary); font-size: var(--font-sm); line-height: 1.55; }
 .stattools-formula-shortcut {
   display: inline-flex;
   min-height: 38px;
@@ -28,8 +30,8 @@
   color: var(--accent-hover);
   background: var(--bg-elevated);
   font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: var(--font-sm);
+  font-weight: 600;
   cursor: pointer;
 }
 .stattools-formula-shortcut:hover { border-color: var(--accent); background: var(--accent-light); }
@@ -68,11 +70,11 @@
   background: var(--bg-elevated);
 }
 .stattools-search:focus-within { border-color: var(--accent); box-shadow: var(--focus-ring); }
-.stattools-search input { min-width: 0; flex: 1; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: 12px; }
+.stattools-search input { min-width: 0; flex: 1; border: 0; outline: 0; color: var(--text-primary); background: transparent; font: inherit; font-size: var(--font-sm); }
 .stattools-search button { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border: 0; border-radius: 6px; color: var(--text-muted); background: transparent; cursor: pointer; }
 .stattools-nav { min-height: 0; flex: 1; overflow-y: auto; padding: 0 8px 12px; }
 .stattools-nav-group { margin-bottom: 8px; }
-.stattools-nav-group h2 { margin: 0; padding: 10px 8px 5px; color: var(--text-muted); font-size: 10.5px; font-weight: 720; letter-spacing: .04em; }
+.stattools-nav-group h2 { margin: 0; padding: 10px 8px 5px; color: var(--text-muted); font-size: var(--font-sm); font-weight: 600; letter-spacing: .04em; }
 .stattools-nav-group > button {
   display: flex;
   width: 100%;
@@ -90,20 +92,20 @@
   cursor: pointer;
 }
 .stattools-nav-group > button:hover { color: var(--text-primary); background: var(--bg-hover); }
-.stattools-nav-group > button.active { color: var(--accent-hover); background: var(--accent-light); box-shadow: inset 3px 0 0 var(--accent); }
+.stattools-nav-group > button.active { color: var(--text-primary); background: var(--bg-hover); box-shadow: inset 3px 0 0 var(--accent); }
 .stattools-nav-group > button > span { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.stattools-nav-group > button strong { overflow: hidden; color: inherit; font-size: 12px; font-weight: 660; text-overflow: ellipsis; white-space: nowrap; }
-.stattools-nav-group > button small { overflow: hidden; color: var(--text-muted); font-size: 9.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.stattools-nav-group > button strong { overflow: hidden; color: inherit; font-size: var(--font-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.stattools-nav-group > button small { overflow: hidden; color: var(--text-muted); font-size: var(--font-xs); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .stattools-nav-group > button.active small { color: currentColor; opacity: .72; }
-.stattools-no-results { margin: 20px 10px; padding: 14px 10px; color: var(--text-muted); font-size: 11px; line-height: 1.6; text-align: center; }
+.stattools-no-results { margin: 20px 10px; padding: 14px 10px; color: var(--text-muted); font-size: var(--font-base); line-height: 1.6; text-align: center; }
 
 .stattools-canvas { min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-canvas); }
 .stattools-canvas-header { display: flex; min-height: 78px; flex: 0 0 auto; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--bg-elevated); }
 .stattools-canvas-header > div { min-width: 0; }
-.stattools-canvas-header span { display: block; margin-bottom: 2px; color: var(--accent); font-size: 10px; font-weight: 700; }
-.stattools-canvas-header h2 { margin: 0; font-family: var(--font-serif); font-size: 20px; font-weight: 660; line-height: 1.3; }
+.stattools-canvas-header span { display: block; margin-bottom: 2px; color: var(--accent); font-size: var(--font-xs); font-weight: 600; }
+.stattools-canvas-header h2 { margin: 0; font-family: var(--font-sans); font-size: var(--font-lg); font-weight: 600; line-height: 1.3; }
 .stattools-canvas-header h2:focus { outline: 0; }
-.stattools-canvas-header p { margin: 3px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+.stattools-canvas-header p { margin: 3px 0 0; color: var(--text-muted); font-size: var(--font-xs); line-height: 1.4; }
 .stattools-mobile-back { display: none; }
 .stattools-canvas-scroll { min-width: 0; min-height: 0; flex: 1; overflow: auto; padding: 22px; overscroll-behavior: contain; }
 .stattools-canvas-scroll > .card,
@@ -113,7 +115,7 @@
 .stattools-canvas-scroll .input { min-height: 40px; }
 .stattools-canvas-scroll .btn { min-height: 40px; }
 .stattools-canvas-scroll label { line-height: 1.45; }
-.stattools-result { margin-top: 12px; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 7px; background: var(--accent-light); }
+.stattools-result { margin-top: 12px; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 7px; background: var(--bg-elevated); }
 
 @media (max-width: 980px) and (min-width: 769px) {
   .stattools-shell { grid-template-columns: 232px minmax(0, 1fr); }
@@ -122,22 +124,17 @@
 
 @media (max-width: 768px) {
   .stattools-view-header { min-height: auto; align-items: flex-start; margin-bottom: 10px; padding-bottom: 10px; }
-  .stattools-view-header h1 { font-size: 22px; }
-  .stattools-view-header p { font-size: 11px; }
   .stattools-formula-shortcut { display: none; }
   .stattools-shell { display: block; min-height: 0; height: auto; overflow: visible; border: 0; border-radius: 0; background: transparent; }
   .stattools-catalog { min-height: calc(100dvh - 210px); border: 1px solid var(--border); border-radius: 9px; }
   .stattools-nav-group > button { min-height: 54px; padding: 7px 10px; }
-  .stattools-nav-group > button strong { font-size: 13px; }
-  .stattools-nav-group > button small { font-size: 10.5px; }
   .stattools-search { min-height: 46px; }
   .stattools-search button { width: 44px; height: 44px; margin-right: -8px; }
   .stattools-canvas { display: none; min-height: calc(100dvh - 126px); overflow: visible; border: 1px solid var(--border); border-radius: 9px; }
   .stattools-view.is-workspace-open .stattools-catalog { display: none; }
   .stattools-view.is-workspace-open .stattools-canvas { display: flex; }
   .stattools-canvas-header { position: sticky; z-index: 8; top: 56px; min-height: 82px; padding: 8px 10px; }
-  .stattools-mobile-back { display: inline-flex; min-width: 86px; min-height: 44px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 4px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-secondary); background: var(--bg-surface); font-family: inherit; font-size: 11px; cursor: pointer; }
-  .stattools-canvas-header h2 { font-size: 17px; }
+  .stattools-mobile-back { display: inline-flex; min-width: 86px; min-height: 44px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 4px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; color: var(--text-secondary); background: var(--bg-surface); font-family: inherit; font-size: var(--font-sm); cursor: pointer; }
   .stattools-canvas-header p { display: none; }
   .stattools-canvas-scroll { padding: 10px; overflow-x: auto; }
   .stattools-canvas-scroll > .card,

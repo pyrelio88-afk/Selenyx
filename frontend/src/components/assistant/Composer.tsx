@@ -71,6 +71,8 @@ export function Composer({
   }, [autoResize, inputRef, maxHeight, value]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // IME confirmation must never run slash commands or submit a message.
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     onKeyDown?.(event);
     if (event.defaultPrevented || !submitOnEnter) return;
     if (event.key === 'Enter' && !event.shiftKey) {

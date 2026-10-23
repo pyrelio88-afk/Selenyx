@@ -94,3 +94,310 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Modal-only layout: a bounded reading column and plain, divided groups.
+   Keep the legacy routed settings workbench above unchanged. */
+.settings-modal {
+  --settings-divider: color-mix(in srgb, var(--border) 70%, transparent);
+  --text-muted: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.settings-modal .settings-modal-header {
+  flex-shrink: 0;
+  padding: 14px 20px;
+}
+
+.settings-modal .settings-modal-body {
+  grid-template-columns: 168px minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.settings-modal .settings-modal-rail {
+  min-width: 0;
+  gap: 4px;
+  padding: 16px 10px;
+  border-color: var(--settings-divider);
+  background: color-mix(in srgb, var(--bg-canvas) 45%, var(--bg-surface));
+  overscroll-behavior: contain;
+}
+
+.settings-modal .settings-modal-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 9px;
+  min-height: 38px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-modal .settings-modal-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings-modal .settings-modal-tab[aria-current="true"] {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 650;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.settings-modal .settings-modal-content {
+  min-width: 0;
+  padding: 24px 28px 32px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-block: 24px;
+}
+
+.settings-modal .settings-modal-content > section {
+  width: 100%;
+  max-width: 640px;
+  min-width: 0;
+  margin-inline: auto;
+  overflow-wrap: anywhere;
+}
+
+.settings-modal .settings-group,
+.settings-modal .settings-modal-content > section > .card,
+.settings-modal .settings-modal-content > section > .card:hover {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+/* MemorySection retains inline presentation; normalize it here rather than
+   changing the shared component or leaking overrides into other workbenches. */
+.settings-modal .settings-modal-content > section > .card {
+  margin: 0 !important;
+}
+
+.settings-modal .settings-group + .settings-group,
+.settings-modal .settings-modal-content > section > .card + .card {
+  margin-top: 24px !important;
+  padding-top: 24px;
+  border-top: 1px solid var(--settings-divider);
+}
+
+.settings-modal .settings-modal-content h3 {
+  margin: 0 0 10px !important;
+  font-size: 14px !important;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+/* Override the legacy inline 11–12px helper/control sizes within this dialog. */
+.settings-modal .settings-modal-content :is(p, span, label, code, kbd, button, input, select, textarea, ul, [role="status"]) {
+  font-size: 13px !important;
+}
+
+.settings-modal .settings-modal-content p {
+  line-height: 1.65 !important;
+}
+
+.settings-modal .settings-modal-content :is(button, input, select, textarea, a) {
+  max-width: 100%;
+}
+
+.settings-modal .settings-modal-content :is(input:not([type="checkbox"]):not([type="range"]), select, textarea) {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font-family: inherit;
+}
+
+.settings-modal .settings-modal-content :is(input[type="checkbox"], input[type="range"]) {
+  accent-color: var(--accent);
+}
+
+.settings-modal .settings-modal-content .btn {
+  min-height: 36px;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.settings-modal .settings-llm-form {
+  width: 100%;
+  max-width: 520px;
+  gap: 16px;
+}
+
+.settings-modal .settings-llm-form label {
+  min-width: 0;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.settings-modal .settings-llm-form :is(input, select) {
+  width: 100%;
+}
+
+.settings-modal .settings-control-row,
+.settings-modal .settings-llm-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-modal .theme-choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-modal .theme-choice {
+  min-width: 0;
+  min-height: 96px;
+  justify-content: flex-start;
+}
+
+.settings-modal .settings-modal-content :is([aria-pressed="true"], [aria-checked="true"]) {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  font-weight: 650;
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+/* Theme cards are marked by the swatch and a hairline accent edge, never a filled block. */
+.settings-modal .theme-choice[aria-pressed="true"] {
+  background: var(--bg-surface);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.settings-modal .theme-choice.btn-primary > span:last-child {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.settings-modal .density-toggle,
+.settings-modal .v4-segmented {
+  max-width: 100%;
+  overflow: visible;
+}
+
+.settings-modal :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+
+.settings-modal .settings-model-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  column-gap: 24px;
+}
+
+.settings-modal .settings-model-option {
+  display: grid;
+  gap: 3px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--settings-divider);
+}
+
+.settings-modal .settings-model-option :is(code, span) {
+  color: var(--text-secondary);
+}
+
+.settings-modal .settings-data-stats {
+  gap: 16px;
+}
+
+.settings-modal .settings-data-stat {
+  display: grid;
+  gap: 2px;
+  padding-block: 4px;
+}
+
+.settings-modal .settings-data-stat strong {
+  font-size: 24px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.settings-modal .settings-data-stat span {
+  color: var(--text-secondary);
+}
+
+.settings-modal .settings-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--settings-divider);
+  color: var(--text-secondary);
+}
+
+.settings-modal .settings-shortcut-row kbd {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 700px) {
+  .settings-modal .settings-modal-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-modal .settings-modal-rail {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    padding: 8px 12px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--settings-divider);
+    scroll-padding-inline: 12px;
+  }
+
+  .settings-modal .settings-modal-tab {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .settings-modal .settings-modal-tab[aria-current="true"] {
+    box-shadow: inset 0 -3px 0 var(--accent);
+  }
+
+  .settings-modal .settings-modal-content {
+    padding: 20px 18px 28px;
+  }
+
+  .settings-modal .settings-modal-content .card :is(div, li) {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 430px) {
+  .settings-modal .theme-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-modal .settings-data-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

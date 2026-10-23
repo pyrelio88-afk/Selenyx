@@ -15,7 +15,6 @@ interface MessageListProps {
   messages: Msg[];
   busy: boolean;
   configured: boolean;
-  onPickPrompt: (prompt: string) => void;
   onCopy: (content: string) => void;
   onEdit: (index: number) => void;
   onRetry: () => void;
@@ -28,7 +27,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
   messages,
   busy,
   configured,
-  onPickPrompt,
   onCopy,
   onEdit,
   onRetry,
@@ -75,7 +73,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
     <>
       <div className="aichat-messages" ref={listRef} onScroll={onScroll}>
         {messages.length === 0 ? (
-          <EmptyState configured={configured} onPick={onPickPrompt} />
+          <EmptyState configured={configured} />
         ) : (
           <div className="aichat-thread">
             {messages.map((message, index) => {

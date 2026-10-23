@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Icon } from '@components/ui/Icon';
 import { memoryApi, type ProjectMemoryEntry } from '@services/skills';
+import { serviceErrorMessage } from '@lib/userFacingError';
+import { confirmAction, notify } from '@lib/appFeedback';
 
 export function MemorySection() {
   const [globalMemory, setGlobalMemory] = useState('');
@@ -39,12 +41,18 @@ export function MemorySection() {
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
     } catch (error) {
-      alert(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`保存失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
   const clearGlobal = async () => {
-    if (!window.confirm('清空全局记忆？此操作不可撤销。')) return;
+    const confirmed = await confirmAction({
+      title: '清空全局记忆？',
+      message: '清空后所有项目都会失去这段共享记忆，且不可撤销。',
+      danger: true,
+      confirmLabel: '确认清空',
+    });
+    if (!confirmed) return;
     await memoryApi.clearGlobal();
     setGlobalMemory('');
   };
@@ -76,7 +84,13 @@ export function MemorySection() {
   };
 
   const clearProject = async (entry: ProjectMemoryEntry) => {
-    if (!window.confirm(`清空项目「${entry.projectName}」的记忆？`)) return;
+    const confirmed = await confirmAction({
+      title: `清空项目「${entry.projectName}」的记忆？`,
+      message: '只会删除该项目的记忆，全局记忆不受影响。',
+      danger: true,
+      confirmLabel: '确认清空',
+    });
+    if (!confirmed) return;
     await memoryApi.clearProject(entry.projectId);
     if (editingProject === entry.projectId) setEditingProject(null);
     await refresh();

@@ -1,5 +1,7 @@
 /** Pure migrations for persisted application state. */
 
+import { normalizeTheme } from '@lib/themes';
+
 /** v4 IA 重排：旧导航 key → 新容器视图（侧边栏 7 项 + 设置弹窗） */
 const V4_VIEW_MAP: Record<string, string> = {
   dashboard: 'newTask',
@@ -61,6 +63,8 @@ export function migratePersistedAppState(persistedState: unknown): Record<string
   if (typeof state.currentView === 'string' && V4_VIEW_MAP[state.currentView]) {
     state.currentView = V4_VIEW_MAP[state.currentView];
   }
+  // v8：删除纸间豆绿并收敛为四个纯强调色主题；旧值回落到森林。
+  state.theme = normalizeTheme(state.theme);
   if (state.llmConfig && typeof state.llmConfig === 'object' && !Array.isArray(state.llmConfig)) {
     const llmConfig = { ...(state.llmConfig as Record<string, unknown>) };
     delete llmConfig.apiKey;

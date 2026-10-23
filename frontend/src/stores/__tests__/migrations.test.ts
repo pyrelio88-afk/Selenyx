@@ -30,4 +30,10 @@ describe('persisted app state migration', () => {
       label: '投稿截止', date: '2026-09-01', color: '#c7483b', projectId: null,
     }]);
   });
+
+  it('migrates the removed paper-green theme to forest', () => {
+    expect(migratePersistedAppState({ theme: 'paper-green' }).theme).toBe('forest');
+    expect(migratePersistedAppState({ theme: 'ink-classic' }).theme).toBe('ink-classic');
+    expect(migratePersistedAppState({ theme: 'unknown' }).theme).toBe('forest');
+  });
 });

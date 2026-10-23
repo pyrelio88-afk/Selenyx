@@ -140,6 +140,7 @@ class AgentRun(SQLModel, table=True):
     input_text: str = ""
     output_text: str = ""
     audit_log_json: str = "[]"
+    checkpoint_json: str = Field(default="{}", exclude=True, sa_column_kwargs={"server_default": "{}"})
     artifacts_json: str = "[]"  # V4 模块 B：write_note/export_artifact 落盘工件清单
     # V4 模块 H：opaque browser-local chat origin. These identifiers carry no
     # conversation content; the frontend uses them to return the real output

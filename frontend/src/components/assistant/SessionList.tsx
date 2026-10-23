@@ -150,8 +150,8 @@ export function SessionList({
     <aside
       className={`aichat-sidebar ${open ? 'open' : ''} ${isMobile ? 'mobile-full' : ''}`}
       aria-label={`${projectName ?? '全局'}的会话列表`}
-      aria-hidden={isMobile && !open ? true : undefined}
-      inert={isMobile && !open}
+      aria-hidden={!open ? true : undefined}
+      inert={!open}
     >
       <div className="aichat-sidebar-head">
         <button type="button" className="aichat-new-btn" onClick={createSession} aria-label="新建对话">

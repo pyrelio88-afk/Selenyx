@@ -21,10 +21,22 @@ def reset_backend(tmp_path, monkeypatch) -> None:
 
 
 def test_recipe_registry():
-    """综述流水线在内置 registry；未知 key 返回 None。"""
+    """内置研究流程可解析；未知 key 返回 None。"""
     recipe = get_recipe("review-pipeline")
     assert recipe is not None and recipe.force_review is True
+    assert recipe.name == "综述流水线"
     assert "文献综述员" in recipe.directive and "论文批评员" in recipe.directive
+
+    audit = get_recipe("evidence-audit")
+    assert audit is not None and audit.force_review is False
+    assert audit.name == "证据审计"
+    assert "save_evidence" in audit.directive and "不得" in audit.directive
+
+    design = get_recipe("study-design")
+    assert design is not None and design.name == "研究设计"
+    assert "PICO" in design.directive and "write_note" in design.directive
+
+    assert len({r.description for r in (recipe, audit, design)}) == 3
     assert get_recipe("no-such-recipe") is None
     assert get_recipe(None) is None
 

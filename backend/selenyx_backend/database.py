@@ -78,6 +78,7 @@ def init_db() -> None:
             # V4 模块 B：run 工件清单（write_note / export_artifact 落盘记录）
             "agent_runs": {
                 "artifacts_json": "TEXT NOT NULL DEFAULT '[]'",
+                "checkpoint_json": "TEXT NOT NULL DEFAULT '{}'",
                 # V4 模块 H：run 完成后回贴浏览器本地来源会话的 opaque 标识。
                 "source_session_id": "TEXT NOT NULL DEFAULT ''",
                 "source_session_scope": "TEXT NOT NULL DEFAULT ''",

@@ -32,9 +32,7 @@ export type IconName =
   // R109 AI 助手动作图标
   | 'copy' | 'pencil' | 'retry' | 'branch' | 'pin' | 'trash' | 'send' | 'stop'
   | 'sparkles' | 'chevronDown' | 'chevronLeft' | 'clock' | 'editIn' | 'list'
-  | 'paperclip'
-  // v0.03 导航鹤化 2.0（鹤顶朱红 + S 颈 + 翅剪影）
-  | 'craneDraft' | 'wingChat' | 'cloudFolder' | 'wingBook' | 'cloudNodes' | 'wingClock' | 'cloudMenu';
+  | 'paperclip' | 'polish';
 
 const PATHS: Record<IconName, ReactNode> = {
   // 导航 —— 视觉重量统一，区分度高
@@ -50,7 +48,7 @@ const PATHS: Record<IconName, ReactNode> = {
   statTools: (<><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M3 20h18" /></>),
   clinicalData: (<><path d="M12 4v16" /><path d="M4 12h16" /><path d="M7 7c0 2.5 2.2 5 5 5s5-2.5 5-5" /><path d="M12 4a3 3 0 0 0-3 3" /><path d="M12 4a3 3 0 0 1 3 3" /></>),
   aiChat: (<><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" /><path d="M12 8.5l.9 2 2.1.3-1.5 1.5.4 2.1L12 13.4l-1.9 1 .4-2.1L9 10.8l2.1-.3z" /></>),
-  settings: (<><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" /><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" /></>),
+  settings: (<><path d="M4 7h6M16 7h4M4 17h2M12 17h8" /><circle cx="13" cy="7" r="3" /><circle cx="9" cy="17" r="3" /></>),
   skills: (<><path d="M12 3l8 4v6c0 4-3.2 6.5-8 8-4.8-1.5-8-4-8-8V7z" /><path d="M8.5 12l2.5 2.5L15.5 10" /></>),
   // 笔记区 —— 翻开的本子 + 书写线（手绘意象，非方块）
   notes: (<><path d="M5 3.5A1.5 1.5 0 0 1 6.5 2H18a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6.5A1.5 1.5 0 0 1 5 20.5z" /><path d="M5 5.5h2M5 9h2M5 12.5h2M5 16h2" /><path d="M9.5 8h7M9.5 11.5h7M9.5 15h4" /></>),
@@ -74,6 +72,8 @@ const PATHS: Record<IconName, ReactNode> = {
   menu: (<><rect x="3" y="4" width="18" height="2.4" rx="1.2" /><rect x="3" y="10.8" width="18" height="2.4" rx="1.2" /><rect x="3" y="17.6" width="12" height="2.4" rx="1.2" /></>),
   warning: (<><path d="M12 4L2.5 20h19L12 4z" /><path d="M12 10v4.5" /><circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none" /></>),
   paperclip: (<><path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7-7l8.4-8.4a3.4 3.4 0 0 1 4.8 4.8l-8.4 8.4a1.8 1.8 0 0 1-2.6-2.6l7.6-7.6" /></>),
+  // 提示词润色：笔尖 + 一颗四角星，语义比单独星星更明确
+  polish: (<><path d="M3.5 20.5l3.9-1 9.1-9.1a2.1 2.1 0 0 0-3-3L4.5 16.6z" /><path d="M12.4 8.5l3.1 3.1" /><path d="M17.6 13.4l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" /></>),
 
   // 流水线阶段 —— 每阶段独立意象，非统一方块
   stageProblem: (<><circle cx="12" cy="12" r="8.5" /><path d="M9.2 9.2a2.8 2.8 0 0 1 5.3 1c0 1.8-2.5 2-2.5 3.5" /><circle cx="12" cy="16.8" r="0.6" fill="currentColor" stroke="none" /></>),
@@ -119,14 +119,6 @@ const PATHS: Record<IconName, ReactNode> = {
   // 图表 —— 三柱递增 + 折线，呼应统计/可视化
   chart: (<><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8 20v-6" /><path d="M12 20v-9" /><path d="M16 20v-4" /><path d="M7 14l5-5 3 3 4-6" /></>),
 
-  // v0.03 鹤化 2.0 —— 每枚一处朱红鹤顶 + S 颈 + 翅/云剪影，18px 可辨
-  craneDraft: (<><path d="M5 18c2-3 3.2-7 6.2-9.2 1.6-1.2 3.6-.4 4.2 1.4.6 1.8-.4 3.4-2 4.4" /><path d="M11.4 9.2c3.2-.6 6.4-1.6 8.6-3.6" /><path d="M11.8 10.6c3.4.4 6.2 1.8 8 4" /><circle className="crane-crown" cx="11.2" cy="6.2" r="1.35" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
-  wingChat: (<><path d="M4 5h16a1.4 1.4 0 0 1 1.4 1.4v8.2A1.4 1.4 0 0 1 20 16h-9l-4.6 3.4V16H4A1.4 1.4 0 0 1 2.6 14.6V6.4A1.4 1.4 0 0 1 4 5z" /><path d="M8 13.6c1.2-2.6 2.8-4.6 5.2-5.4 1.6-.5 3 .6 3 2.1 0 1.4-1.2 2.3-2.5 2.6" /><circle className="crane-crown" cx="13.4" cy="6.6" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
-  cloudFolder: (<><path d="M3 8.6A1.5 1.5 0 0 1 4.5 7.1h3.6l1.6 1.8h8.8A1.5 1.5 0 0 1 20 10.4v7.1A1.5 1.5 0 0 1 18.5 19h-14A1.5 1.5 0 0 1 3 17.5z" /><path d="M8.4 16.2c1.6-2.4 3.4-3.4 5.6-3.2 1.8.2 2.8 1.6 2.4 3-.4 1.2-1.6 1.8-2.8 1.6" /><circle className="crane-crown" cx="14.2" cy="11.2" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
-  wingBook: (<><path d="M3 6.2A1.4 1.4 0 0 1 4.4 4.8H10a2 2 0 0 1 2 2v12.6a2 2 0 0 0-2-1.4H4.4A1.4 1.4 0 0 1 3 16.6z" /><path d="M21 6.2a1.4 1.4 0 0 0-1.4-1.4H14a2 2 0 0 0-2 2v12.6a2 2 0 0 1 2-1.4h5.6a1.4 1.4 0 0 0 1.4-1.4z" /><path d="M11 10.2C8.4 8.4 6.4 8.2 5 10" /><path d="M13 10.2c2.6-1.8 4.6-2 6-0.2" /><circle className="crane-crown" cx="12" cy="5.2" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
-  cloudNodes: (<><circle cx="12" cy="12.2" r="2.2" /><path d="M7.2 8.2c1-2 2.4-3.2 4.2-3.4" /><path d="M16.8 8.2c-1-2-2.4-3.2-4.2-3.4" /><circle cx="5.6" cy="7.4" r="1.6" /><circle cx="18.4" cy="7.4" r="1.6" /><path d="M7.4 18.8c1.5-1.2 3.1-1.2 4.6 0s3.1 1.2 4.6 0" /><circle className="crane-crown" cx="12" cy="6.4" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
-  wingClock: (<><circle cx="12" cy="13" r="7.6" /><path d="M12 13c2.2-1 3.8-2.6 4.6-4.6" /><path d="M12 13c.2 2 .1 3.6-.6 5" /><circle className="crane-crown" cx="12" cy="3.8" r="1.3" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
-  cloudMenu: (<><path d="M4 8c2.2-1.8 4.4-1.8 6.4 0 1.8 1.6 3.8 1.6 5.6 0 1.8-1.6 3.8-1.6 5.4 0" /><path d="M4 13c2.2-1.8 4.4-1.8 6.4 0 1.8 1.6 3.8 1.6 5.6 0 1.8-1.6 3.8-1.6 5.4 0" /><path d="M4 18c2.2-1.8 4.4-1.8 6.4 0 1.8 1.6 3.8 1.6 5.6 0" /><circle className="crane-crown" cx="10.4" cy="5.4" r="1.25" fill="var(--cinnabar, #c7483b)" stroke="none" /></>),
 };
 
 interface IconProps {
@@ -179,14 +171,13 @@ export const STAGE_ICONS: Record<string, IconName> = {
 
 /** 导航 key → 图标名映射 */
 export const NAV_ICONS: Record<string, IconName> = {
-  // Selenyx 导航族：每枚保留具体任务语义，并只点一处朱砂。
-  newTask: 'craneDraft',
-  assistant: 'wingChat',
-  projects: 'cloudFolder',
-  library: 'wingBook',
-  extensions: 'cloudNodes',
-  automations: 'wingClock',
-  more: 'cloudMenu',
+  newTask: 'plus',
+  assistant: 'aiChat',
+  projects: 'projects',
+  library: 'references',
+  extensions: 'connector',
+  automations: 'calendar',
+  more: 'statTools',
   // 旧 key（容器 tab / 深链兜底）
   dashboard: 'dashboard',
   references: 'references',

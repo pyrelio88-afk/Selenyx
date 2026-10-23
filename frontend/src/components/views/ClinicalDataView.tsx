@@ -296,8 +296,8 @@ export function ClinicalDataView() {
         </button>
         <DisciplineIcon id={selected.id} size={28} color={selected.color} />
         <div style={{ flex: 1, minWidth: 140 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>{selected.name}</h1>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selected.nameEn} · {selected.description}</span>
+          <h1 className="view-title">{selected.name}</h1>
+          <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>{selected.nameEn} · {selected.description}</span>
         </div>
         <label className="clinical-detail-search">
           <Icon name="search" size={15} />
@@ -363,15 +363,15 @@ export function ClinicalDataView() {
             >
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>{g.term}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{g.termEn}</span>
+                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{g.termEn}</span>
                 <span style={{
-                  fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)',
+                  fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)',
                   background: 'var(--bg-canvas)', color: 'var(--text-muted)',
                 }}>{g.category}</span>
                 {g.__customIdx !== undefined && (
-                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                  <span style={{ fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
                 )}
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>查看详情 →</span>
+                <span style={{ marginLeft: 'auto', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>查看详情 →</span>
               </div>
               <div className="cd-entry-summary" style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{g.definition}</div>
             </button>
@@ -403,9 +403,9 @@ export function ClinicalDataView() {
                   padding: '1px 8px', borderRadius: 'var(--radius-sm)',
                 }}>{p.value}{p.unit ? ` ${p.unit}` : ''}</span>
                 {p.__customIdx !== undefined && (
-                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                  <span style={{ fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
                 )}
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>详情 →</span>
+                <span style={{ marginLeft: 'auto', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>详情 →</span>
               </div>
               <div className="cd-entry-summary" style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.description}</div>
             </button>
@@ -427,12 +427,12 @@ export function ClinicalDataView() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: selected.color }}>
                   {f.name}
                   {f.__customIdx !== undefined && (
-                    <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                    <span style={{ marginLeft: 6, fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
                   )}
                 </span>
                 {f.unit && (
                   <span style={{
-                    fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)',
+                    fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)',
                     background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600,
                   }}>{f.unit}</span>
                 )}
@@ -459,19 +459,19 @@ export function ClinicalDataView() {
               style={{ padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             >
               <div style={{
-                fontSize: 10, padding: '2px 8px', borderRadius: 'var(--radius-sm)',
+                fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
                 background: selected.color, color: '#fff', fontWeight: 700, flexShrink: 0, marginTop: 2,
               }}>{s.code}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
                   {s.name}
                   {s.__customIdx !== undefined && (
-                    <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                    <span style={{ marginLeft: 6, fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
                   )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.description}</div>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>详情 →</span>
+              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', flexShrink: 0 }}>详情 →</span>
             </button>
           ))}
         </div>
@@ -486,17 +486,17 @@ export function ClinicalDataView() {
               style={{ borderLeftColor: selected.color }}
             >
               <div style={{
-                fontSize: 9, padding: '2px 6px', borderRadius: 'var(--radius-sm)',
+                fontSize: 'var(--font-xs)', padding: '2px 6px', borderRadius: 'var(--radius-sm)',
                 background: selected.color, color: '#fff', fontWeight: 700, flexShrink: 0, marginTop: 2, whiteSpace: 'nowrap',
               }}>{s.code || '官方文件'}</div>
               <div style={{ flex: 1 }}>
                 <button className="clinical-official-title" onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}>
                   {s.name}
                   {s.__customIdx !== undefined && (
-                    <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
+                    <span style={{ marginLeft: 6, fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>自定义</span>
                   )}
                 </button>
-                {s.issuer && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>颁布机构：{s.issuer}{s.year && ` · ${s.year}年`}</div>}
+                {s.issuer && <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2 }}>颁布机构：{s.issuer}{s.year && ` · ${s.year}年`}</div>}
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{s.description}</div>
                 <div className="clinical-source-actions">
                   <button onClick={() => setDetail({ kind: 'officialDocs', data: s, customIndex: s.__customIdx })}>查看摘录与详情</button>
@@ -639,7 +639,7 @@ export function ClinicalDataView() {
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>{label}</div>
       <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7 }}>{children}</div>
     </div>
   );
@@ -650,10 +650,10 @@ function GlossaryDetail({ g, color, discipline }: { g: DisciplineGlossary; color
     <div>
       <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
         <div style={{ fontSize: 24, fontWeight: 700, color }}>{g.term}</div>
-        <div style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>{g.termEn}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', marginTop: 4 }}>{g.termEn}</div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{g.category}</span>
+          <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{g.category}</span>
         </div>
       </div>
       {g.aliases && <DetailRow label="同义词 / 别称">{g.aliases}</DetailRow>}
@@ -679,8 +679,8 @@ function ParameterDetail({ p, color, discipline }: { p: DisciplineParameter; col
           {p.value}{p.unit ? ` ${p.unit}` : ''}
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{p.category}</span>
+          <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{p.category}</span>
         </div>
       </div>
       <DetailRow label="说明">{p.description}</DetailRow>
@@ -695,8 +695,8 @@ function FormulaDetail({ f, color, discipline }: { f: DisciplineFormula; color: 
       <div style={{ borderBottom: `3px solid ${color}`, paddingBottom: 12, marginBottom: 16 }}>
         <div style={{ fontSize: 22, fontWeight: 700, color }}>{f.name}</div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
-          {f.unit && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>{f.unit}</span>}
+          <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          {f.unit && <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>{f.unit}</span>}
         </div>
       </div>
       <DetailRow label="公式">
@@ -723,9 +723,9 @@ function StandardDetail({ s, color, discipline, onPreviewSource }: { s: Discipli
         }}>{s.code}</div>
         <div style={{ fontSize: 20, fontWeight: 700 }}>{s.name}</div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
-          {s.issuer && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.issuer}</span>}
-          {s.year && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.year}</span>}
+          <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          {s.issuer && <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.issuer}</span>}
+          {s.year && <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{s.year}</span>}
         </div>
       </div>
       <DetailRow label="内容说明">{s.description}</DetailRow>
@@ -775,9 +775,9 @@ function OfficialDocDetail({ doc, discipline, color, onPreviewSource }: { doc: D
         }}>{doc.code || '官方文件'}</div>
         <div style={{ fontSize: 20, fontWeight: 700 }}>{doc.name}</div>
         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
-          {doc.issuer && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)' }}>颁布机构：{doc.issuer}</span>}
-          {doc.year && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{doc.year}年</span>}
+          <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{discipline}</span>
+          {doc.issuer && <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--accent-light)', color: 'var(--accent)' }}>颁布机构：{doc.issuer}</span>}
+          {doc.year && <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-canvas)', color: 'var(--text-secondary)' }}>{doc.year}年</span>}
         </div>
       </div>
       <DetailRow label="文件内容">{doc.description}</DetailRow>

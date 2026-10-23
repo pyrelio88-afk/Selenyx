@@ -7,6 +7,7 @@ import { ProjectStatusChip } from '@components/ui/StatusChip';
 import { BottomSheet } from '@components/layout/BottomSheet';
 import { ThreeColumnWorkbench } from '@components/layout/ThreeColumnWorkbench';
 import { useIsMobile } from '@lib/useIsMobile';
+import { serviceErrorMessage } from '@lib/userFacingError';
 import { runPipelineStage } from '@services/pipeline';
 import { LLMError } from '@services/llm';
 import { evidenceApi, searchApi, type EvidenceRecord, type SemanticHit } from '@services/api';
@@ -194,7 +195,7 @@ export function PipelineView() {
     try {
       setEvidence(await evidenceApi.list(projectId));
     } catch (error) {
-      setRagMessage(error instanceof Error ? error.message : '证据链读取失败');
+      setRagMessage(serviceErrorMessage(error, '证据链读取失败'));
     } finally {
       setEvidenceLoading(false);
     }
@@ -248,7 +249,7 @@ export function PipelineView() {
       setPipelineRun(key, { status: 'done', output: getRun(stage).output, runAt: new Date().toISOString(), passed: getRun(stage).passed });
     } catch (error) {
       const isAbort = error instanceof DOMException && error.name === 'AbortError';
-      const errorText = isAbort ? '（已停止）' : error instanceof LLMError ? error.message : `出错了：${error instanceof Error ? error.message : String(error)}`;
+      const errorText = isAbort ? '（已停止）' : error instanceof LLMError ? error.message : `出错了：${serviceErrorMessage(error, '请稍后重试。')}`;
       const previous = getRun(stage).output;
       setPipelineRun(key, { status: 'error', output: previous ? `${previous}\n\n${errorText}` : errorText, runAt: new Date().toISOString(), passed: false });
     } finally {
@@ -271,7 +272,7 @@ export function PipelineView() {
         : '本机索引没有命中。请先向文献库导入带摘要、笔记或全文片段的文献。');
     } catch (error) {
       setRagStatus('error');
-      setRagMessage(error instanceof Error ? error.message : '本机 RAG 检索失败');
+      setRagMessage(serviceErrorMessage(error, '本机 RAG 检索失败'));
     }
   }
 
@@ -285,7 +286,7 @@ export function PipelineView() {
       await refreshEvidence(activeProject.id);
       setRagMessage('片段已进入待审证据链；必须人工“接受”后才能进入写作提纲。');
     } catch (error) {
-      setRagMessage(error instanceof Error ? error.message : '加入证据链失败');
+      setRagMessage(serviceErrorMessage(error, '加入证据链失败'));
     }
   }
 
@@ -295,7 +296,7 @@ export function PipelineView() {
       await refreshEvidence(activeProject.id);
       setOutline(null);
     } catch (error) {
-      setRagMessage(error instanceof Error ? error.message : '证据审核失败');
+      setRagMessage(serviceErrorMessage(error, '证据审核失败'));
     }
   }
 
@@ -303,7 +304,7 @@ export function PipelineView() {
     try {
       setOutline(await evidenceApi.outline(activeProject.id));
     } catch (error) {
-      setRagMessage(error instanceof Error ? error.message : '写作提纲读取失败');
+      setRagMessage(serviceErrorMessage(error, '写作提纲读取失败'));
     }
   }
 

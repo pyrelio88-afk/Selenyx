@@ -25,6 +25,7 @@ router = APIRouter()
 
 _CHAT_TIMEOUT = 120.0
 _STREAM_TIMEOUT = httpx.Timeout(connect=15.0, read=180.0, write=60.0, pool=15.0)
+MAGPIE_BASE_URL = "http://127.0.0.1:3425/v1"
 
 
 class ChatRequest(BaseModel):
@@ -99,8 +100,10 @@ def _llm_settings() -> Settings:
 
 
 def _auth_headers(settings: Settings) -> dict[str, str]:
-    """Use bearer auth when present; loopback Ollama needs no header."""
+    """Use bearer auth when present; never forward a remote key to Magpie."""
 
+    if settings.llm_base_url.rstrip("/") == MAGPIE_BASE_URL:
+        return {}
     if _has_api_key(settings):
         return {"Authorization": f"Bearer {settings.llm_api_key.strip()}"}
     return {}
@@ -231,6 +234,28 @@ def config_status():
         "baseUrl": settings.llm_base_url,
         "model": settings.llm_model,
     }
+
+
+@router.get("/magpie/models")
+async def magpie_models():
+    try:
+        async with _new_http_client(8.0) as client:
+            response = await client.get(f"{MAGPIE_BASE_URL}/models")
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, "Local Magpie model directory is unavailable.") from exc
+    if response.status_code != 200:
+        raise HTTPException(502, "Local Magpie model directory is unavailable.")
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise HTTPException(502, "Local Magpie returned an unexpected model directory.") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        raise HTTPException(502, "Local Magpie returned an unexpected model directory.")
+    models = list(dict.fromkeys(
+        item["id"] for item in data["data"]
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and 0 < len(item["id"]) <= 256
+    ))
+    return {"models": models}
 
 
 @router.get("/test")

@@ -1,393 +1,316 @@
-/**
- * 任务中心 — Selenyx agent 自循环（plan → tool → observe → final）
- *
- * 新建任务（可选项目）→ 本机后端 agent loop 执行 → 步骤时间线实时刷新。
- * 运行记录持久化在后端 SQLite；刷新页面后仍可回看。
- */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
 import { STATUS_COLOR, STATUS_LABEL, StepRow } from '@components/tasks/StepRow';
 import { groupSubagentSteps, isSubagentGroup } from '@components/tasks/groupSteps';
 import { RunOutput } from '@components/tasks/RunOutput';
-import {
-  agentApi,
-  isActiveRun,
-  subscribeRunEvents,
-  type AgentRunDetail,
-  type AgentRunSummary,
-} from '@services/agent';
-import { parseSkillPrefix } from '@services/skills';
-import { withReplyStyle } from '@components/assistant/chatShared';
+import { agentApi, isActiveRun, type AgentRunDetail, type AgentRunSummary } from '@services/agent';
+import { observeRun, type RunConnectionMode } from '@services/runObserver';
+import { evidenceApi, type EvidenceRecord } from '@services/api';
+import { rawErrorText, serviceErrorMessage } from '@lib/userFacingError';
+
+const CONNECTION_LABEL: Record<RunConnectionMode, string> = {
+  connecting: '正在连接', live: '实时同步', polling: '定时同步',
+};
+
+function RunEvidence({ run, evidenceRef }: { run: AgentRunDetail; evidenceRef: React.RefObject<HTMLElement | null> }) {
+  const references = useAppStore((s) => s.references);
+  const requestPdfOpen = useAppStore((s) => s.requestPdfOpen);
+  const [items, setItems] = useState<EvidenceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const alive = useRef(true);
+  const savedCount = run.auditLog.filter((step) => step.kind === 'observation' && step.tool === 'save_evidence').length;
+
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+
+  useEffect(() => {
+    let current = true;
+    if (!run.projectId) { setLoading(false); return; }
+    setLoading(true);
+    setError('');
+    void evidenceApi.list(run.projectId).then((records) => {
+      if (current) setItems(records.filter((item) => item.project_id === run.projectId));
+    }).catch(() => {
+      if (current) setError('证据暂时无法读取，请重试。');
+    }).finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [run.projectId, savedCount, revision]);
+
+  const decide = async (item: EvidenceRecord, review: 'accepted' | 'rejected') => {
+    if (busy) return;
+    setBusy(item.id);
+    setError('');
+    try {
+      const updated = await evidenceApi.patch(item.id, { review });
+      if (alive.current) {
+        setItems((current) => current.map((record) => record.id === updated.id ? updated : record));
+        setRevision((value) => value + 1);
+      }
+    } catch (cause) {
+      if (alive.current) setError(`审核未保存：${serviceErrorMessage(cause, '请稍后重试。')}`);
+    } finally { if (alive.current) setBusy(null); }
+  };
+
+  return (
+    <aside className="research-evidence" aria-label="项目证据" id="research-evidence-panel" ref={evidenceRef}>
+      <div className="research-section-heading"><h2>项目证据</h2>
+        {run.projectId && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRevision((value) => value + 1)} disabled={loading}>刷新</button>}
+      </div>
+      <p className="research-muted">原文、论断与人工裁决分开记录；接受证据不代表结论已经成立。</p>
+      {!run.projectId ? <p className="research-empty">此研究未关联项目，不能保存项目证据。</p>
+        : loading && items.length === 0 ? <p role="status">正在读取证据…</p>
+        : !error && items.length === 0 ? <p className="research-empty">还没有证据。检索后保存的证据卡会出现在这里。</p> : null}
+      {error && <p role="alert" className="research-error">{error}</p>}
+      <ul className="research-evidence-list">
+        {items.map((item) => (
+          <li key={item.id} className="research-evidence-card">
+            <div className="research-evidence-meta"><span>{item.review === 'accepted' ? '人工已接受' : item.review === 'rejected' ? '已驳回' : '待人工审核'}</span><code>{item.id.slice(0, 8)}</code></div>
+            <h3>{item.claim || '未填写论断'}</h3>
+            <blockquote>{item.excerpt}</blockquote>
+            <p className="research-muted">{references.find((ref) => ref.id === item.reference_id)?.title ?? (item.reference_id ? '关联文献' : '未关联来源')}{item.page ? ` · 第 ${item.page} 页` : ''}</p>
+            <div className="research-evidence-actions">
+              {item.reference_id && item.page && <button type="button" className="btn btn-ghost btn-sm" onClick={() => requestPdfOpen(item.reference_id, item.page!)}>查看原文</button>}
+              {item.review === 'pending' && <>
+                <button type="button" className="btn btn-sm" disabled={busy !== null} onClick={() => void decide(item, 'rejected')}>驳回</button>
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy !== null} onClick={() => void decide(item, 'accepted')}>{busy === item.id ? '保存中…' : '接受'}</button>
+              </>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
 
 export function TasksView() {
   const projects = useAppStore((s) => s.projects);
-  const currentProjectId = useAppStore((s) => s.currentProjectId);
   const focusRunId = useAppStore((s) => s.focusRunId);
   const clearRunFocus = useAppStore((s) => s.clearRunFocus);
-  const customInstructions = useAppStore((s) => s.customInstructions);
-  const replyStyle = useAppStore((s) => s.replyStyle);
-  const [goal, setGoal] = useState('');
-  const [projectId, setProjectId] = useState<string>(currentProjectId ?? '');
-  const [review, setReview] = useState(false);
-  const [confirmPlan, setConfirmPlan] = useState(false);
+  const requestNewTask = useAppStore((s) => s.requestNewTask);
   const [runs, setRuns] = useState<AgentRunSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(focusRunId);
   const [selected, setSelected] = useState<AgentRunDetail | null>(null);
   const [backendOffline, setBackendOffline] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [listLoading, setListLoading] = useState(true);
+  const [detailError, setDetailError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
   const [steerText, setSteerText] = useState('');
   const [adjustment, setAdjustment] = useState('');
-  const [sseFailed, setSseFailed] = useState(false);
-  const pollRef = useRef<number | null>(null);
+  const [mode, setMode] = useState<RunConnectionMode>('connecting');
+  const [showEvidence, setShowEvidence] = useState(true);
+  const observerRef = useRef<ReturnType<typeof observeRun> | null>(null);
+  const evidenceRef = useRef<HTMLElement>(null);
+  const jumpToEvidenceRef = useRef(false);
+  const selectionRef = useRef<string | null>(focusRunId);
+  const listRequestRef = useRef<AbortController | null>(null);
 
-  const activeProjects = projects.filter((p) => p.status !== 'archived');
+  const revealEvidence = () => {
+    if (showEvidence) evidenceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else {
+      jumpToEvidenceRef.current = true;
+      setShowEvidence(true);
+    }
+  };
+
+  useEffect(() => {
+    if (showEvidence && jumpToEvidenceRef.current && evidenceRef.current) {
+      evidenceRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      jumpToEvidenceRef.current = false;
+    }
+  }, [showEvidence]);
 
   const refreshList = useCallback(async () => {
+    listRequestRef.current?.abort();
+    const controller = new AbortController();
+    listRequestRef.current = controller;
+    setListLoading(true);
     try {
-      const { runs: list } = await agentApi.list();
+      const { runs: list } = await agentApi.list(AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]));
+      if (controller.signal.aborted) return;
       setRuns(list);
       setBackendOffline(false);
-      return list;
     } catch {
-      setBackendOffline(true);
-      return [] as AgentRunSummary[];
+      if (!controller.signal.aborted) setBackendOffline(true);
+    } finally {
+      if (!controller.signal.aborted) setListLoading(false);
     }
   }, []);
 
-  const refreshDetail = useCallback(async (runId: string) => {
-    try {
-      const detail = await agentApi.get(runId);
-      setSelected(detail);
-      return detail;
-    } catch {
-      return null;
-    }
+  const openRun = useCallback((runId: string | null) => {
+    if (selectionRef.current === runId) { observerRef.current?.refresh(); return; }
+    observerRef.current?.close();
+    observerRef.current = null;
+    selectionRef.current = runId;
+    setSelectedId(runId);
+    setSelected(null);
+    setDetailError('');
+    setActionError('');
+    setActionBusy(false);
+    setSteerText('');
+    setAdjustment('');
+    setMode('connecting');
   }, []);
 
-  /* 启动后轮询选中 run；列表在存在进行中 run 时同步刷新 */
   useEffect(() => {
     void refreshList();
+    return () => { listRequestRef.current?.abort(); };
   }, [refreshList]);
 
-  /* 外部聚焦（新建任务主页 / 侧边栏动态区）：选中指定 run 的详情 */
   useEffect(() => {
     if (!focusRunId) return;
-    void refreshDetail(focusRunId);
+    openRun(focusRunId);
     clearRunFocus();
-  }, [focusRunId, refreshDetail, clearRunFocus]);
+  }, [focusRunId, openRun, clearRunFocus]);
 
-  const selectedId = selected?.id;
-  const selectedStatus = selected?.status;
-
-  /* SSE 优先（V4 模块 D）：活动 run 订阅事件流，事件驱动刷新详情（DB 为真相源） */
   useEffect(() => {
-    if (!selectedId || !selectedStatus || !isActiveRun(selectedStatus)) return;
-    setSseFailed(false);
-    let refreshTimer: number | null = null;
-    const close = subscribeRunEvents(selectedId, {
-      onEvent: () => {
-        if (refreshTimer) window.clearTimeout(refreshTimer);
-        refreshTimer = window.setTimeout(() => void refreshDetail(selectedId), 300);
+    if (!selectedId) return;
+    const observer = observeRun(selectedId, {
+      onUpdate: (run) => {
+        setSelected(run);
+        setDetailError('');
+        setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)]);
+        if (!isActiveRun(run.status)) void refreshList();
       },
-      onStatus: () => {
-        void refreshDetail(selectedId);
-        void refreshList();
-      },
-      onError: () => setSseFailed(true),
+      onModeChange: setMode,
+      onError: () => setDetailError('连接暂时中断，正在重新读取已保存的进度。不会重新执行任务。'),
     });
+    observerRef.current = observer;
     return () => {
-      if (refreshTimer) window.clearTimeout(refreshTimer);
-      close();
+      observer.close();
+      if (observerRef.current === observer) observerRef.current = null;
     };
-  }, [selectedId, selectedStatus, refreshDetail, refreshList]);
+  }, [selectedId, refreshList]);
 
-  /* 轮询兜底：SSE 断线时接管实时刷新 */
-  useEffect(() => {
-    if (pollRef.current) window.clearInterval(pollRef.current);
-    pollRef.current = null;
-    if (!selectedId || !selectedStatus || !isActiveRun(selectedStatus) || !sseFailed) return;
-    pollRef.current = window.setInterval(() => {
-      void (async () => {
-        const detail = await refreshDetail(selectedId);
-        if (detail && !isActiveRun(detail.status)) {
-          if (pollRef.current) window.clearInterval(pollRef.current);
-          pollRef.current = null;
-          void refreshList();
+  const applyAction = async (action: 'cancel' | 'steer' | 'confirm', changePlan = false) => {
+    if (!selected || actionBusy) return;
+    const observer = observerRef.current;
+    const runId = selected.id;
+    const text = action === 'steer' ? steerText.trim() : adjustment.trim();
+    if (action === 'steer' && !text) return;
+    setActionBusy(true);
+    setActionError('');
+    try {
+      if (action === 'cancel') await agentApi.cancel(runId);
+      else if (action === 'steer') await agentApi.steer(runId, text);
+      else await agentApi.confirm(runId, changePlan ? text : undefined);
+      if (observerRef.current !== observer) return;
+      if (action === 'steer') setSteerText('');
+      if (action === 'confirm') setAdjustment('');
+      observer?.refresh();
+    } catch (cause) {
+      if (observerRef.current === observer) {
+        if (action === 'confirm' && /^API 409:/.test(rawErrorText(cause))) {
+          setActionError('确认请求与当前状态冲突，正在读取已保存的进度。');
+          observer?.refresh();
+        } else {
+          setActionError(`操作未确认成功：${serviceErrorMessage(cause, '请核对进度后再试。')}`);
         }
-      })();
-    }, 1500);
-    return () => {
-      if (pollRef.current) window.clearInterval(pollRef.current);
-      pollRef.current = null;
-    };
-  }, [selectedId, selectedStatus, sseFailed, refreshDetail, refreshList]);
-
-  const submit = async () => {
-    const text = goal.trim();
-    if (!text || submitting) return;
-    setSubmitting(true);
-    try {
-      // 输入框 /技能名 前缀（模块 F）：解析后随 run 注入指令并裁剪工具白名单
-      const parsed = parseSkillPrefix(text);
-      const { runId } = await agentApi.start(parsed.goal, projectId || null, {
-        review,
-        confirmPlan,
-        skill: parsed.skill,
-        customInstructions: withReplyStyle(customInstructions, replyStyle),
-      });
-      setGoal('');
-      await refreshList();
-      await refreshDetail(runId);
-    } catch (error) {
-      setBackendOffline(true);
-      alert(`任务创建失败：${error instanceof Error ? error.message : String(error)}`);
+      }
     } finally {
-      setSubmitting(false);
+      if (observerRef.current === observer) setActionBusy(false);
     }
   };
 
-  const cancel = async (runId: string) => {
-    try {
-      await agentApi.cancel(runId);
-      await refreshDetail(runId);
-    } catch { /* 忽略：下一次轮询会收敛状态 */ }
-  };
-
-  const sendSteer = async () => {
-    const text = steerText.trim();
-    if (!text || !selected) return;
-    try {
-      await agentApi.steer(selected.id, text);
-      setSteerText('');
-    } catch (error) {
-      alert(`插话失败：${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  const confirmRun = async (withAdjustment: boolean) => {
-    if (!selected) return;
-    try {
-      await agentApi.confirm(selected.id, withAdjustment ? adjustment.trim() : undefined);
-      setAdjustment('');
-      await refreshDetail(selected.id);
-    } catch (error) {
-      alert(`确认失败：${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
-
-  /* plan 确认门横幅用：取最近一条计划 */
-  const latestPlan = useMemo(() => {
-    if (!selected) return null;
-    for (let i = selected.auditLog.length - 1; i >= 0; i -= 1) {
-      if (selected.auditLog[i].kind === 'plan') return selected.auditLog[i];
-    }
-    return null;
-  }, [selected]);
+  const latestPlan = useMemo(() => selected?.auditLog.slice().reverse().find((step) => step.kind === 'plan'), [selected]);
+  const timeline = useMemo(() => groupSubagentSteps(selected?.auditLog ?? []), [selected]);
+  const project = projects.find((item) => item.id === selected?.projectId);
+  const active = selected ? isActiveRun(selected.status) : false;
+  const emptyNoSelection = !selectedId && runs.length === 0 && !listLoading;
 
   return (
-    <div style={{ display: 'grid', gap: 16, alignContent: 'start' }}>
-      <div className="view-header">
-        <div>
-          <h1 className="view-title">任务</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
-            把研究目标交给 Selenyx agent：规划 → 检索 → 执行 → 成稿，全程步骤可审计。
-          </p>
-        </div>
-      </div>
+    <div className="research-workspace">
+      <header className="view-header research-header">
+        <div><h1 className="view-title">研究记录</h1><p>查看计划、执行进度、证据和成果。</p></div>
+        <button type="button" className="btn btn-primary" onClick={requestNewTask}><Icon name="plus" size={15} /> 新研究</button>
+      </header>
+      <div className={`research-layout ${selectedId ? 'has-selection' : ''} ${emptyNoSelection ? 'is-empty' : ''}`}>
+        {!emptyNoSelection && (
+        <nav className="research-history" aria-label="研究历史">
+          <div className="research-section-heading"><h2>运行记录</h2><button type="button" className="btn btn-ghost btn-sm" onClick={() => void refreshList()} disabled={listLoading}>刷新</button></div>
+          {backendOffline && <p role="alert" className="research-error">本机服务未连接，暂时无法读取研究记录。</p>}
+          {listLoading && runs.length === 0 ? <p role="status">正在读取记录…</p> : runs.length === 0 && !backendOffline ? <p className="research-empty">还没有研究记录。提出一个问题，让 Selenyx 开始。</p> : null}
+          <ul>{runs.map((run) => (
+            <li key={run.id}><button type="button" className={`research-history-item ${selectedId === run.id ? 'is-selected' : ''}`} aria-current={selectedId === run.id ? 'true' : undefined} onClick={() => openRun(run.id)}>
+              <strong>{run.goal}</strong>
+              <span><span style={{ color: STATUS_COLOR[run.status] }}>{STATUS_LABEL[run.status] ?? run.status}</span> · {projects.find((item) => item.id === run.projectId)?.name ?? '未关联项目'}</span>
+              {run.startedAt && <time dateTime={run.startedAt}>{new Date(run.startedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>}
+            </button></li>
+          ))}</ul>
+        </nav>
+        )}
 
-      {backendOffline && (
-        <div role="alert" className="local-offline-alert">
-          本机后端还没连上。桌面版会自动拉起；开发时在本机启动后端即可。
-        </div>
-      )}
-
-      <div className="card" style={{ padding: 16 }}>
-        <h2 style={{ margin: '0 0 10px', fontSize: 15 }}>新建任务</h2>
-        <textarea
-          value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          placeholder="例如：帮我梳理这个项目文献库里关于「谵妄预防」的证据，产出一份结构化综述提纲…"
-          rows={3}
-          style={{ width: '100%', resize: 'vertical', marginBottom: 10 }}
-          aria-label="任务目标"
-        />
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-            项目
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} style={{ minHeight: 36 }}>
-              <option value="">不关联项目</option>
-              {activeProjects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-            <input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} />
-            成稿前批评审查（多 1-2 次模型调用）
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-            <input type="checkbox" checked={confirmPlan} onChange={(e) => setConfirmPlan(e.target.checked)} />
-            计划先给我确认
-          </label>
-          <button type="button" className="btn btn-primary" onClick={() => void submit()} disabled={!goal.trim() || submitting || backendOffline}>
-            <Icon name="send" size={15} /> {submitting ? '创建中…' : '交给 Selenyx'}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: selected ? 'minmax(240px, 320px) 1fr' : '1fr', gap: 12, alignItems: 'start' }}>
-        <div className="card" style={{ padding: 12 }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: 15, padding: '0 4px' }}>运行记录</h2>
-          {runs.length === 0 ? (
-            <p style={{ margin: 0, padding: '0 4px', fontSize: 12.5, color: 'var(--text-muted)' }}>还没有任务。创建一个，让 Selenyx 开始工作。</p>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
-              {runs.map((run) => (
-                <li key={run.id}>
-                  <button
-                    type="button"
-                    onClick={() => void refreshDetail(run.id)}
-                    style={{
-                      width: '100%', textAlign: 'left', display: 'grid', gap: 4, padding: '10px 12px',
-                      border: `1px solid ${selected?.id === run.id ? 'var(--accent)' : 'var(--border)'}`,
-                      borderRadius: 'var(--radius-md)', background: 'transparent', cursor: 'pointer', font: 'inherit',
-                    }}
-                  >
-                    <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>{run.goal}</span>
-                    <span style={{ fontSize: 11, color: STATUS_COLOR[run.status] ?? 'var(--text-muted)', fontWeight: 700 }}>
-                      {STATUS_LABEL[run.status] ?? run.status}
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-                        {' · '}{activeProjects.find((p) => p.id === run.projectId)?.name ?? '全局'}
-                        {run.startedAt ? ` · ${new Date(run.startedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {selected && (
-          <div className="card" style={{ padding: 16, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-              <div style={{ minWidth: 0 }}>
-                <h2 style={{ margin: 0, fontSize: 15, overflowWrap: 'anywhere' }}>{selected.goal}</h2>
-                <span style={{ fontSize: 11.5, color: STATUS_COLOR[selected.status] ?? 'var(--text-muted)', fontWeight: 700 }}>
-                  {STATUS_LABEL[selected.status] ?? selected.status}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                {isActiveRun(selected.status) && (
-                  <button type="button" className="btn" onClick={() => void cancel(selected.id)} style={{ minHeight: 32, fontSize: 12, color: 'var(--danger)' }}>取消</button>
-                )}
-                <button type="button" className="btn" onClick={() => setSelected(null)} aria-label="关闭详情" style={{ minHeight: 32, fontSize: 12 }}>关闭</button>
+        {selectedId ? <div className={`research-run-layout ${showEvidence && selected ? 'with-evidence' : ''}`}>
+          <section className="research-run" aria-label="研究运行详情" data-run-id={selectedId}>
+            <div className="research-run-toolbar">
+              <span className="research-muted">{project?.name ?? (selected?.projectId ? '关联项目' : '独立研究')}</span>
+              <div>
+                {selected && <>
+                  <button type="button" className="btn btn-ghost btn-sm research-evidence-toggle" aria-pressed={showEvidence} aria-controls="research-evidence-panel" onClick={() => setShowEvidence((value) => !value)}>{showEvidence ? '隐藏证据' : '显示证据'}</button>
+                  <button type="button" className="btn btn-ghost btn-sm research-evidence-jump" aria-controls="research-evidence-panel" onClick={revealEvidence}>查看证据</button>
+                </>}
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => openRun(null)} aria-label="关闭详情">关闭</button>
               </div>
             </div>
-
-            {selected.status === 'waiting_confirm' && (
-              <div
-                role="group"
-                aria-label="计划确认"
-                style={{
-                  margin: '0 0 12px', padding: '12px 14px', border: '1px solid var(--accent)',
-                  borderRadius: 'var(--radius-md)', display: 'grid', gap: 8,
-                }}
-              >
-                <b style={{ fontSize: 13, color: 'var(--text-primary)' }}>计划已出，等你落锤</b>
-                {latestPlan && (
-                  <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 2, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                    {(latestPlan.items ?? []).map((item, i) => <li key={i}>{item}</li>)}
-                  </ol>
-                )}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button type="button" className="btn btn-primary" onClick={() => void confirmRun(false)} style={{ minHeight: 34, fontSize: 12.5 }}>
-                    <Icon name="check" size={13} /> 按计划执行
-                  </button>
-                  <input
-                    value={adjustment}
-                    onChange={(e) => setAdjustment(e.target.value)}
-                    placeholder="调整意见（可选）…"
-                    aria-label="调整意见"
-                    style={{ flex: 1, minWidth: 180, minHeight: 34 }}
-                  />
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => void confirmRun(true)}
-                    disabled={!adjustment.trim()}
-                    style={{ minHeight: 34, fontSize: 12.5 }}
-                  >
-                    调整后执行
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <ul className="agent-steps" style={{ margin: '0 0 12px', padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
-              {groupSubagentSteps(selected.auditLog).map((item, i) =>
-                isSubagentGroup(item) ? (
-                  <li key={i} className="agent-step is-subagent" style={{ display: 'block' }}>
-                    <details>
-                      <summary style={{ cursor: 'pointer', display: 'flex', gap: 7, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                        <Icon name="chip" size={13} />
-                        <span>专家 <b>{item.expert}</b> 接力 · {item.entries.length} 步</span>
-                        {item.answer && (
-                          <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>
-                            结论：{item.answer.slice(0, 60)}{item.answer.length > 60 ? '…' : ''}
-                          </span>
-                        )}
-                      </summary>
-                      <ul className="agent-steps" style={{ margin: '6px 0 0', padding: '0 0 0 20px', listStyle: 'none', display: 'grid', gap: 6 }}>
-                        {item.entries.map((s, j) => <StepRow key={j} step={s} />)}
-                      </ul>
-                    </details>
-                  </li>
-                ) : (
-                  <StepRow key={i} step={item} />
-                ),
-              )}
-              {selected.status === 'running' && <li className="agent-step is-thought"><Icon name="clock" size={13} /><span>Selenyx 正在思考与检索…</span></li>}
-            </ul>
-
-            {selected.status === 'running' && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <input
-                  value={steerText}
-                  onChange={(e) => setSteerText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') void sendSteer(); }}
-                  placeholder="运行中插话：补充方向、纠正重点…"
-                  aria-label="运行中插话"
-                  style={{ flex: 1, minHeight: 36 }}
-                />
-                <button type="button" className="btn" onClick={() => void sendSteer()} disabled={!steerText.trim()} style={{ minHeight: 36, fontSize: 12.5 }}>
-                  <Icon name="send" size={13} /> 插话
-                </button>
-              </div>
-            )}
-
-            {selected.outputText && <RunOutput run={selected} />}
-          </div>
+            {detailError && <div role="status" className="research-connection-error"><span>{detailError}</span><button type="button" className="btn btn-sm" onClick={() => observerRef.current?.refresh()}>重试同步</button></div>}
+            {!selected ? <p role="status">{detailError ? '尚未取得运行详情。' : '正在读取研究进度…'}</p> : <>
+              <header className="research-question"><h2>{selected.goal}</h2><div className="research-run-meta">
+                <span style={{ color: STATUS_COLOR[selected.status] }}>{STATUS_LABEL[selected.status] ?? selected.status}</span>
+                {active && <span>{CONNECTION_LABEL[mode]}</span>}
+                <span>{selected.auditLog.filter((step) => step.kind === 'tool').length} 次工具调用</span>
+                {active && <button type="button" className="btn btn-ghost btn-sm research-stop" disabled={actionBusy || selected.status === 'cancelling'} onClick={() => void applyAction('cancel')}>{selected.status === 'cancelling' ? '正在停止…' : '停止研究'}</button>}
+              </div></header>
+              {actionError && <p role="alert" className="research-error">{actionError}</p>}
+              {selected.status === 'waiting_confirm' && <section className="research-approval" aria-label="计划确认">
+                <h3>确认计划后再执行</h3>
+                {latestPlan && <ol>{(latestPlan.items ?? []).map((item, index) => <li key={index}>{item}</li>)}</ol>}
+                <label htmlFor="research-plan-adjustment">调整方向（可选）</label>
+                <textarea id="research-plan-adjustment" className="input" value={adjustment} onChange={(event) => setAdjustment(event.target.value)} placeholder="补充研究范围、排除条件或输出要求…" rows={2} />
+                <div className="research-approval-actions"><button type="button" className="btn" disabled={actionBusy || !adjustment.trim()} onClick={() => void applyAction('confirm', true)}>调整后执行</button><button type="button" className="btn btn-primary" disabled={actionBusy} onClick={() => void applyAction('confirm')}>按计划执行</button></div>
+              </section>}
+              {selected.status === 'waiting_evidence' && <section className="research-approval" aria-label="等待证据裁决">
+                <h3>证据等待你的裁决</h3>
+                <p>成稿引用了尚未人工接受的项目证据。请在证据卡上选择「接受」或「驳回」；裁决后研究会自动继续，无需重新运行。</p>
+                <div className="research-approval-actions"><button type="button" className="btn btn-primary" onClick={revealEvidence}>查看证据卡</button></div>
+              </section>}
+              <section className="research-timeline" aria-label="执行过程">
+                <h3>执行过程</h3>
+                <ul className="agent-steps">{timeline.map((item, index) => isSubagentGroup(item) ? (
+                  <li key={index} className="agent-step is-subagent research-subagent"><details><summary><Icon name="chip" size={13} /><span>专家 {item.expert} · {item.entries.length} 步</span>{item.answer && <span className="research-muted">{item.answer.slice(0, 60)}{item.answer.length > 60 ? '…' : ''}</span>}</summary><ul className="agent-steps">{item.entries.map((step, entryIndex) => <StepRow key={entryIndex} step={step} />)}</ul></details></li>
+                ) : <StepRow key={index} step={item} />)}</ul>
+                {selected.status === 'running' && <p className="research-live" role="status"><Icon name="clock" size={14} /> Selenyx 正在执行，进度将自动保存。</p>}
+                {!active && selected.auditLog.length === 0 && <p className="research-empty">此记录没有保存执行步骤。</p>}
+              </section>
+              {selected.status === 'running' && <div className="research-steer">
+                <input className="input" value={steerText} onChange={(event) => setSteerText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void applyAction('steer'); } }} placeholder="补充方向或纠正重点…" aria-label="运行中插话" />
+                <button type="button" className="btn" disabled={actionBusy || !steerText.trim()} onClick={() => void applyAction('steer')}><Icon name="send" size={14} /> 插话</button>
+              </div>}
+              {selected.outputText && <RunOutput key={selected.id} run={selected} />}
+            </>}
+          </section>
+          {selected && showEvidence && <RunEvidence key={selected.id} run={selected} evidenceRef={evidenceRef} />}
+        </div> : emptyNoSelection ? (
+          <section className="research-idle research-onboarding">
+            <Icon name={backendOffline ? 'clock' : 'target'} size={32} />
+            <h2>{backendOffline ? '研究记录暂时离线' : '让问题成为一项研究'}</h2>
+            <p>{backendOffline
+              ? '本机服务未连接。已有记录仍保存在本机，恢复连接后即可继续查看。'
+              : '选择一条记录查看计划、来源与成果，或开始新的研究。'}</p>
+            <div className="research-onboarding-actions">
+              {backendOffline && <button type="button" className="btn" onClick={() => void refreshList()}>重试连接</button>}
+              <button type="button" className="btn btn-primary" onClick={requestNewTask}>开始新研究</button>
+            </div>
+          </section>
+        ) : (
+          <section className="research-idle"><Icon name="target" size={32} /><h2>让问题成为一项研究</h2><p>选择一条记录查看计划、来源与成果，或开始新的研究。</p><button type="button" className="btn" onClick={requestNewTask}>开始新研究</button></section>
         )}
       </div>
-
-      <style>{`
-        .agent-step { display: flex; gap: 7px; align-items: flex-start; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
-        .agent-step svg { flex: 0 0 auto; margin-top: 2px; color: var(--text-muted); }
-        .agent-step.is-thought svg { color: var(--accent); }
-        .agent-step.is-tool b { color: var(--text-primary); }
-        .agent-step.is-tool code { margin-left: 6px; font-size: 11px; color: var(--text-muted); }
-        .agent-step.is-observation svg { color: var(--success); }
-        .agent-step.is-error { color: var(--danger); }
-        .agent-step.is-error svg { color: var(--danger); }
-        .agent-step.is-plan b { color: var(--text-primary); }
-        .agent-step.is-review svg { color: var(--warning); }
-        .agent-step.is-subagent svg { color: var(--accent); }
-        .agent-step.is-steer { color: var(--text-primary); }
-        .agent-step.is-steer svg { color: var(--accent); }
-        .agent-step.is-waiting svg { color: var(--accent); }
-      `}</style>
     </div>
   );
 }

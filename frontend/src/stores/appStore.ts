@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { selectPrimaryProject } from '@lib/projectPriority';
+import type { ThemeName } from '@lib/themes';
 import type {
   Reference, ResearchProject, RefCollection, RefTag,
   KanbanTask, LLMConfig, MultiDimTable, TableField,
@@ -62,7 +63,7 @@ const LEGACY_VIEW_TARGET: Record<string, LegacyViewTarget | undefined> = {
   tools: { view: 'more', moreTab: 'tools' },
 };
 
-export type ThemeName = 'paper-green' | 'minimal-white' | 'ink-classic' | 'mono';
+export type { ThemeName } from '@lib/themes';
 export type ThemeMode = 'light' | 'dark';
 export type Density = 'compact' | 'comfortable' | 'spacious';
 
@@ -199,6 +200,15 @@ interface AppState {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
 
+  // === 全局工作区搜索（K） ===
+  knowledgeSearchOpen: boolean;
+  openKnowledgeSearch: () => void;
+  closeKnowledgeSearch: () => void;
+  /** 搜索结果 → 文献详情：ReferencesView 消费后清零。 */
+  pendingReferenceId: string | null;
+  requestReferenceOpen: (id: string) => void;
+  clearPendingReferenceOpen: () => void;
+
   // === R109：笔记区 ===
   notes: Note[];
   addNote: (partial?: Partial<Note>) => string; // 返回新笔记 id
@@ -221,6 +231,9 @@ interface AppState {
   pendingChatOpen: { scope: string; sessionId: string } | null;
   requestChatOpen: (scope: string, sessionId: string) => void;
   clearPendingChatOpen: () => void;
+  /** Transient guard for recent-chat scope switches, not ordinary navigation. */
+  chatStreamBusy: boolean;
+  setChatStreamBusy: (busy: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -295,7 +308,7 @@ export const useAppStore = create<AppState>()(
       petNotifyPending: true,
       setPetNotifyPending: (v) => set({ petNotifyPending: v }),
 
-      theme: 'mono',
+      theme: 'forest',
       mode: 'light',
       density: 'comfortable',
       setTheme: (t) => set({ theme: t }),
@@ -313,12 +326,14 @@ export const useAppStore = create<AppState>()(
       }),
       clearPendingPdfOpen: () => set({ pendingPdfOpen: null }),
       pendingChatOpen: null,
-      requestChatOpen: (scope, sessionId) => set({
+      requestChatOpen: (scope, sessionId) => set((state) => state.chatStreamBusy ? state : {
         pendingChatOpen: { scope, sessionId },
         currentView: 'newTask',
         currentProjectId: scope === 'global' ? null : scope,
       }),
       clearPendingChatOpen: () => set({ pendingChatOpen: null }),
+      chatStreamBusy: false,
+      setChatStreamBusy: (busy) => set({ chatStreamBusy: busy }),
 
       references: [],
       referenceSyncStatus: 'idle',
@@ -511,6 +526,17 @@ export const useAppStore = create<AppState>()(
       searchQuery: '',
       setSearchQuery: (q) => set({ searchQuery: q }),
 
+      knowledgeSearchOpen: false,
+      openKnowledgeSearch: () => set({ knowledgeSearchOpen: true }),
+      closeKnowledgeSearch: () => set({ knowledgeSearchOpen: false }),
+      pendingReferenceId: null,
+      requestReferenceOpen: (id) => set({
+        pendingReferenceId: id,
+        currentView: 'library',
+        libraryTab: 'references',
+      }),
+      clearPendingReferenceOpen: () => set({ pendingReferenceId: null }),
+
       // === R109：笔记区 ===
       notes: [],
       addNote: (partial) => {
@@ -533,7 +559,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'selenyx-v2',
-      version: 7,
+      version: 8,
       // D6：版本化迁移链（R102）。migrate 只做"补默认值 + 结构调整"，绝不整个 reset
       // ——reset 留给下方 storage.getItem 的 JSON 预校验兜底（数据真损坏读不出时才回退）。
       // 新增持久化字段时在此补默认（state.xxx ??= defaultValue），保持链路完整可追踪。
@@ -550,8 +576,8 @@ export const useAppStore = create<AppState>()(
       },
       // Secrets are accepted only transiently for browser development. The
       // installed desktop app writes them through a native command instead.
-      // settingsOpen / focusRunId 为会话态，不落盘。
-      partialize: (state) => ({
+      // settingsOpen / focusRunId 为会话态，不落盘。chatStreamBusy is omitted entirely.
+      partialize: ({ chatStreamBusy: _chatStreamBusy, ...state }) => ({
         ...state,
         settingsOpen: false,
         focusRunId: null,
@@ -559,6 +585,8 @@ export const useAppStore = create<AppState>()(
         handledTaskLaunchNonce: 0,
         pendingPdfOpen: null,
         pendingChatOpen: null,
+        knowledgeSearchOpen: false,
+        pendingReferenceId: null,
         llmConfig: state.llmConfig ? { ...state.llmConfig, apiKey: undefined } : null,
       }),
       // C1 修复：自定义 storage 预校验 JSON，脏数据降级为初始状态而非白屏崩溃

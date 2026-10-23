@@ -10,10 +10,10 @@
 .dynamic-item,
 .user-popover-item,
 .user-trigger,
-.newtask-template,
 .newtask-chip,
 .newtask-model-chip,
 .newtask-attach,
+.newtask-polish,
 .sidebar-search,
 .evidence-card-actions .btn {
   transition:
@@ -24,16 +24,16 @@
     transform var(--transition-fast);
 }
 
-.btn:hover,
+.btn:not(.btn-primary):not(.btn-danger):hover,
 .icon-btn:hover,
 .nav-item:hover,
 .tabbar-btn:hover,
 .dynamic-item:hover,
 .user-popover-item:hover,
-.newtask-template:hover,
 .newtask-chip:hover,
 .newtask-model-chip:hover,
 .newtask-attach:hover,
+.newtask-polish:hover:not(:disabled),
 .sidebar-search:hover {
   color: var(--text-primary);
 }
@@ -43,10 +43,10 @@
 .nav-item:active,
 .tabbar-btn:active,
 .dynamic-item:active,
-.newtask-template:active,
 .newtask-chip:active,
 .newtask-model-chip:active,
-.newtask-attach:active {
+.newtask-attach:active,
+.newtask-polish:active:not(:disabled) {
   transform: translateY(1px);
 }
 
@@ -57,10 +57,10 @@
 .dynamic-item:focus-visible,
 .user-popover-item:focus-visible,
 .user-trigger:focus-visible,
-.newtask-template:focus-visible,
 .newtask-chip:focus-visible,
 .newtask-model-chip:focus-visible,
 .newtask-attach:focus-visible,
+.newtask-polish:focus-visible,
 .sidebar-search:focus-visible,
 .tabbar-btn:focus-visible,
 .evidence-card-actions .btn:focus-visible {
@@ -74,6 +74,7 @@
 .newtask-chip:disabled,
 .newtask-model-chip:disabled,
 .newtask-attach:disabled,
+.newtask-polish:disabled,
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;

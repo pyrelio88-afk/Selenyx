@@ -168,7 +168,7 @@ def _mark_unhandled_run_failure(run_id: str) -> None:
     """Safety net for an exception that escapes execute_run's own guard."""
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
-        if not run or run.status not in ("staged", "running", "cancelling", "waiting_confirm"):
+        if not run or run.status not in ("staged", "running", "cancelling", "waiting_confirm", "waiting_evidence"):
             return
         run.status = "failed"
         run.completed_at = datetime.now().isoformat()

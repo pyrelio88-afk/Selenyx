@@ -10,6 +10,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon, type IconName } from '@components/ui/Icon';
 import { expertsApi, TOOL_BOUNDARY_LABEL, type ExpertDef, type ExpertDelegation } from '@services/extensions';
+import { serviceErrorMessage } from '@lib/userFacingError';
+import { confirmAction, notify } from '@lib/appFeedback';
 
 const EXPERT_ICONS: Record<string, IconName> = {
   reviewer: 'references',
@@ -76,7 +78,7 @@ export function ExpertsView() {
       setName(''); setTagline(''); setPrompt(''); setShowForm(false); setEditingId(null);
       await refresh();
     } catch (error) {
-      alert(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`保存失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
@@ -95,12 +97,18 @@ export function ExpertsView() {
   };
 
   const remove = async (expert: ExpertDef) => {
-    if (!window.confirm(`删除自定义专家「${expert.name}」？`)) return;
+    const confirmed = await confirmAction({
+      title: `删除自定义专家「${expert.name}」？`,
+      message: '此操作只删除本地专家配置，已发出的任务不受影响。',
+      danger: true,
+      confirmLabel: '确认删除',
+    });
+    if (!confirmed) return;
     try {
       await expertsApi.remove(expert.id);
       await refresh();
     } catch (error) {
-      alert(`删除失败：${error instanceof Error ? error.message : String(error)}`);
+      notify(`删除失败：${serviceErrorMessage(error, '请稍后重试。')}`, 'error');
     }
   };
 
@@ -109,7 +117,7 @@ export function ExpertsView() {
       <div className="view-header">
         <div>
           <h1 className="view-title">专家</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <p style={{ margin: '4px 0 0', fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
             角色化研究助手：独立人格与工作边界；可在对话中启用，也可被 agent 任务委托。
           </p>
         </div>
@@ -126,10 +134,10 @@ export function ExpertsView() {
 
       {showForm && (
         <div className="card" style={{ padding: 16, display: 'grid', gap: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 15 }}>{editingId ? '编辑专家' : '新建自定义专家'}</h2>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="名称，如：投稿审稿人" aria-label="专家名称" style={{ minHeight: 40 }} />
-          <input value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="一句话定位（可选）" aria-label="专家定位" style={{ minHeight: 40 }} />
-          <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder="人格提示词：角色、工作边界、输出要求…" aria-label="人格提示词" style={{ resize: 'vertical' }} />
+          <h2 style={{ margin: 0, fontSize: 'var(--font-md)' }}>{editingId ? '编辑专家' : '新建自定义专家'}</h2>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="名称，如：投稿审稿人" aria-label="专家名称" />
+          <input className="input" value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="一句话定位（可选）" aria-label="专家定位" />
+          <textarea className="input" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder="人格提示词：角色、工作边界、输出要求…" aria-label="人格提示词" style={{ resize: 'vertical' }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn btn-primary" onClick={() => void create()} disabled={!name.trim() || !prompt.trim()} style={{ minHeight: 38 }}>{editingId ? '保存' : '创建'}</button>
             <button type="button" className="btn" onClick={closeForm} style={{ minHeight: 38 }}>取消</button>
@@ -145,12 +153,12 @@ export function ExpertsView() {
               <strong style={{ fontSize: 14.5, flex: 1 }}>{expert.name}</strong>
               {!expert.builtin && (
                 <>
-                  <button type="button" className="btn" onClick={() => startEdit(expert)} aria-label={`编辑 ${expert.name}`} style={{ minHeight: 28, fontSize: 11, padding: '0 8px' }}>编辑</button>
-                  <button type="button" className="btn" onClick={() => void remove(expert)} aria-label={`删除 ${expert.name}`} style={{ minHeight: 28, fontSize: 11, color: 'var(--danger)', padding: '0 8px' }}>删除</button>
+                  <button type="button" className="btn" onClick={() => startEdit(expert)} aria-label={`编辑 ${expert.name}`} style={{ minHeight: 28, fontSize: 'var(--font-sm)', padding: '0 8px' }}>编辑</button>
+                  <button type="button" className="btn" onClick={() => void remove(expert)} aria-label={`删除 ${expert.name}`} style={{ minHeight: 28, fontSize: 'var(--font-sm)', color: 'var(--danger)', padding: '0 8px' }}>删除</button>
                 </>
               )}
             </div>
-            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{expert.tagline || '自定义专家'}</p>
+            <p style={{ margin: 0, fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', lineHeight: 1.55 }}>{expert.tagline || '自定义专家'}</p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" className="btn btn-primary" onClick={() => activate(expert)} style={{ justifySelf: 'start', minHeight: 36 }}>
                 <Icon name="sparkles" size={14} /> 对话
@@ -160,7 +168,7 @@ export function ExpertsView() {
                 className="btn"
                 onClick={() => void toggleDetail(expert)}
                 aria-expanded={detailId === expert.id}
-                style={{ minHeight: 36, fontSize: 12.5 }}
+                style={{ minHeight: 36, fontSize: 'var(--font-sm)' }}
               >
                 <Icon name="list" size={13} /> {detailId === expert.id ? '收起' : '详情'}
               </button>
@@ -168,20 +176,20 @@ export function ExpertsView() {
             {detailId === expert.id && (
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'grid', gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 4 }}>工具边界（被 agent 委托时）</div>
+                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 4 }}>工具边界（被 agent 委托时）</div>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {(expert.toolBoundary ?? []).map((tool) => (
-                      <span key={tool} style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 999, border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                      <span key={tool} style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 999, border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
                         {TOOL_BOUNDARY_LABEL[tool] ?? tool}
                       </span>
                     ))}
-                    <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 999, border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: 'var(--font-xs)', padding: '2px 8px', borderRadius: 999, border: '1px dashed var(--border)', color: 'var(--text-muted)' }}>
                       不可写笔记/工件 · 不可再委托
                     </span>
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 4 }}>被委托记录</div>
+                  <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 4 }}>被委托记录</div>
                   {(delegations[expert.id] ?? []).length === 0 ? (
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>还没有被委托过；在任务里它会以子代理身份出场。</span>
                   ) : (
@@ -212,7 +220,7 @@ export function ExpertsView() {
         ))}
       </div>
       {!offline && experts.length === 0 && (
-        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)' }}>暂无专家；后端启动后会自动写入 4 位内置专家。</p>
+        <p style={{ margin: 0, fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>暂无专家；后端启动后会自动写入 4 位内置专家。</p>
       )}
     </div>
   );

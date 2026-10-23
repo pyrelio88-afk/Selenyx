@@ -1,7 +1,7 @@
 import type { LLMConfig, LLMProvider } from '@apptypes/index';
 
 const PROVIDERS = new Set<LLMProvider>([
-  'openai', 'openrouter', 'anthropic', 'google', 'ollama', 'agnes', 'custom',
+  'openai', 'openrouter', 'anthropic', 'google', 'ollama', 'magpie', 'agnes', 'custom',
 ]);
 
 export interface EnvironmentLLM {
@@ -27,14 +27,14 @@ export function parseEnvironmentLLM(values: EnvironmentValues): EnvironmentLLM {
 
   if (!hasAnyValue) return { config: null, error: null };
   if (!PROVIDERS.has(providerValue as LLMProvider)) {
-    return { config: null, error: 'VITE_LLM_PROVIDER must be one of: openai, openrouter, anthropic, google, ollama, agnes, custom.' };
+    return { config: null, error: 'VITE_LLM_PROVIDER must be one of: openai, openrouter, anthropic, google, ollama, magpie, agnes, custom.' };
   }
   if (!baseUrl || !model) {
     return { config: null, error: 'VITE_LLM_BASE_URL and VITE_LLM_MODEL are required when AI is configured.' };
   }
   const provider = providerValue as LLMProvider;
-  if (provider !== 'ollama' && !apiKey) {
-    return { config: null, error: 'VITE_LLM_API_KEY is required for remote AI providers. For a keyless local model, use provider=ollama.' };
+  if (provider !== 'ollama' && provider !== 'magpie' && !apiKey) {
+    return { config: null, error: 'VITE_LLM_API_KEY is required for remote AI providers. For a keyless local model, use provider=ollama or magpie.' };
   }
 
   return {

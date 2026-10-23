@@ -65,7 +65,7 @@ export function summarizePetRuns(runs: AgentRunSummary[], pendingCount: number, 
     if (!isToday(run.startedAt, today)) continue;
     if (run.status === 'completed') completedToday += 1;
     else if (run.status === 'failed') failedToday += 1;
-    else if (run.status === 'running' || run.status === 'cancelling' || run.status === 'waiting_confirm') runningToday += 1;
+    else if (run.status === 'running' || run.status === 'cancelling' || run.status === 'waiting_confirm' || run.status === 'waiting_evidence') runningToday += 1;
   }
   return { pendingCount, completedToday, failedToday, runningToday };
 }

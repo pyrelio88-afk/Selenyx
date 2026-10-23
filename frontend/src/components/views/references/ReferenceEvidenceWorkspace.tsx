@@ -4,6 +4,7 @@ import type { ResearchProject } from '@apptypes/project';
 import { Icon } from '@components/ui/Icon';
 import { searchApi, type SemanticHit } from '@services/api';
 import type { ReferenceSyncStatus } from '@services/referenceRepository';
+import { rawErrorText, serviceErrorMessage } from '@lib/userFacingError';
 import { referenceOnlineUrl } from '@utils/referenceIntegrity';
 
 export interface ReferenceIndexPresentation {
@@ -53,9 +54,11 @@ export function ReferenceEvidenceWorkspace({
   const [scope, setScope] = useState<'project' | 'library'>(project ? 'project' : 'library');
   const [status, setStatus] = useState<RetrievalStatus>('idle');
   const [message, setMessage] = useState('');
+  const [messageDetail, setMessageDetail] = useState('');
   const [hits, setHits] = useState<SemanticHit[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [indexSummary, setIndexSummary] = useState<string | null>(null);
+  const [indexDetail, setIndexDetail] = useState('');
   const [reindexing, setReindexing] = useState(false);
   const indexPresentation = getReferenceIndexPresentation(syncStatus);
   const referenceById = useMemo(() => new Map(references.map((reference) => [reference.id, reference])), [references]);
@@ -68,6 +71,7 @@ export function ReferenceEvidenceWorkspace({
     setHits([]);
     setStatus('idle');
     setMessage('');
+    setMessageDetail('');
     setExpandedIds(new Set());
   }, [projectId]);
 
@@ -76,6 +80,7 @@ export function ReferenceEvidenceWorkspace({
     if (!cleanedQuery || !indexPresentation.searchable) return;
     setStatus('loading');
     setMessage('');
+    setMessageDetail('');
     try {
       const response = await searchApi.semantic(cleanedQuery, projectScope ? project?.id : undefined);
       setHits(response.results);
@@ -85,7 +90,8 @@ export function ReferenceEvidenceWorkspace({
     } catch (error) {
       setHits([]);
       setStatus('error');
-      setMessage(error instanceof Error ? error.message : '本机 RAG 检索失败');
+      setMessage(serviceErrorMessage(error, '本机 RAG 检索失败'));
+      setMessageDetail(rawErrorText(error));
     }
   }
 
@@ -93,11 +99,13 @@ export function ReferenceEvidenceWorkspace({
     if (!indexPresentation.searchable || reindexing) return;
     setReindexing(true);
     setIndexSummary(null);
+    setIndexDetail('');
     try {
       const result = await searchApi.reindex();
       setIndexSummary(`已重建 ${result.references} 篇文献，共 ${result.chunksTotal} 个索引片段`);
     } catch (error) {
-      setIndexSummary(error instanceof Error ? `重建失败：${error.message}` : '重建索引失败');
+      setIndexSummary(`重建失败：${serviceErrorMessage(error, '请稍后重试')}`);
+      setIndexDetail(rawErrorText(error));
     } finally {
       setReindexing(false);
     }
@@ -157,11 +165,11 @@ export function ReferenceEvidenceWorkspace({
         </button>
       </div>
 
-      {indexSummary && <p className="reference-index-summary" role="status">{indexSummary}</p>}
+      {indexSummary && <p className="reference-index-summary" title={indexDetail || undefined} role="status">{indexSummary}</p>}
       {!indexPresentation.searchable && (
-        <p className="reference-index-notice">{syncMessage || '启动本机后端并完成 SQLite 同步后，才能查询真实索引。'}</p>
+        <p className="reference-index-notice" title={syncMessage || undefined}>启动本机后端并完成 SQLite 同步后，才能查询真实索引。</p>
       )}
-      {message && <p className={`reference-retrieval-message is-${status}`} role="status">{message}</p>}
+      {message && <p className={`reference-retrieval-message is-${status}`} title={messageDetail || undefined} role="status">{message}</p>}
 
       {status === 'done' && hits.length > 0 && (
         <div className="reference-retrieval-results" aria-label="可追溯证据片段">

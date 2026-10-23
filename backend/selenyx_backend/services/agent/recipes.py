@@ -14,6 +14,8 @@ from dataclasses import dataclass
 class Recipe:
     key: str
     name: str
+    # 面向输入框菜单的一句话说明（不参与模型注入）
+    description: str
     # 注入 run 目标消息的角色接力指令
     directive: str
     # 是否强制开启 finalize 批评审查门
@@ -23,6 +25,7 @@ class Recipe:
 _REVIEW_PIPELINE = Recipe(
     key="review-pipeline",
     name="综述流水线",
+    description="检索 → 起草 → 证据卡 → 批评 → 成稿",
     force_review=True,
     directive=(
         "本任务按「综述流水线」执行，角色接力顺序不可省略：\n"
@@ -36,7 +39,39 @@ _REVIEW_PIPELINE = Recipe(
     ),
 )
 
-RECIPES: dict[str, Recipe] = {recipe.key: recipe for recipe in (_REVIEW_PIPELINE,)}
+_EVIDENCE_AUDIT = Recipe(
+    key="evidence-audit",
+    name="证据审计",
+    description="逐条核对主张与证据，标出无据和冲突",
+    directive=(
+        "本任务按「证据审计」执行，顺序不可省略：\n"
+        "1. 你先输出审计计划（plan），写明本轮要核对的主张 / 草稿范围；\n"
+        "2. 用 project_context 与 list_evidence 盘点现有主张和证据链，再用 search_library 回查原文，"
+        "不得只凭记忆判断；\n"
+        "3. 对每条主张给出结论：有据（附真实证据 id 与原文摘录）、弱支持、无据或互相冲突；\n"
+        "4. 对无据或弱支持的主张，用 save_evidence 补充证据卡；无法补充的明确标为待补，不要编造证据；\n"
+        "5. 最终输出审计表（主张 | 结论 | 证据 id | 原文摘录 | 下一步），并总结最需要补强的 3 处。"
+    ),
+)
+
+_STUDY_DESIGN = Recipe(
+    key="study-design",
+    name="研究设计",
+    description="从研究问题到可执行方案与风险清单",
+    directive=(
+        "本任务按「研究设计」执行：\n"
+        "1. 先澄清研究问题与假设，用 PICO / PECO 等框架界定人群、暴露或干预、对照、结局与时间窗；\n"
+        "2. 用 search_library、project_context、list_evidence 检索本机资料，说明已有证据如何支持这个问题，"
+        "并指出具体研究缺口（不要把“没人做过”当成缺口）；\n"
+        "3. 给出研究设计草案：研究类型、纳排标准、样本量考虑、主要与次要结局、统计分析和偏倚控制；\n"
+        "4. 列出可行性、伦理、数据获取与时间风险，以及仍需补充的材料；\n"
+        "5. 用 write_note 保存方案草稿，最后给出按优先级排序的下一步清单。"
+    ),
+)
+
+RECIPES: dict[str, Recipe] = {
+    recipe.key: recipe for recipe in (_REVIEW_PIPELINE, _EVIDENCE_AUDIT, _STUDY_DESIGN)
+}
 
 
 def get_recipe(key: str | None) -> Recipe | None:

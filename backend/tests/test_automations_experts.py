@@ -191,7 +191,7 @@ def test_stale_runs_marked_failed(tmp_path, monkeypatch):
         runs = list(session.exec(select(AgentRun)).all())
         stale = next(r for r in runs if r.input_text == "中断任务")
         assert stale.status == "failed" and stale.completed_at
-        assert stale.output_text == "进程重启，任务中断。"
+        assert stale.output_text == "进程重启，任务中断；无法安全恢复，未重放任何操作。"
         done = next(r for r in runs if r.input_text == "正常任务")
         assert done.status == "completed"
 

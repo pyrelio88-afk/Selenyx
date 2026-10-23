@@ -16,17 +16,19 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import update
 from sqlmodel import Session, select
 
 from selenyx_backend.database import get_engine
 from selenyx_backend.models import AgentRun
 from selenyx_backend.services.agent import events, execute_run, registry
+from selenyx_backend.services.agent.plan_checkpoint import load_checkpoint
 from selenyx_backend.services.agent.recipes import get_recipe
 from selenyx_backend.services.skills import get_skill
 
 router = APIRouter()
 
-_ACTIVE_STATUSES = ("running", "cancelling", "waiting_confirm")
+_ACTIVE_STATUSES = ("running", "cancelling", "waiting_confirm", "waiting_evidence")
 
 # SSE 事件名映射（对齐 go-claw 事件类型）：时间线 kind -> wire 事件名
 _SSE_EVENT_NAME = {
@@ -183,19 +185,40 @@ def get_run(run_id: str):
 
 
 @router.post("/runs/{run_id}/cancel")
-def cancel_run(run_id: str):
+async def cancel_run(run_id: str):
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
         if not run:
             raise HTTPException(404, "运行记录不存在。")
         if run.status not in _ACTIVE_STATUSES:
             return {"runId": run_id, "status": run.status}
-    marked = registry.cancel_run(run_id)
-    return {"runId": run_id, "status": "cancelling" if marked else "running"}
+        controls = registry.get_controls(run_id)
+        if controls is None and run.status != "waiting_confirm":
+            raise HTTPException(409, "任务控制面不存在，无法取消进行中的调用。")
+        run.checkpoint_json = "{}"
+        run.status = "cancelling" if controls else "cancelled"
+        if controls is None:
+            run.completed_at = datetime.now().isoformat()
+            try:
+                audit = json.loads(run.audit_log_json)
+            except (ValueError, TypeError):
+                audit = None
+            if isinstance(audit, list):
+                last_step = audit[-1].get("step", 0) if audit and isinstance(audit[-1], dict) else 0
+                audit.append({"step": last_step, "kind": "error", "ts": run.completed_at, "message": "已被用户取消"})
+                run.audit_log_json = json.dumps(audit, ensure_ascii=False)
+        status, output = run.status, run.output_text
+        session.add(run)
+        session.commit()
+    if controls is not None:
+        controls.cancel()
+    else:
+        events.publish(run_id, {"type": "status", "status": status, "output": output})
+    return {"runId": run_id, "status": status}
 
 
 @router.post("/runs/{run_id}/steer")
-def steer_run(run_id: str, body: SteerBody):
+async def steer_run(run_id: str, body: SteerBody):
     """运行中插话（V4 模块 D）：loop 在下一步顶部消费，时间线显示为用户插话。"""
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
@@ -204,27 +227,62 @@ def steer_run(run_id: str, body: SteerBody):
         if run.status not in _ACTIVE_STATUSES:
             raise HTTPException(409, f"任务已结束（{run.status}），无法插话。")
     controls = registry.get_controls(run_id)
-    if controls is None or not controls.add_steer(body.text.strip()):
+    if controls is None or controls.cancelled or not controls.add_steer(body.text.strip()):
         raise HTTPException(409, "插话队列已满或任务不在进行中，请稍后再试。")
     return {"runId": run_id, "queued": True}
 
 
 @router.post("/runs/{run_id}/confirm")
-def confirm_run(run_id: str, body: ConfirmBody):
-    """plan 确认门放行（V4 模块 D）：按计划执行，或带调整意见执行。"""
+async def confirm_run(run_id: str, body: ConfirmBody):
+    """Consume the first plan checkpoint before waking or starting execution."""
     with Session(get_engine()) as session:
         run = session.get(AgentRun, run_id)
         if not run:
             raise HTTPException(404, "运行记录不存在。")
         if run.status != "waiting_confirm":
             raise HTTPException(409, f"任务不在等待确认状态（{run.status}）。")
-        run.status = "running"
-        session.add(run)
+        controls = registry.get_controls(run_id)
+        if controls is not None and (controls.cancelled or not controls.confirm_plan or controls.plan_gate.is_set()):
+            raise HTTPException(409, "任务已取消或计划已确认。")
+        try:
+            snapshot = load_checkpoint(run)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(409, "没有可安全恢复的计划检查点；未更改等待状态。") from exc
+        goal, project_id = run.input_text, run.project_id or None
+        consumed = session.execute(
+            update(AgentRun).where(
+                AgentRun.id == run_id,
+                AgentRun.status == "waiting_confirm",
+                AgentRun.checkpoint_json == run.checkpoint_json,
+                AgentRun.audit_log_json == run.audit_log_json,
+            ).values(status="running", checkpoint_json="{}")
+        )
+        if consumed.rowcount != 1:
+            session.rollback()
+            raise HTTPException(409, "计划状态已改变，请刷新后重试。")
         session.commit()
-    controls = registry.get_controls(run_id)
-    if controls is None:
-        raise HTTPException(409, "任务控制面不存在（可能进程已重启）。")
-    controls.confirm(body.adjustment)
+    # No await between validation, consumption and registration: controls stay
+    # on the sidecar's single event loop. A second approval sees running.
+    if controls is not None:
+        controls.confirm(body.adjustment)
+    else:
+        controls = registry.register_run(run_id)
+        controls.confirm_plan = True
+        controls.confirm(body.adjustment)
+
+        async def runner() -> None:
+            try:
+                await execute_run(
+                    run_id, goal, project_id,
+                    lambda event: events.publish(run_id, event),
+                    lambda: controls.cancelled,
+                    controls=controls,
+                    resume_snapshot=snapshot,
+                )
+            finally:
+                registry.finish_run(run_id)
+
+        asyncio.create_task(runner())
     return {"runId": run_id, "status": "running"}
 
 

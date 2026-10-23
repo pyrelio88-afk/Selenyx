@@ -6,10 +6,21 @@
   flex-direction: column;
   gap: 16px;
   color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-base);
+}
+
+.clinical-data-workbench .clinical-directory-header .view-title {
+  font-size: var(--font-xl);
+  font-weight: 600;
 }
 
 .clinical-directory-header {
   margin-bottom: 0;
+}
+
+.clinical-directory-header p {
+  font-size: var(--font-sm);
 }
 
 .clinical-directory-search {
@@ -28,7 +39,7 @@
   border: 0;
   outline: none;
   background: transparent;
-  font-size: 14px;
+  font-size: var(--font-sm);
   color: var(--text-primary);
 }
 
@@ -52,14 +63,15 @@
   justify-content: space-between;
   gap: 12px;
   margin: 0 0 10px;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-md);
+  font-weight: 600;
 }
 
 .clinical-directory-group h2 span {
-  font-size: 12px;
+  font-size: var(--font-xs);
   font-weight: 500;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .clinical-directory-group > div {
@@ -110,18 +122,19 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--font-base);
+  font-weight: 600;
 }
 
 .clinical-directory-copy small {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--font-xs);
+  font-weight: 400;
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
 }
 
 .clinical-directory-copy > span {
-  font-size: 12px;
+  font-size: var(--font-sm);
   color: var(--text-secondary);
   line-height: 1.45;
 }
@@ -135,7 +148,7 @@
 
 .clinical-directory-counts i {
   font-style: normal;
-  font-size: 11px;
+  font-size: var(--font-xs);
   padding: 2px 7px;
   border-radius: 999px;
   background: var(--bg-canvas);
@@ -171,14 +184,15 @@
 
 .clinical-directory-summary h2 {
   margin: 0 0 12px;
-  font-size: 14px;
+  font-size: var(--font-md);
+  font-weight: 600;
 }
 
 .clinical-directory-summary dl > div {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
+  font-size: var(--font-base);
 }
 
 .clinical-directory-summary dt {
@@ -187,13 +201,13 @@
 
 .clinical-directory-summary dd {
   margin: 0;
-  font-weight: 700;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
 .clinical-directory-summary p {
   margin: 12px 0 0;
-  font-size: 12px;
+  font-size: var(--font-sm);
   line-height: 1.55;
   color: var(--text-secondary);
 }
@@ -221,6 +235,9 @@
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-secondary);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -248,7 +265,7 @@
   border: 0;
   outline: none;
   background: transparent;
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
 .clinical-add-button {
@@ -288,11 +305,12 @@
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-sm);
+  white-space: nowrap;
 }
 
 .cd-tabbar button small {
-  font-size: 11px;
+  font-size: var(--font-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -300,7 +318,7 @@
 .cd-tabbar button.is-active {
   color: var(--accent);
   border-bottom-color: var(--accent);
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .cd-cat-chips {
@@ -315,7 +333,8 @@
   border-radius: 999px;
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-sm);
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -323,7 +342,7 @@
   background: var(--accent-light);
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .cd-entry-row {
@@ -332,10 +351,16 @@
 
 .cd-entry-summary {
   color: var(--text-secondary);
+  font-size: var(--font-sm);
 }
 
 .cd-pager {
   margin-top: 8px;
+}
+
+.cd-pager .btn {
+  font-size: var(--font-sm);
+  white-space: nowrap;
 }
 
 .cd-loadmore {
@@ -358,14 +383,14 @@
 
 .clinical-content-hint p {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: var(--font-sm);
   line-height: 1.6;
   color: var(--text-secondary);
 }
 
-.clinical-content-meta {
-  font-size: 12px !important;
-  color: var(--text-muted) !important;
+.clinical-content-hint .clinical-content-meta {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
 }
 
 .clinical-official-notice {
@@ -376,7 +401,7 @@
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--warning, #9a7837) 12%, var(--bg-canvas));
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-sm);
   line-height: 1.5;
 }
 
@@ -398,8 +423,8 @@
   border: 0;
   background: transparent;
   text-align: left;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--font-base);
+  font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
 }
@@ -425,7 +450,9 @@
   border-radius: var(--radius-sm);
   background: var(--bg-canvas);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-sm);
+  font-weight: 500;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
 }

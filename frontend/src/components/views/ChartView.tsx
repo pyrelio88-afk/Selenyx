@@ -187,6 +187,21 @@ function getChartTheme(): ChartTheme {
   };
 }
 
+// 类别系列先走 accent + 中性灰阶；语义色排在后面，避免默认两组数据都落在绿色系难以区分。
+function categoricalPalette(theme: ChartTheme): string[] {
+  const text = parseColor(theme.text);
+  const surface = parseColor(theme.canvasBg);
+  return [
+    theme.palette[0],
+    mix(text, surface, 0.35),
+    mix(text, surface, 0.62),
+    theme.palette[1],
+    theme.palette[2],
+    theme.palette[3],
+    mix(parseColor(theme.palette[0]), surface, 0.55),
+  ].filter(Boolean);
+}
+
 // ===== CSV 解析（支持引号字段） =====
 export function parseCSV(text: string): string[][] {
   const rows: string[][] = [];
@@ -589,8 +604,9 @@ function buildOption(
   if (type === 'bar' || type === 'line' || type === 'area') {
     const cats = rows.map((r) => r[0] ?? '');
     const seriesNames = headers.slice(1);
+    const palette = categoricalPalette(ct);
     const series = seriesNames.map((name, si) => {
-      const color = ct.palette[si % ct.palette.length];
+      const color = palette[si % palette.length];
       if (type === 'bar') {
         return {
           name, type: 'bar' as const, stack: cfg.stacked ? 'total' : undefined,
@@ -614,7 +630,7 @@ function buildOption(
       grid: baseGrid(cfg),
       xAxis: { type: 'category' as const, data: cats, name: cfg.xLabel, nameTextStyle: { color: ct.subText }, ...ax.axisLine, axisLabel: ax.axisLabel },
       yAxis: { type: 'value' as const, name: cfg.yLabel, nameTextStyle: { color: ct.subText }, ...ax.axisLine, axisLabel: ax.axisLabel, splitLine: ax.splitLine },
-      color: ct.palette,
+      color: palette,
       series,
     };
   }
@@ -622,8 +638,9 @@ function buildOption(
   // 散点图：X 数值
   if (type === 'scatter') {
     const seriesNames = headers.slice(1);
+    const palette = categoricalPalette(ct);
     const series = seriesNames.map((name, si) => {
-      const color = ct.palette[si % ct.palette.length];
+      const color = palette[si % palette.length];
       return {
         name, type: 'scatter' as const,
         data: rows.map((r) => [toNum(r[0]), toNum(r[si + 1])]),
@@ -635,7 +652,7 @@ function buildOption(
       grid: baseGrid(cfg),
       xAxis: { type: 'value' as const, name: cfg.xLabel, nameTextStyle: { color: ct.subText }, ...ax.axisLine, axisLabel: ax.axisLabel, splitLine: ax.splitLine },
       yAxis: { type: 'value' as const, name: cfg.yLabel, nameTextStyle: { color: ct.subText }, ...ax.axisLine, axisLabel: ax.axisLabel, splitLine: ax.splitLine },
-      color: ct.palette,
+      color: palette,
       series,
     };
   }
@@ -645,7 +662,7 @@ function buildOption(
     const data = rows.map((r) => ({ name: r[0] ?? '', value: toNum(r[1]) })).filter((d) => d.name);
     return {
       title: titleComp, legend: legendComp, tooltip,
-      color: ct.palette,
+      color: categoricalPalette(ct),
       series: [{
         type: 'pie' as const,
         radius: type === 'donut' ? ['42%', '68%'] : '68%',

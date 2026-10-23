@@ -76,3 +76,15 @@ export function parseSkillPrefix(text: string): { skill: string | null; goal: st
   if (!match) return { skill: null, goal: text };
   return { skill: match[1], goal: match[2].trim() };
 }
+
+/**
+ * 输入框技能来源合并：加号菜单显式选择的技能优先于 /技能名 前缀。
+ * 两者同时存在时仍剥掉前缀，避免把命令词写进研究目标。
+ */
+export function resolveGoalSkill(
+  text: string,
+  selectedSkill: string | null,
+): { skill: string | null; goal: string } {
+  const parsed = parseSkillPrefix(text);
+  return { skill: selectedSkill ?? parsed.skill, goal: parsed.goal };
+}

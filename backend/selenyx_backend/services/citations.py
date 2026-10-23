@@ -75,6 +75,32 @@ def has_evidence_markers(text: str) -> bool:
     return bool(_EVIDENCE_REF_RE.search(text) or _NONE_REF_RE.search(text))
 
 
+def pending_evidence_refs(session: Session, project_id: str | None, text: str) -> list[str]:
+    """引用了本项目中仍待人工裁决的证据 id（按出现顺序，去重）。
+
+    已驳回的证据不算待裁决：它们是明确的无效引用，交给证据门打回修订。
+    库中不存在或属于其他项目的 id 也不在这里，由 ``analyze_citations`` 判为编造。
+    """
+    references = extract_evidence_refs(text)
+    scope = (project_id or "").strip()
+    if not references or not scope:
+        return []
+    rows = session.exec(
+        select(EvidenceItem).where(
+            EvidenceItem.project_id == scope,
+            EvidenceItem.id.in_(references),
+        )
+    ).all()
+    pending = {
+        item.id
+        for item in rows
+        if not (item.status == "accepted" and item.review == "accepted")
+        and item.status != "rejected"
+        and item.review != "rejected"
+    }
+    return [reference for reference in references if reference in pending]
+
+
 def requires_evidence_markers(
     text: str,
     *,

@@ -16,6 +16,7 @@ import { orderProjectsForWorkspace, projectRoleLabel, selectPrimaryProject } fro
 import { evidenceApi } from '@services/api';
 import { ProjectCountdown, UnassignedProjectCountdowns } from '@components/projects/ProjectDeadlines';
 import { hasCompleteCountdown, isProjectNameReady } from '@components/projects/projectCreatePolicy';
+import { confirmAction } from '@lib/appFeedback';
 
 const DISCIPLINE_FILTERS: { label: string; match: string[] }[] = [
   { label: '全部', match: [] },
@@ -151,7 +152,7 @@ function FrameworkPicker({
                 type="button"
                 onClick={() => setDisciplineFilter(filter)}
                 style={{
-                  fontSize: 11, padding: '3px 10px', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 'var(--font-xs)', padding: '3px 10px', borderRadius: 10, cursor: 'pointer',
                   border: `1px solid ${disciplineFilter.label === filter.label ? 'var(--accent)' : 'var(--border)'}`,
                   background: disciplineFilter.label === filter.label ? 'var(--accent-light)' : 'transparent',
                   color: disciplineFilter.label === filter.label ? 'var(--accent)' : 'var(--text-muted)',
@@ -176,7 +177,7 @@ function FrameworkPicker({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{fw.name}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fw.fields.length} 字段</span>
+                    <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{fw.fields.length} 字段</span>
                     <button
                       type="button"
                       className="fw-select-btn"
@@ -190,11 +191,11 @@ function FrameworkPicker({
                   {fw.description.slice(0, 80)}...
                 </p>
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: 'var(--accent-light)', color: 'var(--accent)' }}>
+                  <span style={{ fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 6, background: 'var(--accent-light)', color: 'var(--accent)' }}>
                     {fw.bestFor}
                   </span>
                   {fw.disciplines.slice(0, 2).map((discipline) => (
-                    <span key={discipline} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
+                    <span key={discipline} style={{ fontSize: 'var(--font-xs)', padding: '1px 6px', borderRadius: 6, background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>
                       {discipline}
                     </span>
                   ))}
@@ -223,7 +224,7 @@ function FrameworkPicker({
                 value={fieldValues[field.key] || ''}
                 onChange={(event) => setFieldValues((current) => ({ ...current, [field.key]: event.target.value }))}
               />
-              {field.hint && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>{field.hint}</span>}
+              {field.hint && <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>{field.hint}</span>}
             </div>
           ))}
         </div>
@@ -359,8 +360,13 @@ export function ProjectsView() {
     setSelectedFramework(null);
   }
 
-  function handleDelete(project: ResearchProject) {
-    const ok = window.confirm(`确定删除项目「${project.name}」？\n将同步删除其任务与证据条目，且不可恢复。`);
+  async function handleDelete(project: ResearchProject) {
+    const ok = await confirmAction({
+      title: `删除项目「${project.name}」？`,
+      message: '将同步删除其任务与证据条目，且不可恢复。',
+      danger: true,
+      confirmLabel: '确认删除',
+    });
     if (!ok) return;
     deleteProject(project.id);
   }
@@ -444,11 +450,11 @@ export function ProjectsView() {
     <div className="projects-workbench">
       <div className="view-header">
         <div>
-          <h1 className="view-title">项目</h1>
+          <h1 className="view-title">研究项目</h1>
           <div
             role="status"
             title={workspaceSyncMessage}
-            style={{ marginTop: 3, fontSize: 11.5, color: workspaceSyncStatus === 'synced' ? 'var(--success)' : 'var(--text-muted)' }}
+            style={{ marginTop: 3, fontSize: 'var(--font-xs)', color: workspaceSyncStatus === 'synced' ? 'var(--success)' : 'var(--text-muted)' }}
           >
             {workspaceSyncStatus === 'synced'
               ? '● SQLite 已同步'
@@ -484,7 +490,7 @@ export function ProjectsView() {
                 <h2 id={`project-group-${group.key}`}>{group.title}</h2>
                 <p>{group.detail}</p>
               </div>
-              <span>{group.projects.length}</span>
+              <span className="project-group-count">{group.projects.length} 项</span>
             </header>
             <div className="grid grid-2 projects-grid">
           {group.projects.map((project) => {
@@ -536,7 +542,7 @@ export function ProjectsView() {
                 {project.tags && project.tags.length > 0 && (
                   <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
                     {project.tags.map((tag) => (
-                      <span key={tag} style={{ fontSize: 11, padding: '1px 8px', borderRadius: 8, background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{tag}</span>
+                      <span key={tag} style={{ fontSize: 'var(--font-xs)', padding: '1px 8px', borderRadius: 8, background: 'var(--bg-surface)', color: 'var(--text-muted)' }}>{tag}</span>
                     ))}
                   </div>
                 )}

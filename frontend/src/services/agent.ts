@@ -15,14 +15,14 @@ export interface AgentRunSummary {
   /** Browser-local assistant session that created this run, when applicable. */
   sourceSessionId?: string | null;
   sourceSessionScope?: string | null;
-  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'cancelling' | 'waiting_confirm' | string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled' | 'cancelling' | 'waiting_confirm' | 'waiting_evidence' | string;
   startedAt: string | null;
   completedAt: string | null;
 }
 
 export interface AgentStep {
   step: number;
-  kind: 'plan' | 'thought' | 'tool' | 'observation' | 'subagent' | 'review' | 'final' | 'error' | 'coverage' | 'steer' | 'waiting';
+  kind: 'plan' | 'thought' | 'tool' | 'observation' | 'subagent' | 'review' | 'final' | 'error' | 'coverage' | 'steer' | 'waiting' | 'evidence_wait' | 'evidence_resume';
   ts: string;
   text?: string;
   tool?: string;
@@ -30,6 +30,7 @@ export interface AgentStep {
   result?: unknown;
   message?: string;
   items?: string[];
+  ids?: string[];
   critic?: string;
   expert?: string;
   error?: boolean;
@@ -50,7 +51,7 @@ export interface AgentRunDetail extends AgentRunSummary {
 
 /** run 是否还在活动态（轮询/SSE 是否继续的依据）。 */
 export function isActiveRun(status: string): boolean {
-  return status === 'running' || status === 'cancelling' || status === 'waiting_confirm';
+  return status === 'running' || status === 'cancelling' || status === 'waiting_confirm' || status === 'waiting_evidence';
 }
 
 export interface StartRunOptions {
@@ -81,8 +82,8 @@ export const agentApi = {
         sourceSessionScope: opts.sourceSessionScope ?? null,
       }),
     }),
-  list: () => request<{ runs: AgentRunSummary[] }>('/agent/runs'),
-  get: (runId: string) => request<AgentRunDetail>(`/agent/runs/${runId}`),
+  list: (signal?: AbortSignal) => request<{ runs: AgentRunSummary[] }>('/agent/runs', { signal }),
+  get: (runId: string, signal?: AbortSignal) => request<AgentRunDetail>(`/agent/runs/${runId}`, { signal }),
   cancel: (runId: string) =>
     request<{ runId: string; status: string }>(`/agent/runs/${runId}/cancel`, { method: 'POST' }),
   /** 运行中插话：下一步顶部被 loop 消费，时间线显示为用户插话。 */
@@ -100,6 +101,8 @@ export const agentApi = {
 };
 
 export interface RunEventHandlers {
+  /** SSE 连接已建立。 */
+  onOpen?: () => void;
   /** 任一实时事件到达（thought/tool_call/tool_result/plan/review/final/error/coverage/steer/waiting）。 */
   onEvent?: (name: string, data: Record<string, unknown>) => void;
   /** run 终态（completed/failed/cancelled）。 */
@@ -121,6 +124,7 @@ const SSE_EVENT_NAMES = [
   'subagent',
   'steer',
   'waiting',
+  'step',
   'status',
 ];
 
@@ -149,6 +153,9 @@ export function subscribeRunEvents(runId: string, handlers: RunEventHandlers): (
       handlers.onEvent?.(name, data);
     });
   }
+  source.onopen = () => {
+    handlers.onOpen?.();
+  };
   source.onerror = () => {
     handlers.onError?.();
   };

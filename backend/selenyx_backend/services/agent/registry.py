@@ -11,17 +11,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime
 
 from sqlmodel import Session, select
 
 from selenyx_backend.database import get_engine
 from selenyx_backend.models import AgentRun
+from selenyx_backend.services.agent.plan_checkpoint import load_checkpoint
 
 # steer 插话积压上限：防失控客户端灌爆内存
 _MAX_STEER_BACKLOG = 20
-# plan 确认等待上限：超时自动按计划继续（用户可能关了窗口）
-PLAN_CONFIRM_TIMEOUT_S = 1800
 
 
 class RunControls:
@@ -29,8 +29,8 @@ class RunControls:
 
     - 取消即时化：cancel_event 一置位，进行中的 LLM 调用立刻被取消；
     - steer：用户运行中插话，loop 在下一步顶部消费；
-    - plan 确认门：confirm_plan=True 时首个计划在 plan_gate 上等待，
-      confirm()（或 cancel()）放行。
+    - plan 确认门：confirm_plan=True 时有效计划在 plan_gate 上持续等待，
+      只有 confirm() 授权执行；cancel() 唤醒等待并终止运行。
     """
 
     def __init__(self) -> None:
@@ -111,27 +111,61 @@ def release_task(task_id: str) -> None:
 
 
 def mark_stale_runs_failed() -> int:
-    """进程启动时把残留的 running/cancelling/waiting_confirm run 收敛为 failed（重启即中断）。"""
+    """Only a validated first pre-tool plan wait survives startup; nothing resumes."""
     now = datetime.now().isoformat()
+    failed = 0
     with Session(get_engine()) as session:
         stale = list(
             session.exec(
-                select(AgentRun).where(AgentRun.status.in_(("running", "cancelling", "waiting_confirm")))
+                select(AgentRun).where(
+                    AgentRun.status.in_(("running", "cancelling", "waiting_confirm", "waiting_evidence"))
+                )
             ).all()
         )
         for run in stale:
+            if run.status == "waiting_confirm":
+                try:
+                    load_checkpoint(run)
+                except (ValueError, TypeError):
+                    pass  # Legacy or unsafe waits cannot be reconstructed from audit.
+                else:
+                    continue
             run.status = "failed"
+            run.checkpoint_json = "{}"
             run.completed_at = now
-            if not run.output_text:
-                run.output_text = "进程重启，任务中断。"
+            interruption = "进程重启，任务中断；无法安全恢复，未重放任何操作。"
+            run.output_text = f"{run.output_text}\n\n{interruption}" if run.output_text else interruption
+            try:
+                audit = json.loads(run.audit_log_json)
+            except (ValueError, TypeError):
+                audit = None
+            if isinstance(audit, list):
+                pending: dict[int, str] = {}
+                for entry in audit:
+                    if not isinstance(entry, dict) or type(entry.get("step")) is not int:
+                        continue
+                    step = entry["step"]
+                    if entry.get("kind") == "tool" and isinstance(entry.get("tool"), str):
+                        pending[step] = entry["tool"]
+                    elif entry.get("kind") == "observation":
+                        pending.pop(step, None)
+                if pending:
+                    audit.append({
+                        "step": max(pending), "kind": "error", "ts": now,
+                        "message": (
+                            f"工具 {pending[max(pending)]} 的结果未记录，执行状态未知；"
+                            "请先核对本地证据或工件，再决定是否重新运行。"
+                        ),
+                    })
+                    run.audit_log_json = json.dumps(audit, ensure_ascii=False)
             session.add(run)
+            failed += 1
         session.commit()
-        return len(stale)
+        return failed
 
 
 __all__ = [
     "RunControls",
-    "PLAN_CONFIRM_TIMEOUT_S",
     "register_run",
     "get_controls",
     "cancel_run",

@@ -21,6 +21,7 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
+        "theme": "Light",
         "center": true
       }
     ],
