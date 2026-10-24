@@ -39,6 +39,7 @@ from selenyx_backend.services.agent.core import (
     fold_observations as _fold_observations,
     run_tool as _run_tool,
     truncate as _truncate,
+    skill_allows_tool as _skill_allows_tool,
 )
 from selenyx_backend.services.agent.budget import (
     TokenBudgetExceeded, record_usage, start_budget, token_limit, tokens_used,
@@ -76,6 +77,10 @@ from selenyx_backend.services.memory import (
 )
 
 _REVIEW_TEXT_CHARS = 1500
+_READ_ONLY_TOOLS = frozenset({
+    "search_library", "list_references", "project_context", "list_evidence",
+    "list_pending_evidence", "list_notes", "read_note", "read_memory",
+})
 
 _WRAP_UP_PROMPT = (
     "已达到最大工具步数。请停止调用工具，基于目前已收集的信息直接输出最终 JSON 动作"
@@ -200,7 +205,12 @@ def _plan_items(action: dict[str, Any]) -> list[str]:
     return [item for item in items if item]
 
 
-async def _ask_expert(project_id: str | None, args: dict[str, Any], record: Callable[..., None]) -> Any:
+async def _ask_expert(
+    project_id: str | None,
+    args: dict[str, Any],
+    record: Callable[..., None],
+    allowed_tools: set[str] | None = None,
+) -> Any:
     """ask_expert 工具：把子问题委托给专家子代理（subagent）。
 
     子代理的 LLM 故障降级为 error 观察回灌主循环，不炸掉整个 run。
@@ -220,7 +230,7 @@ async def _ask_expert(project_id: str | None, args: dict[str, Any], record: Call
         record("subagent", expert=expert_snapshot.name, **event)
 
     try:
-        answer = await run_subagent(expert_snapshot, question, project_id, emit_sub)
+        answer = await run_subagent(expert_snapshot, question, project_id, emit_sub, allowed_tools)
     except HTTPException as exc:
         return {"expert": expert_snapshot.name, "error": f"专家暂不可用：{exc.detail}"}
     return {"expert": expert_snapshot.name, "answer": _truncate(answer, 2000)}
@@ -254,9 +264,16 @@ def _evidence_gate_error(operation: str, exc: EvidenceAppendixValidationError) -
     }
 
 
-async def _dispatch_tool(run_id: str, project_id: str | None, tool: str, args: dict[str, Any], record: Callable[..., None]) -> Any:
+async def _dispatch_tool(
+    run_id: str,
+    project_id: str | None,
+    tool: str,
+    args: dict[str, Any],
+    record: Callable[..., None],
+    allowed_tools: set[str] | None = None,
+) -> Any:
     if tool == "ask_expert":
-        return await _ask_expert(project_id, args, record)
+        return await _ask_expert(project_id, args, record, allowed_tools)
     # 记忆工具（V4 模块 F）：有项目归属写项目记忆，否则写全局
     if tool == "read_memory":
         return {"memory": _read_memory(project_id) or "（暂无记忆）", "globalMemory": _read_memory(None) or "（暂无全局记忆）"}
@@ -543,6 +560,8 @@ async def execute_run(
     reviewed = False
     citation_bounced = False  # One repair turn; a second invalid draft fails closed.
     plan_confirmed = False  # 仅在等待中的计划实际获得人工确认后置位
+    last_read_call: tuple[str, str, str] | None = None
+    blocked_read_call: tuple[str, str] | None = None
     step_limit = MAX_STEPS
     try:
         if resume_snapshot is not None:
@@ -669,17 +688,51 @@ async def execute_run(
             tool = str(action.get("tool", ""))
             args = action.get("args") if isinstance(action.get("args"), dict) else {}
             timeline.record("tool", tool=tool, args=args)
-            # 技能白名单（V4 模块 F）：越界工具不执行，观察里说明可用清单
-            mcp_wildcard_allowed = tool.startswith("mcp:") and "mcp:*" in (allowed_tools or set())
-            if allowed_tools is not None and tool not in allowed_tools and not mcp_wildcard_allowed:
+            # 技能白名单（V4 模块 F）：越界工具不执行，观察里说明可用清单。
+            # 读工具在同一调用和参数下连续两次返回相同结果后，后续重复不再派发；
+            # 以可见观察提示模型换查询/工具，不静默终止整个 run。
+            def dispatch_current_tool():
+                if tool == "ask_expert":
+                    return _dispatch_tool(run_id, project_id, tool, args, timeline.record, allowed_tools)
+                return _dispatch_tool(run_id, project_id, tool, args, timeline.record)
+
+            if not _skill_allows_tool(tool, allowed_tools):
                 observation = {
                     "error": f"当前技能不允许使用工具 {tool}",
-                    "allowedTools": sorted(allowed_tools),
+                    "allowedTools": sorted(allowed_tools or set()),
                 }
+                last_read_call = None
+                blocked_read_call = None
             else:
-                observation = await _await_cancellable(
-                    _dispatch_tool(run_id, project_id, tool, args, timeline.record), controls
-                )
+                request_key = (tool, json.dumps(args, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+                if tool not in _READ_ONLY_TOOLS:
+                    last_read_call = None
+                    blocked_read_call = None
+                    operation = dispatch_current_tool()
+                elif blocked_read_call == request_key:
+                    observation = {
+                        "error": f"连续两次相同的只读工具调用 {tool} 返回了相同结果；为避免无进展循环，已拦截重复执行。请调整参数、改用其他工具或基于现有结果总结。",
+                        "noProgress": True,
+                    }
+                    operation = None
+                else:
+                    operation = dispatch_current_tool()
+                if operation is not None:
+                    raw_observation = await _await_cancellable(operation, controls)
+                    result_key = json.dumps(raw_observation, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+                    if tool in _READ_ONLY_TOOLS:
+                        if last_read_call == (request_key[0], request_key[1], result_key):
+                            blocked_read_call = request_key
+                            observation = {
+                                "error": f"连续两次相同的只读工具调用 {tool} 返回了相同结果；为避免无进展循环，后续重复将被拦截。请调整参数、改用其他工具或基于现有结果总结。",
+                                "noProgress": True,
+                            }
+                        else:
+                            blocked_read_call = None
+                            observation = raw_observation
+                        last_read_call = (request_key[0], request_key[1], result_key)
+                    else:
+                        observation = raw_observation
             timeline.record("observation", tool=tool, result=observation)
             messages.append({
                 "role": "user",

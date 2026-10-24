@@ -24,6 +24,7 @@ from selenyx_backend.services.agent.core import (
     complete as _complete,
     extract_action as _extract_action,
     run_tool as _run_tool,
+    skill_allows_tool as _skill_allows_tool,
 )
 
 SUBAGENT_MAX_STEPS = 6
@@ -49,6 +50,7 @@ async def run_subagent(
     question: str,
     project_id: str | None,
     emit_sub: Any = None,
+    allowed_tools: set[str] | None = None,
 ) -> str:
     """以专家人格跑一个受限子循环，返回其 final 文本。"""
     # 子代理复用主协议（工具白名单 + JSON 动作），但人格由专家 system prompt 主导
@@ -66,6 +68,11 @@ async def run_subagent(
         args = action.get("args") if isinstance(action.get("args"), dict) else {}
         if tool == "ask_expert":
             observation: Any = {"error": "专家不能再委托其他专家（禁止嵌套）"}
+        elif not _skill_allows_tool(tool, allowed_tools):
+            observation = {
+                "error": f"当前技能不允许使用工具 {tool}",
+                "allowedTools": sorted(allowed_tools or set()),
+            }
         else:
             with Session(get_engine()) as session:
                 observation = await _run_tool(session, project_id, tool, args)

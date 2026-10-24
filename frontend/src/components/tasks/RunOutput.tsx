@@ -27,7 +27,7 @@ const STAIN_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
   unsourced: { bg: 'rgba(199, 72, 59, 0.12)', fg: '#c7483b', label: '无据断言' },
 };
 
-export function RunOutput({ run }: { run: AgentRunDetail }) {
+export function RunOutput({ run, latestActivityTarget = false }: { run: AgentRunDetail; latestActivityTarget?: boolean }) {
   const addNote = useAppStore((s) => s.addNote);
   const setPendingNoteId = useAppStore((s) => s.setPendingNoteId);
   const setView = useAppStore((s) => s.setView);
@@ -139,7 +139,7 @@ export function RunOutput({ run }: { run: AgentRunDetail }) {
   };
 
   return (
-    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+    <div id={latestActivityTarget ? 'research-latest-step' : undefined} style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
         <h3 style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>产出</h3>
         {coverage && coverage.sentences > 0 && (

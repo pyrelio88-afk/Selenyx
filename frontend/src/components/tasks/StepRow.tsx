@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { Icon } from '@components/ui/Icon';
 import type { AgentStep } from '@services/agent';
+import { formatAgentStepTime, TOOL_LABEL } from './activity';
 
 export const STATUS_LABEL: Record<string, string> = {
   running: '运行中', cancelling: '取消中', completed: '已完成', failed: '失败', cancelled: '已取消',
@@ -17,20 +18,22 @@ export const STATUS_COLOR: Record<string, string> = {
   failed: 'var(--danger)', cancelled: 'var(--text-muted)', waiting_confirm: 'var(--accent)',
   waiting_evidence: 'var(--accent)',
 };
-const TOOL_LABEL: Record<string, string> = {
-  search_library: '检索文献库', list_references: '列出文献', project_context: '读取项目概况', list_evidence: '读取证据链',
-  save_evidence: '落证据卡', list_pending_evidence: '查看待裁决证据', ask_expert: '委托专家',
-  write_note: '写入笔记', export_artifact: '导出工件', list_notes: '读取笔记列表', read_note: '读取笔记',
-  read_memory: '读取记忆', write_memory: '写入记忆',
-};
-
 function formatToolData(value: unknown, missing: string): string {
   if (value === undefined) return missing;
   if (typeof value === 'string') return value;
   return JSON.stringify(value, null, 2) ?? missing;
 }
 
-function ToolStepRow({ step }: { step: AgentStep }) {
+function StepMeta({ step, isLatest }: { step: AgentStep; isLatest: boolean }) {
+  return (
+    <span className="agent-step-meta">
+      {isLatest && <span className="agent-step-latest">最新</span>}
+      <time dateTime={step.ts}>{formatAgentStepTime(step.ts)}</time>
+    </span>
+  );
+}
+
+function ToolStepRow({ step, isLatest, id }: { step: AgentStep; isLatest: boolean; id?: string }) {
   const [expanded, setExpanded] = useState(false);
   const isObservation = step.kind === 'observation';
   const result = step.result !== null && typeof step.result === 'object' && !Array.isArray(step.result)
@@ -49,7 +52,7 @@ function ToolStepRow({ step }: { step: AgentStep }) {
   const toolLabel = TOOL_LABEL[step.tool ?? ''] ?? step.tool ?? '未知工具';
 
   return (
-    <li className={`agent-step ${failed ? 'is-error' : isObservation ? 'is-observation' : 'is-tool'}`}>
+    <li id={id} className={`agent-step ${failed ? 'is-error' : isObservation ? 'is-observation' : 'is-tool'}${isLatest ? ' is-latest' : ''}`}>
       <details className="agent-tool-disclosure" onToggle={(event) => setExpanded(event.currentTarget.open)}>
         <summary>
           <Icon name={failed ? 'warning' : isObservation ? 'list' : 'blueprint'} size={13} />
@@ -74,14 +77,16 @@ function ToolStepRow({ step }: { step: AgentStep }) {
           </div>
         )}
       </details>
+      <StepMeta step={step} isLatest={isLatest} />
     </li>
   );
 }
 
-export function StepRow({ step }: { step: AgentStep }) {
+export function StepRow({ step, isLatest = false, id }: { step: AgentStep; isLatest?: boolean; id?: string }) {
+  const rowClass = (kind: string) => `agent-step ${kind}${isLatest ? ' is-latest' : ''}`;
   if (step.kind === 'plan') {
     return (
-      <li className="agent-step is-plan">
+      <li id={id} className={rowClass('is-plan')}>
         <Icon name="blueprint" size={13} />
         <span>
           <b>执行计划</b>
@@ -89,75 +94,83 @@ export function StepRow({ step }: { step: AgentStep }) {
             {(step.items ?? []).map((item, i) => <li key={i}>{item}</li>)}
           </ol>
         </span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'thought') {
-    return <li className="agent-step is-thought"><Icon name="sparkles" size={13} /><span>{step.text}</span></li>;
+    return <li id={id} className={rowClass('is-thought')}><Icon name="sparkles" size={13} /><span>{step.text}</span><StepMeta step={step} isLatest={isLatest} /></li>;
   }
   if (step.kind === 'review') {
     return (
-      <li className={`agent-step ${step.error ? 'is-error' : 'is-review'}`}>
+      <li id={id} className={rowClass(step.error ? 'is-error' : 'is-review')}>
         <Icon name="warning" size={13} />
         <span><b>{step.critic ?? '批评员'}审阅</b>{step.text ? `：${step.text}` : ''}</span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'subagent') {
     return (
-      <li className="agent-step is-subagent">
+      <li id={id} className={rowClass('is-subagent')}>
         <Icon name="chip" size={13} />
         <span>专家 <b>{step.expert}</b> {step.tool ? `调用 ${TOOL_LABEL[step.tool] ?? step.tool}` : '处理中'}</span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'tool' || step.kind === 'observation') {
-    return <ToolStepRow step={step} />;
+    return <ToolStepRow step={step} isLatest={isLatest} id={id} />;
   }
   if (step.kind === 'coverage') {
     const s = step as unknown as { sentences?: number; supported?: number; fullyAccepted?: number };
     return (
-      <li className="agent-step is-observation">
+      <li id={id} className={rowClass('is-observation')}>
         <Icon name="check" size={13} />
         <span>证据校验：{s.supported ?? 0}/{s.sentences ?? 0} 论断有据，其中 {s.fullyAccepted ?? 0} 条人工已接受</span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'steer') {
     return (
-      <li className="agent-step is-steer">
+      <li id={id} className={rowClass('is-steer')}>
         <Icon name="editIn" size={13} />
         <span><b>你的插话</b>：{step.text}</span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'waiting') {
     return (
-      <li className="agent-step is-waiting">
+      <li id={id} className={rowClass('is-waiting')}>
         <Icon name="clock" size={13} />
         <span>{step.text ?? '等待人工确认'}</span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'evidence_wait') {
     const count = step.ids?.length ?? 0;
     return (
-      <li className="agent-step is-waiting">
+      <li id={id} className={rowClass('is-waiting')}>
         <Icon name="clock" size={13} />
         <span>成稿引用了 {count} 条待裁决证据，等待你接受或驳回后继续。</span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'evidence_resume') {
     return (
-      <li className="agent-step is-observation">
+      <li id={id} className={rowClass('is-observation')}>
         <Icon name="check" size={13} />
         <span>证据裁决已返回，继续校验成稿引用。</span>
+        <StepMeta step={step} isLatest={isLatest} />
       </li>
     );
   }
   if (step.kind === 'error') {
-    return <li className="agent-step is-error"><Icon name="warning" size={13} /><span>{step.message}</span></li>;
+    return <li id={id} className={rowClass('is-error')}><Icon name="warning" size={13} /><span>{step.message}</span><StepMeta step={step} isLatest={isLatest} /></li>;
   }
   return null; // final 单独渲染
 }

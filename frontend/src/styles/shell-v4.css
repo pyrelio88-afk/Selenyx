@@ -802,6 +802,9 @@
 .agent-step { display: flex; gap: 8px; align-items: flex-start; font-size: var(--font-sm); line-height: 1.65; color: var(--text-secondary); min-width: 0; overflow-wrap: anywhere; }
 .agent-step > svg { flex: 0 0 auto; margin-top: 4px; color: var(--text-muted); }
 .agent-step > span { min-width: 0; }
+.agent-step.is-latest { padding: 8px 10px; border: 1px solid var(--border); border-inline-start: 3px solid var(--accent); border-radius: 8px; }
+.agent-step-meta { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin-left: auto; color: var(--text-muted); font-size: var(--font-xs); white-space: nowrap; }
+.agent-step-latest { padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-primary); font-weight: 600; }
 .agent-step.is-thought > svg, .agent-step.is-subagent svg, .agent-step.is-steer > svg, .agent-step.is-waiting > svg { color: var(--accent); }
 .agent-step.is-error, .agent-step.is-error svg { color: var(--danger); }
 .agent-step.is-review > svg { color: var(--warning); }
@@ -823,6 +826,13 @@
 .research-subagent > details > summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; cursor: pointer; }
 .research-subagent .agent-steps { padding-left: 16px; border-left: 1px solid var(--border); margin-top: 8px; }
 .research-live { margin: 0; display: flex; gap: 8px; align-items: center; font-size: var(--font-xs); color: var(--text-secondary); }
+.research-latest-activity { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--border); border-inline-start: 3px solid var(--accent); border-radius: 8px; background: var(--bg-elevated); }
+.research-latest-activity > svg { flex: 0 0 auto; color: var(--text-muted); }
+.research-latest-activity > a { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; flex: 1; color: var(--text-primary); font-size: var(--font-xs); text-decoration: none; }
+.research-latest-activity > a:hover .research-latest-label { text-decoration: underline; }
+.research-latest-label { font-weight: 600; white-space: nowrap; }
+.research-latest-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.research-latest-activity time { color: var(--text-muted); white-space: nowrap; }
 .research-steer { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
 .research-steer .input { flex: 1; width: 0; min-width: 0; }
 .research-evidence { border-left: 1px solid var(--border); padding-left: 16px; min-width: 0; }
@@ -836,7 +846,7 @@
 .research-idle { min-height: 320px; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; color: var(--text-secondary); }
 .research-idle > svg { color: var(--accent); }
 .research-idle h2, .research-idle p { margin: 0; }
-.research-workspace :is(button, summary, input, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.research-workspace :is(button, summary, input, textarea, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 1280px) {
   .research-run-layout.with-evidence { grid-template-columns: minmax(0, 1fr); }
   .research-evidence { border-left: 0; border-top: 1px solid var(--border); padding: 20px 0 0; scroll-margin-top: 16px; }

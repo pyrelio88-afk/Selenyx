@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
@@ -10,6 +10,9 @@ import { createServer } from 'vite';
 const frontend = fileURLToPath(new URL('../', import.meta.url));
 const workspace = resolve(frontend, '..');
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+// Optional local overrides support Linux Chromium and screenshot hosts without CJK fonts.
+const browserExecutable = process.env.PLAYWRIGHT_EXECUTABLE_PATH || (process.platform === 'win32' ? EDGE : undefined);
+const smokeCjkFont = process.env.SMOKE_CJK_FONT_PATH ? (await readFile(process.env.SMOKE_CJK_FONT_PATH)).toString('base64') : '';
 const TIME = '2026-10-23T10:00:00Z';
 const XSS = '<img src="https://selenyx-xss.invalid/probe" onerror="window.__researchXss=true"><script>window.__researchXss=true</script>';
 const LONG = 'fixture_long_unbroken_text_'.repeat(24);
@@ -350,6 +353,13 @@ async function test(name, body, options = {}) {
   await context.addInitScript(installTransport, { unavailable: options.unavailable ?? false });
   try {
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
+    if (options.cjkFont && smokeCjkFont) {
+      await page.addStyleTag({ content: `
+        @font-face { font-family: "Smoke Noto Sans SC"; src: url(data:font/woff2;base64,${smokeCjkFont}) format("woff2"); font-weight: 400; font-display: block; }
+        :root { --font-sans: "Smoke Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif !important; }
+      ` });
+      await page.evaluate(() => document.fonts.load('14px "Smoke Noto Sans SC"'));
+    }
     await page.getByRole('button', { name: '查看全部', exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelector('select[aria-label="选择项目"]')?.options.length === 3);
     await body({ page, context, fixtures });
@@ -382,7 +392,7 @@ try {
   const address = server.httpServer.address();
   assert(address && typeof address !== 'string');
   origin = `http://127.0.0.1:${address.port}`;
-  browser = await chromium.launch({ executablePath: EDGE, headless: true });
+  browser = await chromium.launch({ ...(browserExecutable ? { executablePath: browserExecutable } : {}), headless: true });
 
   await test('home launch targets research not chat', async ({ page, fixtures }) => {
     assert.equal(await page.locator('html').getAttribute('data-theme'), 'forest');
@@ -642,6 +652,21 @@ try {
       await select(page, fixtures, A);
       await page.getByRole('heading', { name: 'A：需要人工接受的论断', exact: true }).waitFor();
       await emit(page, A, 'open');
+      const latestActivity = detail(page).getByRole('status', { name: '最新已保存的研究活动', exact: true });
+      await latestActivity.waitFor();
+      assert((await latestActivity.innerText()).includes('Fixture save refused'), 'Latest activity must summarize the persisted observation');
+      const persistedReads = fixtures.requests.filter((request) => request.method === 'GET' && request.path === `/api/agent/runs/${A}`).length;
+      await emit(page, A, 'thought', { text: 'WIRE ONLY: transient activity must not be announced' });
+      await bounded((async () => {
+        while (fixtures.requests.filter((request) => request.method === 'GET' && request.path === `/api/agent/runs/${A}`).length <= persistedReads) {
+          await new Promise((done) => setTimeout(done, 20));
+        }
+      })(), 'persisted run snapshot refresh');
+      assert(!(await latestActivity.innerText()).includes('WIRE ONLY'), 'The live announcement must ignore transient SSE payload text');
+      const latestRow = detail(page).locator('.agent-step.is-latest');
+      assert.equal(await latestRow.count(), 1, 'Exactly one persisted row is marked latest');
+      assert((await latestRow.innerText()).includes('最新'), 'Latest distinction must be textual, not color alone');
+      assert(await latestRow.locator('time[datetime]').count() === 1, 'The latest row must show its persisted timestamp');
       await layout(page, `run ${width}`);
       await typography(page, context, [
         ['.research-header h1', 24], ['.research-question h2', 20], ['.research-section-heading h2', 16],
@@ -676,8 +701,23 @@ try {
       await detail(page).getByText(finalA, { exact: true }).waitFor();
       await layout(page, `final ${width}`);
       assert.equal(fixtures.writes().length, 0);
-    }, { width });
+    }, { width, cjkFont: width === 1440 || width === 390 });
   }
+
+  await test('latest delegated progress anchors its visible persisted group', async ({ page, fixtures }) => {
+    fixtures.runs.get(A).auditLog = [
+      step('subagent', { expert: 'reviewer', tool: 'list_references' }),
+      step('subagent', { expert: 'reviewer', tool: 'list_references', text: '读取文献中' }),
+    ];
+    await history(page);
+    await select(page, fixtures, A);
+    const latestActivity = detail(page).getByRole('status', { name: '最新已保存的研究活动', exact: true });
+    await latestActivity.getByRole('link', { name: /专家 reviewer 调用 列出文献/ }).waitFor();
+    assert.equal(await detail(page).locator('.agent-step.is-latest').count(), 1);
+    const latestRow = detail(page).locator('#research-latest-step');
+    assert(await latestRow.isVisible(), 'Latest activity target must remain visible when its expert group is collapsed');
+    assert((await latestRow.getAttribute('class')).includes('is-latest'));
+  });
 
   await test('delayed initial detail and refresh cannot bleed on switch', async ({ page, fixtures }) => {
     await history(page);

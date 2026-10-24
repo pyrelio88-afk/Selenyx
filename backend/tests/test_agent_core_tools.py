@@ -50,6 +50,20 @@ def tool_db(tmp_path, monkeypatch):
         engine.dispose()
 
 
+@pytest.mark.parametrize(("tool", "allowed_tools", "expected"), [
+    ("save_evidence", None, True),
+    ("list_references", {"list_references"}, True),
+    ("save_evidence", {"list_references"}, False),
+    ("mcp:server/search", {"mcp:*"}, True),
+    ("mcp:server/search", {"list_references"}, False),
+    ("list_references", set(), False),
+])
+def test_skill_tool_allowlist_boundaries(tool, allowed_tools, expected):
+    from selenyx_backend.services.agent.core import skill_allows_tool
+
+    assert skill_allows_tool(tool, allowed_tools) is expected
+
+
 @pytest.mark.parametrize("project_id,expected", [
     ("a", {"ref-a", "shared"}),
     ("b", {"ref-b", "shared"}),
