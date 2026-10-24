@@ -16,11 +16,13 @@ from selenyx_backend.database import get_engine, init_db
 from selenyx_backend.models import AgentRun, ResearchProject
 from selenyx_backend.services.agent import events, registry
 from selenyx_backend.services.agent import loop as agent_loop
+from selenyx_backend.routers import agent as agent_router
 from selenyx_backend.routers.agent import (
     ConfirmBody,
     cancel_run as api_cancel_run,
     confirm_run,
     get_run as api_get_run,
+    run_events,
 )
 from selenyx_backend.services.rate_limit import reset_rate_limits
 
@@ -102,6 +104,49 @@ def test_event_bus_drops_oldest_when_full():
     assert first["seq"] >= 10  # 最旧的已被挤出
     assert q.qsize() <= 200
     events.unsubscribe("run-2", q)
+
+
+async def test_sse_captures_completion_after_snapshot_read(tmp_path, monkeypatch):
+    """A completion between snapshot capture and response streaming must reach SSE."""
+    reset_backend(tmp_path, monkeypatch)
+    run_id = make_run()
+    serialize = agent_router._serialize
+
+    def complete_after_snapshot(run, *, with_log):
+        snapshot = serialize(run, with_log=with_log)
+        with Session(get_engine()) as session:
+            persisted = session.get(AgentRun, run_id)
+            persisted.status = "completed"
+            persisted.output_text = "已保存的最终回答"
+            session.add(persisted)
+            session.commit()
+        events.publish(run_id, {
+            "type": "status", "status": "completed", "output": "已保存的最终回答",
+        })
+        return snapshot
+
+    monkeypatch.setattr(agent_router, "_serialize", complete_after_snapshot)
+    response = await run_events(run_id)
+    stream = response.body_iterator
+    try:
+        first = await asyncio.wait_for(stream.__anext__(), timeout=1)
+        second = await asyncio.wait_for(stream.__anext__(), timeout=0.05)
+    finally:
+        await stream.aclose()
+
+    assert "event: snapshot" in first
+    assert '"status": "running"' in first
+    assert "event: status" in second
+    assert '"output": "已保存的最终回答"' in second
+    assert events.subscriber_count(run_id) == 0
+
+
+async def test_sse_missing_run_does_not_leak_subscriber(tmp_path, monkeypatch):
+    reset_backend(tmp_path, monkeypatch)
+    with pytest.raises(HTTPException) as missing:
+        await run_events("missing-run")
+    assert missing.value.status_code == 404
+    assert events.subscriber_count("missing-run") == 0
 
 
 # ---------- steer 插话 ----------
