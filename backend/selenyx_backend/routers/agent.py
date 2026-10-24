@@ -292,17 +292,22 @@ def _sse_frame(event_name: str, payload: dict[str, Any]) -> str:
 
 @router.get("/runs/{run_id}/events")
 async def run_events(run_id: str):
-    """SSE 事件流（V4 模块 D）：snapshot 先行（迟到者补齐），随后实时推送。
+    """SSE 事件流：先订阅再读取快照，随后发送快照与实时事件。
 
+    先订阅可避免 run 在快照读取与订阅之间结束而丢失终态事件；
     前端 EventSource 优先、轮询兜底；run 结束（status 事件）后流关闭，
     订阅队列随即注销。
     """
-    with Session(get_engine()) as session:
-        run = session.get(AgentRun, run_id)
-        if not run:
-            raise HTTPException(404, "运行记录不存在。")
-        snapshot = _serialize(run, with_log=True)
     queue = events.subscribe(run_id)
+    try:
+        with Session(get_engine()) as session:
+            run = session.get(AgentRun, run_id)
+            if not run:
+                raise HTTPException(404, "运行记录不存在。")
+            snapshot = _serialize(run, with_log=True)
+    except Exception:
+        events.unsubscribe(run_id, queue)
+        raise
 
     async def stream():
         try:
