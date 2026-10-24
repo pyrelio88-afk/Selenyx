@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from selenyx_backend.database import get_engine, init_db
 from selenyx_backend.models import AgentRun, EvidenceItem, ResearchProject
@@ -327,6 +327,121 @@ async def test_step_numbering_no_gaps(tmp_path, monkeypatch):
     assert steps == sorted(steps)
     first_seen = list(dict.fromkeys(steps))
     assert first_seen == [1, 2, 3]
+
+
+async def test_skill_tool_allowlist_is_enforced_in_delegated_expert(tmp_path, monkeypatch):
+    """A delegated expert cannot save evidence when the parent skill excludes it."""
+    from selenyx_backend.routers.experts import seed_builtin_experts
+    import selenyx_backend.services.agent.subagents as subagents
+
+    reset_backend(tmp_path, monkeypatch)
+    seed_builtin_experts()
+    project_id = seed_project()
+    run_id = make_run("只委托、不落卡", project_id)
+    script_llm(monkeypatch, [
+        '{"tool":"ask_expert","args":{"expert":"reviewer","question":"请尝试保存证据卡"}}',
+        '{"final":"专家无法越权落卡[^none]。"}',
+    ])
+    expert_replies = iter([
+        '{"thought":"先用允许的只读工具","tool":"list_references","args":{}}',
+        '{"thought":"再尝试越权写入","tool":"save_evidence","args":{"claim":"越权论断","excerpt":"攻击性测试摘录"}}',
+        '{"final":"工具被技能约束拒绝。"}',
+    ])
+
+    async def fake_expert_complete(_messages):
+        return next(expert_replies)
+
+    monkeypatch.setattr(subagents, "_complete", fake_expert_complete)
+    events: list[dict] = []
+
+    await agent_loop.execute_run(
+        run_id, "只委托、不落卡", project_id, events.append, lambda: False,
+        skill_directive="只允许委托专家并读取文献。", allowed_tools={"ask_expert", "list_references"},
+    )
+
+    blocked = next(
+        event for event in events
+        if event.get("kind") == "subagent" and event.get("tool") == "save_evidence"
+    )
+    assert blocked["result"] == {
+        "error": "当前技能不允许使用工具 save_evidence",
+        "allowedTools": ["ask_expert", "list_references"],
+    }
+    allowed = next(
+        event for event in events
+        if event.get("kind") == "subagent" and event.get("tool") == "list_references"
+    )
+    assert allowed["result"]["count"] == 0
+    with Session(get_engine()) as session:
+        evidence = session.exec(select(EvidenceItem).where(EvidenceItem.project_id == project_id)).all()
+        run = session.get(AgentRun, run_id)
+        assert len(evidence) == 1  # Only the fixture's pre-existing accepted evidence remains.
+        assert run is not None and run.status == "completed"
+
+
+async def test_repeated_identical_read_is_reported_without_ending_run(tmp_path, monkeypatch):
+    """Identical retrieval outputs trip a visible guard; later repeats are not dispatched."""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("检查检索进度", project_id)
+    script_llm(monkeypatch, [
+        '{"tool":"search_library","args":{"query":"同一检索","topK":4}}',
+        '{"tool":"search_library","args":{"topK":4,"query":"同一检索"}}',
+        '{"tool":"search_library","args":{"query":"同一检索","topK":4}}',
+        '{"final":"重复检索未带来新结果，任务仍可正常收尾[^none]。"}',
+    ])
+    dispatches = 0
+
+    async def fake_dispatch(_run_id, _project_id, _tool, _args, _record):
+        nonlocal dispatches
+        dispatches += 1
+        return {"hits": [{"title": "Fixture result"}], "count": 1}
+
+    monkeypatch.setattr(agent_loop, "_dispatch_tool", fake_dispatch)
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "检查检索进度", project_id, events.append, lambda: False)
+
+    observations = [event for event in events if event.get("kind") == "observation"]
+    assert len(observations) == 3
+    assert observations[0]["result"] == {"hits": [{"title": "Fixture result"}], "count": 1}
+    assert observations[1]["result"]["noProgress"] is True
+    assert observations[2]["result"]["noProgress"] is True
+    assert "后续重复将被拦截" in observations[1]["result"]["error"]
+    assert "已拦截重复执行" in observations[2]["result"]["error"]
+    assert dispatches == 2
+    with Session(get_engine()) as session:
+        run = session.get(AgentRun, run_id)
+        assert run is not None and run.status == "completed"
+        assert run.output_text.startswith("重复检索未带来新结果")
+
+
+async def test_repeated_read_guard_ignores_changed_results(tmp_path, monkeypatch):
+    """A repeated read is allowed when the underlying response changed."""
+    reset_backend(tmp_path, monkeypatch)
+    project_id = seed_project()
+    run_id = make_run("检索进展变化", project_id)
+    script_llm(monkeypatch, [
+        '{"tool":"search_library","args":{"query":"同一检索","topK":4}}',
+        '{"tool":"search_library","args":{"query":"同一检索","topK":4}}',
+        '{"final":"检索结果已更新[^none]。"}',
+    ])
+    results = iter([
+        {"hits": [], "count": 0},
+        {"hits": [{"title": "New result"}], "count": 1},
+    ])
+
+    async def fake_dispatch(_run_id, _project_id, _tool, _args, _record):
+        return next(results)
+
+    monkeypatch.setattr(agent_loop, "_dispatch_tool", fake_dispatch)
+    events: list[dict] = []
+
+    await agent_loop.execute_run(run_id, "检索进展变化", project_id, events.append, lambda: False)
+
+    observations = [event for event in events if event.get("kind") == "observation"]
+    assert [event["result"]["count"] for event in observations] == [0, 1]
+    assert not any(event["result"].get("noProgress") for event in observations)
 
 
 async def test_max_steps_forces_wrap_up(tmp_path, monkeypatch):

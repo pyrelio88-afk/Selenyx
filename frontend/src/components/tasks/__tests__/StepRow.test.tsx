@@ -174,6 +174,15 @@ describe('StepRow tool disclosures', () => {
 });
 
 describe('StepRow other step kinds', () => {
+  it('marks the latest persisted row with a textual label and timestamp', () => {
+    const step = makeStep({ kind: 'observation', result: { count: 1 } });
+    const markup = renderToStaticMarkup(<StepRow step={step} isLatest id="research-latest-step" />);
+    expect(markup).toContain('id="research-latest-step"');
+    expect(markup).toContain('agent-step is-observation is-latest');
+    expect(markup).toContain('<span class="agent-step-latest">最新</span>');
+    expect(markup).toContain('<time dateTime="2026-10-24T00:00:00Z">');
+    expect(markup).toContain('2026-10-24T00:00:00Z');
+  });
   it('keeps the execution plan and final rendering behavior unchanged', () => {
     const plan = render(makeStep({ kind: 'plan', items: ['检索证据', '审阅结论'] }));
     expect(plan).toContain('class="agent-step is-plan"');

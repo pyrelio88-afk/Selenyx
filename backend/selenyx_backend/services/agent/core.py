@@ -383,6 +383,13 @@ TOOLS: dict[str, ToolHandler] = {
 }
 
 
+def skill_allows_tool(tool: str, allowed_tools: set[str] | None) -> bool:
+    """Return whether a skill's tool allowlist admits this tool name."""
+    if allowed_tools is None:
+        return True
+    return tool in allowed_tools or (tool.startswith("mcp:") and "mcp:*" in allowed_tools)
+
+
 async def run_tool(
     session: Session,
     project_id: str | None,
@@ -425,4 +432,5 @@ __all__ = [
     "truncate",
     "fold_observations",
     "run_tool",
+    "skill_allows_tool",
 ]

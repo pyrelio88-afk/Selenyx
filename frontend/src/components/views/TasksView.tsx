@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { Icon } from '@components/ui/Icon';
 import { STATUS_COLOR, STATUS_LABEL, StepRow } from '@components/tasks/StepRow';
+import { formatAgentStepTime, summarizeAgentStep } from '@components/tasks/activity';
 import { groupSubagentSteps, isSubagentGroup } from '@components/tasks/groupSteps';
 import { RunOutput } from '@components/tasks/RunOutput';
 import { agentApi, isActiveRun, type AgentRunDetail, type AgentRunSummary } from '@services/agent';
@@ -220,6 +221,19 @@ export function TasksView() {
 
   const latestPlan = useMemo(() => selected?.auditLog.slice().reverse().find((step) => step.kind === 'plan'), [selected]);
   const timeline = useMemo(() => groupSubagentSteps(selected?.auditLog ?? []), [selected]);
+  const latestStep = selected?.auditLog.at(-1);
+  const latestActivityText = latestStep ? summarizeAgentStep(latestStep) : '';
+  const latestActivityTime = latestStep ? formatAgentStepTime(latestStep.ts) : '';
+  const latestActivityIsOutput = latestStep?.kind === 'final' && Boolean(selected?.outputText);
+  const latestTimelineIndex = useMemo(() => timeline.findIndex((item) => {
+    if (!latestStep) return false;
+    if (!isSubagentGroup(item)) return item === latestStep;
+    if (item.entries.includes(latestStep)) return true;
+    if (latestStep.kind !== 'observation' || latestStep.tool !== 'ask_expert') return false;
+    const result = latestStep.result !== null && typeof latestStep.result === 'object'
+      ? latestStep.result as { answer?: unknown; error?: unknown } : undefined;
+    return item.answer === result?.answer || item.answer === result?.error;
+  }), [latestStep, timeline]);
   const project = projects.find((item) => item.id === selected?.projectId);
   const active = selected ? isActiveRun(selected.status) : false;
   const emptyNoSelection = !selectedId && runs.length === 0 && !listLoading;
@@ -279,19 +293,39 @@ export function TasksView() {
                 <p>成稿引用了尚未人工接受的项目证据。请在证据卡上选择「接受」或「驳回」；裁决后研究会自动继续，无需重新运行。</p>
                 <div className="research-approval-actions"><button type="button" className="btn btn-primary" onClick={revealEvidence}>查看证据卡</button></div>
               </section>}
-              <section className="research-timeline" aria-label="执行过程">
+              {latestStep && <div className="research-latest-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="最新已保存的研究活动">
+                <Icon name="clock" size={14} />
+                <a href="#research-latest-step" aria-label={`最新活动：${latestActivityText}，${latestActivityTime}`}>
+                  <span className="research-latest-label">最新活动</span>
+                  <span className="research-latest-summary">{latestActivityText}</span>
+                  <time dateTime={latestStep.ts}>{latestActivityTime}</time>
+                </a>
+              </div>}
+              <section
+                className="research-timeline"
+                aria-label="执行过程"
+                id={latestStep && !latestActivityIsOutput && latestTimelineIndex < 0 ? 'research-latest-step' : undefined}
+              >
                 <h3>执行过程</h3>
-                <ul className="agent-steps">{timeline.map((item, index) => isSubagentGroup(item) ? (
-                  <li key={index} className="agent-step is-subagent research-subagent"><details><summary><Icon name="chip" size={13} /><span>专家 {item.expert} · {item.entries.length} 步</span>{item.answer && <span className="research-muted">{item.answer.slice(0, 60)}{item.answer.length > 60 ? '…' : ''}</span>}</summary><ul className="agent-steps">{item.entries.map((step, entryIndex) => <StepRow key={entryIndex} step={step} />)}</ul></details></li>
-                ) : <StepRow key={index} step={item} />)}</ul>
-                {selected.status === 'running' && <p className="research-live" role="status"><Icon name="clock" size={14} /> Selenyx 正在执行，进度将自动保存。</p>}
+                <ul className="agent-steps">{timeline.map((item, index) => {
+                  const isLatest = index === latestTimelineIndex;
+                  if (isSubagentGroup(item)) return (
+                    <li key={index} id={isLatest && !latestActivityIsOutput ? 'research-latest-step' : undefined} className={`agent-step is-subagent research-subagent${isLatest ? ' is-latest' : ''}`}>
+                      <details><summary><Icon name="chip" size={13} /><span>专家 {item.expert} · {item.entries.length} 步</span>{item.answer && <span className="research-muted">{item.answer.slice(0, 60)}{item.answer.length > 60 ? '…' : ''}</span>}
+                        {isLatest && latestStep && <span className="agent-step-meta"><span className="agent-step-latest">最新</span><time dateTime={latestStep.ts}>{latestActivityTime}</time></span>}
+                      </summary><ul className="agent-steps">{item.entries.map((step, entryIndex) => <StepRow key={entryIndex} step={step} />)}</ul></details>
+                    </li>
+                  );
+                  return <StepRow key={index} step={item} isLatest={isLatest} id={isLatest && !latestActivityIsOutput ? 'research-latest-step' : undefined} />;
+                })}</ul>
+                {active && !latestStep && <p className="research-live" role="status" aria-live="polite"><Icon name="clock" size={14} /> Selenyx 正在执行，进度将自动保存。</p>}
                 {!active && selected.auditLog.length === 0 && <p className="research-empty">此记录没有保存执行步骤。</p>}
               </section>
               {selected.status === 'running' && <div className="research-steer">
                 <input className="input" value={steerText} onChange={(event) => setSteerText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void applyAction('steer'); } }} placeholder="补充方向或纠正重点…" aria-label="运行中插话" />
                 <button type="button" className="btn" disabled={actionBusy || !steerText.trim()} onClick={() => void applyAction('steer')}><Icon name="send" size={14} /> 插话</button>
               </div>}
-              {selected.outputText && <RunOutput key={selected.id} run={selected} />}
+              {selected.outputText && <RunOutput key={selected.id} run={selected} latestActivityTarget={latestActivityIsOutput} />}
             </>}
           </section>
           {selected && showEvidence && <RunEvidence key={selected.id} run={selected} evidenceRef={evidenceRef} />}
