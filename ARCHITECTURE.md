@@ -24,6 +24,7 @@
 - 默认 **hashing embedding**（无模型下载，永远可用）
 - 可选 **Ollama 原生 /api/embed** 或 **OpenAI 兼容 /embeddings**（推荐本机 `embeddinggemma`）
 - 检索结果带 `page` / `charOffset` / `excerpt`，禁止编造引用
+- 项目限定检索只读取已关联文献的分块；空索引回退时也只为该项目建索引，不能把无关文献内容送入配置的嵌入服务
 - 不同模型身份的向量绝不混算；模型切换或服务失败时回退 `hash-v2`
 
 学术连接器（抄 OpenScience/Runcell 的诚实性）：

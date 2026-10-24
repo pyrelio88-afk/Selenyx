@@ -4,16 +4,17 @@ import json
 
 import httpx
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 import selenyx_backend.services.embeddings as embeddings
 import selenyx_backend.services.rag as rag
-from selenyx_backend.models import DocumentChunk, Reference
+from selenyx_backend.models import DocumentChunk, Reference, ResearchProject
 from selenyx_backend.services.embeddings import (
     HASH_BACKEND,
     cosine,
     dense_backend_id,
     embed_texts,
+    hash_embed,
     tokenize,
 )
 from selenyx_backend.settings import Settings
@@ -112,6 +113,72 @@ def test_dense_identity_changes_with_model_without_exposing_endpoint():
     )
     assert dense_backend_id(first) != dense_backend_id(prefixed)
     assert dense_backend_id(Settings(embed_base_url="not-a-url", embed_model="model-a")) is None
+
+
+@pytest.mark.asyncio
+async def test_project_scoped_empty_index_only_embeds_linked_references(monkeypatch):
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    indexed_texts: list[str] = []
+
+    async def capture_embeddings(texts, settings, *, role="document"):
+        if role == "document":
+            indexed_texts.extend(texts)
+        return [hash_embed(text) for text in texts], HASH_BACKEND
+
+    monkeypatch.setattr(rag, "embed_texts", capture_embeddings)
+    with Session(engine) as session:
+        session.add_all([
+            Reference(id="linked", title="Allowed reference", abstract="scope sentinel"),
+            Reference(id="unlinked", title="Unrelated reference", abstract="private-only text"),
+            ResearchProject(id="project", reference_ids_json='["linked"]'),
+        ])
+        session.commit()
+
+        hits = await rag.semantic_search(
+            session,
+            "scope sentinel",
+            project_id="project",
+            settings=Settings(embed_base_url="", embed_model=""),
+        )
+        indexed_chunks = session.exec(select(DocumentChunk)).all()
+
+    assert [hit.reference_id for hit in hits] == ["linked"]
+    assert {chunk.reference_id for chunk in indexed_chunks} == {"linked"}
+    assert indexed_texts and all("private-only text" not in text for text in indexed_texts)
+
+
+@pytest.mark.parametrize("project_id", ["missing", "empty"])
+@pytest.mark.asyncio
+async def test_unlinked_project_does_not_trigger_library_auto_index(project_id, monkeypatch):
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+    document_texts: list[str] = []
+
+    async def capture_embeddings(texts, settings, *, role="document"):
+        if role == "document":
+            document_texts.extend(texts)
+        return [hash_embed(text) for text in texts], HASH_BACKEND
+
+    monkeypatch.setattr(rag, "embed_texts", capture_embeddings)
+    with Session(engine) as session:
+        session.add_all([
+            Reference(id="unlinked", title="Unrelated reference", abstract="private-only text"),
+            ResearchProject(id="empty", reference_ids_json="[]"),
+        ])
+        session.commit()
+
+        hits = await rag.semantic_search(
+            session,
+            "private-only text",
+            project_id=project_id,
+            settings=Settings(embed_base_url="", embed_model=""),
+        )
+        indexed_chunks = session.exec(select(DocumentChunk)).all()
+
+    assert hits == []
+    assert indexed_chunks == []
+    assert document_texts == []
 
 
 @pytest.mark.asyncio

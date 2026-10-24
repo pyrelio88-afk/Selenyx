@@ -169,26 +169,13 @@ async def semantic_search(
     if not q:
         return []
 
-    statement = select(DocumentChunk)
-    chunks = list(session.exec(statement).all())
-    if not chunks:
-        # Fallback: search reference titles/abstracts directly and auto-index lightly
-        refs = list(session.exec(select(Reference)).all())
-        for ref in refs:
-            await index_reference_record(session, ref, settings=settings)
-        chunks = list(session.exec(select(DocumentChunk)).all())
-        if not chunks:
-            return []
-
-    # Optional project filter via reference_ids_json on projects is applied later if needed.
     allowed_ref_ids: set[str] | None = None
     if project_id:
         from selenyx_backend.models import ResearchProject
 
         project = session.get(ResearchProject, project_id)
-        # A project-scoped query must never silently widen to the whole
-        # library. A missing project or a project with zero linked references
-        # therefore has an empty allow-list.
+        # Resolve scope before indexing or loading chunks: a project-scoped
+        # query must never touch unrelated references, even during fallback.
         allowed_ref_ids = set()
         if project and project.reference_ids_json:
             try:
@@ -197,6 +184,31 @@ async def semantic_search(
                     allowed_ref_ids = {str(x) for x in ids}
             except json.JSONDecodeError:
                 allowed_ref_ids = set()
+        if not allowed_ref_ids:
+            return []
+
+    statement = select(DocumentChunk)
+    if allowed_ref_ids is not None:
+        statement = statement.where(col(DocumentChunk.reference_id).in_(allowed_ref_ids))
+    chunks = list(session.exec(statement).all())
+    if not chunks:
+        # Preserve the legacy fallback only when the library index is empty.
+        # In a scoped search, index only linked references and only after
+        # confirming that no other project's chunks already exist.
+        index_is_empty = (
+            allowed_ref_ids is None
+            or session.exec(select(DocumentChunk.id).limit(1)).first() is None
+        )
+        if index_is_empty:
+            refs_statement = select(Reference)
+            if allowed_ref_ids is not None:
+                refs_statement = refs_statement.where(col(Reference.id).in_(allowed_ref_ids))
+            refs = list(session.exec(refs_statement).all())
+            for ref in refs:
+                await index_reference_record(session, ref, settings=settings)
+            chunks = list(session.exec(statement).all())
+        if not chunks:
+            return []
 
     q_vecs, query_backend = await embed_texts([q], settings, role="query")
     q_vec = q_vecs[0]
