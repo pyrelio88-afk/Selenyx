@@ -44,6 +44,13 @@ selenyx/
   scripts/      构建与校验
 ```
 
+## 前端组合边界
+
+- `frontend/src/App.tsx` 只负责把应用生命周期、活动视图、外壳和全局弹层组合起来；页面标题与渲染器由 `app/viewRegistry.tsx` 作为单一注册表维护。
+- `app/useAppLifecycle.ts` 承担主题/缩放、启动时本地仓库对账、环境 LLM 配置和桌宠生命周期；`app/keyboardShortcuts.ts` 集中定义全局快捷键优先级，避免散落到页面组件。
+- `components/layout/AppShell.tsx` 统一侧栏、顶栏、主内容和移动导航抽屉；`Sidebar` 只负责导航内容。移动抽屉打开时使用遮罩、背景 inert、焦点约束与 Escape 关闭。
+- Zustand 继续承担 UI/本地缓存状态；前端 `services/*Repository.ts` 是持久化/后端同步边界；功能视图不直接承担应用启动和导航注册职责。
+
 ## 数据与密钥边界
 
 1. SQLite 默认 `~/.selenyx/selenyx.sqlite3`；文献完整 payload 与项目/任务工作区分别通过显式仓库层对账
