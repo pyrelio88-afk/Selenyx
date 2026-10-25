@@ -61,6 +61,64 @@ export function parseCsvText(source: string): string[][] {
   return rows;
 }
 
+export interface CsvImportPlan {
+  fields: TableField[];
+  newFields: TableField[];
+  records: Record<string, unknown>[];
+  unnamedColumnNames: string[];
+}
+
+export function prepareCsvImport(
+  headerRow: string[],
+  rows: string[][],
+  existingFields: TableField[],
+): CsvImportPlan {
+  const existingByName = new Map(existingFields.map((field) => [field.name, field]));
+  const existingIds = new Set(existingFields.map((field) => field.id));
+  const usedIds = new Set<string>();
+  const usedNames = new Set<string>();
+  const columns: { field: TableField; sourceIndex: number }[] = [];
+  const unnamedColumnNames: string[] = [];
+  const width = rows.reduce((max, row) => Math.max(max, row.length), headerRow.length);
+
+  const uniqueName = (base: string) => {
+    let candidate = base;
+    let suffix = 2;
+    while (usedNames.has(candidate)) candidate = `${base}（${suffix++}）`;
+    return candidate;
+  };
+
+  for (let sourceIndex = 0; sourceIndex < width; sourceIndex += 1) {
+    let name = headerRow[sourceIndex]?.trim() ?? '';
+    const hasData = rows.some((row) => String(row[sourceIndex] ?? '').trim().length > 0);
+    if (!name) {
+      if (!hasData) continue;
+      name = `未命名列 ${sourceIndex + 1}`;
+      unnamedColumnNames.push(name);
+    }
+
+    let field = existingByName.get(name);
+    if (!field || usedIds.has(field.id)) {
+      const candidate = uniqueName(name);
+      const matchingExisting = existingByName.get(candidate);
+      if (matchingExisting && !usedIds.has(matchingExisting.id)) field = matchingExisting;
+      else field = { id: genId(), name: candidate, type: 'text', required: false, defaultValue: null };
+    }
+    usedIds.add(field.id);
+    usedNames.add(field.name);
+    columns.push({ field, sourceIndex });
+  }
+
+  const fields = columns.map(({ field }) => field);
+  const newFields = fields.filter((field) => !existingIds.has(field.id));
+  const records = rows.map((values) => {
+    const record: Record<string, unknown> = {};
+    columns.forEach(({ field, sourceIndex }) => { record[field.id] = values[sourceIndex] ?? ''; });
+    return record;
+  });
+  return { fields, newFields, records, unnamedColumnNames };
+}
+
 export function prepareTableRecords(
   table: MultiDimTable,
   filterText: string,
@@ -209,6 +267,7 @@ export function TablesView() {
   const [dragRowIdx, setDragRowIdx] = useState<number | null>(null);
   const [dropTargetGroup, setDropTargetGroup] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [csvReview, setCsvReview] = useState<{ fileName: string; tableId: string; tableName: string; plan: CsvImportPlan } | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const selected = tables.find((table) => table.id === selectedId) ?? null;
@@ -266,18 +325,24 @@ export function TablesView() {
 
   async function handleImport(file: File) {
     if (!selected) return;
-    const rows = parseCsvText(await file.text());
-    const headers = rows[0]?.map((header) => header.trim()).filter(Boolean) ?? [];
-    if (headers.length === 0) { setMessage('CSV 没有可识别的表头'); return; }
-    const existingByName = new Map(selected.fields.map((field) => [field.name, field]));
-    const importFields = headers.map((name) => existingByName.get(name) ?? { id: genId(), name, type: 'text' as const, required: false, defaultValue: null });
-    for (const field of importFields) if (!existingByName.has(field.name)) addTableField(selected.id, field);
-    for (const values of rows.slice(1)) {
-      const record: Record<string, unknown> = {};
-      importFields.forEach((field, index) => { record[field.id] = values[index] ?? ''; });
-      addTableRecord(selected.id, record);
+    try {
+      const rows = parseCsvText(await file.text());
+      if (rows.length === 0) { setMessage('CSV 文件为空或没有可解析内容'); return; }
+      const plan = prepareCsvImport(rows[0], rows.slice(1), selected.fields);
+      if (plan.fields.length === 0) { setMessage('CSV 没有可导入的列'); return; }
+      if (isMobile) setInspectorOpen(false);
+      setCsvReview({ fileName: file.name, tableId: selected.id, tableName: selected.name, plan });
+    } catch {
+      setMessage('无法读取此 CSV 文件，请检查文件编码或访问权限');
     }
-    setMessage(`已从 CSV 导入 ${Math.max(0, rows.length - 1)} 行，新增字段会按文本保存`);
+  }
+
+  function confirmCsvImport() {
+    if (!csvReview) return;
+    for (const field of csvReview.plan.newFields) addTableField(csvReview.tableId, field);
+    for (const record of csvReview.plan.records) addTableRecord(csvReview.tableId, record);
+    setMessage(`已从 CSV 导入 ${csvReview.plan.records.length} 行、${csvReview.plan.fields.length} 列`);
+    setCsvReview(null);
   }
 
   function deleteSelectedTable() {
@@ -390,6 +455,41 @@ export function TablesView() {
             <p>新表预置“名称”和“状态”字段；可在字段检查区继续扩展。</p>
             <div><button className="btn" onClick={() => setShowCreate(false)}>取消</button><button className="btn btn-primary" onClick={handleCreate} disabled={!newTableName.trim()}>创建</button></div>
           </div>
+        </div>
+      )}
+      {csvReview && (
+        <div className="modal-overlay" onClick={() => setCsvReview(null)}>
+          <section className="modal-card tables-csv-review-modal" role="dialog" aria-modal="true" aria-labelledby="tables-csv-review-title" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Escape') setCsvReview(null); }}>
+            <header className="tables-csv-review-heading">
+              <div><span>导入前检查</span><h2 id="tables-csv-review-title">确认 CSV 列与样例数据</h2></div>
+              <button type="button" className="tables-icon-button" aria-label="关闭导入预览" onClick={() => setCsvReview(null)}>×</button>
+            </header>
+            <div className="tables-csv-review-summary">
+              <strong>{csvReview.fileName}</strong>
+              <span>目标表：{csvReview.tableName}</span>
+              <span>将导入 {csvReview.plan.records.length} 行 · {csvReview.plan.fields.length} 列</span>
+            </div>
+            {csvReview.plan.unnamedColumnNames.length > 0 && <p className="tables-csv-review-notice" role="note">
+              {csvReview.plan.unnamedColumnNames.length} 个有数据的空表头列会保留原位置，并按列号命名：{csvReview.plan.unnamedColumnNames.join('、')}。
+            </p>}
+            {csvReview.plan.newFields.length > 0 && <p className="tables-csv-review-notice" role="note">
+              {csvReview.plan.newFields.length} 个新字段会按文本类型创建：{csvReview.plan.newFields.map((field) => field.name).join('、')}。
+            </p>}
+            <div className="tables-csv-preview-scroll" aria-label="CSV 导入样例（最多显示前 5 行）">
+              <table className="tables-csv-preview">
+                <thead><tr><th>#</th>{csvReview.plan.fields.map((field) => <th key={field.id}>{field.name}{csvReview.plan.newFields.some((newField) => newField.id === field.id) && <small>新字段</small>}</th>)}</tr></thead>
+                <tbody>{csvReview.plan.records.slice(0, 5).map((record, rowIndex) => <tr key={rowIndex}>
+                  <th>{rowIndex + 1}</th>{csvReview.plan.fields.map((field) => <td key={field.id} title={String(record[field.id] ?? '')}>{String(record[field.id] ?? '') || '—'}</td>)}
+                </tr>)}</tbody>
+              </table>
+              {csvReview.plan.records.length === 0 && <p className="tables-csv-preview-empty">此 CSV 只有表头，确认后仅创建字段。</p>}
+            </div>
+            <p className="tables-csv-review-footnote">确认后才会写入表格；现有字段按名称匹配，新增字段暂按文本保存。</p>
+            <footer className="tables-csv-review-actions">
+              <button type="button" className="btn" onClick={() => setCsvReview(null)}>取消导入</button>
+              <button type="button" className="btn btn-primary" onClick={confirmCsvImport}>确认导入</button>
+            </footer>
+          </section>
         </div>
       )}
     </div>
