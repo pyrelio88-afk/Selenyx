@@ -19,7 +19,12 @@ const RESEARCH_TOOLS: { key: ViewKey; label: string; icon: IconName; hint: strin
 
 const CHAT_BUSY_HINT = '正在生成回复，请等待完成或停止生成后再切换对话';
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen: boolean;
+  onMobileOpenChange: (open: boolean) => void;
+}
+
+export function Sidebar({ mobileOpen, onMobileOpenChange }: SidebarProps) {
   const {
     currentView, setView, requestNewTask, sidebarCollapsed, toggleSidebar,
     projects, currentProjectId, setCurrentProject, requestCreateProject, requestChatOpen, chatStreamBusy,
@@ -29,8 +34,8 @@ export function Sidebar() {
   const [recent, setRecent] = useState<RecentConversation[]>([]);
   const [toolsOpen, setToolsOpen] = useState(() => RESEARCH_TOOLS.some((item) => item.key === currentView));
   const [chatsOpen, setChatsOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
   const toolsActive = RESEARCH_TOOLS.some((item) => item.key === currentView);
   const showLabels = !sidebarCollapsed || mobileOpen;
   const recentProjects = projects.filter((project) => project.status !== 'archived')
@@ -38,27 +43,55 @@ export function Sidebar() {
 
   useEffect(() => {
     if (!mobileOpen) return;
-    const onEscape = (event: KeyboardEvent) => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusFrame = window.requestAnimationFrame(() => {
+      sidebarRef.current?.querySelector<HTMLElement>('.sidebar-new-task')?.focus();
+    });
+    const close = () => {
+      onMobileOpenChange(false);
+      mobileToggleRef.current?.focus();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setMobileOpen(false);
-        mobileToggleRef.current?.focus();
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...(sidebarRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])].filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        sidebarRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !sidebarRef.current?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !sidebarRef.current?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
       }
     };
     const onResize = () => {
-      if (window.innerWidth > 640) setMobileOpen(false);
+      if (window.innerWidth > 640) {
+        onMobileOpenChange(false);
+        window.requestAnimationFrame(() => sidebarRef.current?.querySelector<HTMLElement>('.v4-brand-actions button')?.focus());
+      }
     };
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.target instanceof Element && !event.target.closest('.workspace-sidebar')) setMobileOpen(false);
-    };
-    document.addEventListener('keydown', onEscape);
-    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
     window.addEventListener('resize', onResize);
     return () => {
-      document.removeEventListener('keydown', onEscape);
-      document.removeEventListener('pointerdown', onPointerDown);
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('resize', onResize);
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, onMobileOpenChange]);
 
   useEffect(() => {
     const refresh = () => {
@@ -76,20 +109,33 @@ export function Sidebar() {
     };
   }, [projects]);
 
-  const search = () => { openKnowledgeSearch(); setMobileOpen(false); };
-  const navigate = (view: ViewKey) => { setView(view); setMobileOpen(false); };
+  const closeMobileNavigation = () => {
+    if (!mobileOpen) return;
+    onMobileOpenChange(false);
+    mobileToggleRef.current?.focus();
+  };
+  const search = () => { openKnowledgeSearch(); closeMobileNavigation(); };
+  const navigate = (view: ViewKey) => { setView(view); closeMobileNavigation(); };
 
   return (
-    <aside className={`sidebar workspace-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`} aria-label="Selenyx 侧栏">
+    <aside
+      ref={sidebarRef}
+      className={`sidebar workspace-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}
+      aria-label={mobileOpen ? undefined : 'Selenyx 侧栏'}
+      aria-labelledby={mobileOpen ? 'sidebar-dialog-title' : undefined}
+      aria-modal={mobileOpen || undefined}
+      role={mobileOpen ? 'dialog' : undefined}
+      tabIndex={-1}
+    >
       <div className="workspace-brand v4-brand">
         <span className="workspace-brand-mark sidebar-desktop-mark" aria-hidden="true"><Crane size={38} /></span>
         <button ref={mobileToggleRef} type="button" className="workspace-brand-mark sidebar-mobile-toggle"
           aria-label={mobileOpen ? '收起侧栏' : '展开侧栏'} aria-expanded={mobileOpen} aria-controls="sidebar-main-content"
-          onClick={() => setMobileOpen((open) => !open)} title={mobileOpen ? '收起侧栏' : '展开侧栏'}>
+          onClick={() => onMobileOpenChange(!mobileOpen)} title={mobileOpen ? '收起侧栏' : '展开侧栏'}>
           <Crane size={38} />
         </button>
-        {showLabels && <div className="v4-brand-copy"><div className="workspace-brand-name">Selenyx</div><span className="workspace-brand-caption">科研工作台</span></div>}
-        {mobileOpen && <button type="button" className="sidebar-mobile-close" aria-label="收起侧栏" onClick={() => setMobileOpen(false)}><Icon name="chevronLeft" size={16} /></button>}
+        {showLabels && <div className="v4-brand-copy"><div id="sidebar-dialog-title" className="workspace-brand-name">Selenyx 导航</div><span className="workspace-brand-caption">科研工作台</span></div>}
+        {mobileOpen && <button type="button" className="sidebar-mobile-close" aria-label="收起侧栏" onClick={closeMobileNavigation}><Icon name="chevronLeft" size={16} /></button>}
         <div className="v4-brand-actions">
           <button type="button" className="icon-btn" onClick={toggleSidebar}
             aria-label={sidebarCollapsed ? '展开侧栏' : '折叠侧栏'}
@@ -100,7 +146,7 @@ export function Sidebar() {
       </div>
       <div id="sidebar-main-content" className="sidebar-main-content">
 
-      <button type="button" className={`sidebar-new-task${currentView === 'newTask' ? ' is-active' : ''}`} onClick={() => { requestNewTask(); setMobileOpen(false); }} aria-label="新研究" aria-current={currentView === 'newTask' ? 'page' : undefined} title="新研究（Ctrl+N）">
+      <button type="button" className={`sidebar-new-task${currentView === 'newTask' ? ' is-active' : ''}`} onClick={() => { requestNewTask(); closeMobileNavigation(); }} aria-label="新研究" aria-current={currentView === 'newTask' ? 'page' : undefined} title="新研究（Ctrl+N）">
         <Icon name="plus" size={18} />
         {showLabels && <><span>新研究</span><kbd>Ctrl N</kbd></>}
       </button>
@@ -150,7 +196,7 @@ export function Sidebar() {
                 onClick={() => navigate('projects')} aria-current={currentView === 'projects' ? 'page' : undefined}>
                 <Icon name="projects" size={16} /> 研究项目
               </button>
-              <button type="button" onClick={() => { requestCreateProject(); setMobileOpen(false); }} aria-label="新建项目" title="新建项目"><Icon name="plus" size={14} /></button>
+              <button type="button" onClick={() => { requestCreateProject(); closeMobileNavigation(); }} aria-label="新建项目" title="新建项目"><Icon name="plus" size={14} /></button>
             </div>
             {recentProjects.map((project) => (
               <button key={project.id} type="button" className={`dynamic-item sidebar-project-item ${currentView === 'projects' && currentProjectId === project.id ? 'is-current' : ''}`}
@@ -166,7 +212,7 @@ export function Sidebar() {
             </button>
             {chatsOpen && recent.map((chat) => (
               <button key={`${chat.scope}:${chat.sessionId}`} type="button" className="dynamic-item"
-                onClick={() => { requestChatOpen(chat.scope, chat.sessionId); setMobileOpen(false); }} disabled={chatStreamBusy}
+                onClick={() => { requestChatOpen(chat.scope, chat.sessionId); closeMobileNavigation(); }} disabled={chatStreamBusy}
                 title={chatStreamBusy ? `${chat.title} · ${CHAT_BUSY_HINT}` : chat.title}
                 aria-label={chatStreamBusy ? `${chat.title}，${CHAT_BUSY_HINT}` : chat.title}>
                 <Icon name="aiChat" size={15} /><span className="dynamic-item-text">{chat.title}</span>
