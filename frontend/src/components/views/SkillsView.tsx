@@ -228,9 +228,7 @@ export function SkillsView() {
 
   function sendToAI(skill: ResearchSkill) {
     if (!skill.prompt) return;
-    sessionStorage.setItem('selenyx_skill_prompt', skill.prompt);
-    sessionStorage.setItem('selenyx_skill_name', skill.name);
-    useAppStore.getState().setView('aiChat');
+    useAppStore.getState().requestChatDraft(skill.prompt, `技能 · ${skill.name}`);
   }
 
   const directory = (

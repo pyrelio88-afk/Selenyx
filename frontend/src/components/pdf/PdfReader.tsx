@@ -20,6 +20,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type * as PdfjsLibType from 'pdfjs-dist';
 // 引入官方 textLayer 样式（含 .textLayer span 定位/选区色，保证文本与画布像素级对齐）
 import 'pdfjs-dist/web/pdf_viewer.css';
+import './pdf-reader.css';
 import type { Annotation, AnnotationType } from '@apptypes/reference';
 import { Icon } from '@components/ui/Icon';
 import { runOcr, detectScannedPdf, terminateOcr, OCR_LANG_LABEL } from '@services/ocr';

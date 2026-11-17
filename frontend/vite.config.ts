@@ -6,22 +6,13 @@ import { realpathSync } from 'fs';
 
 const logicalFrontendRoot = resolve(__dirname);
 const physicalFrontendRoot = realpathSync(logicalFrontendRoot);
+const useSingleFile = process.env.VITE_SINGLEFILE === '1';
 
 export default defineConfig(({ command }) => ({
-  // During serve, use Windows' physical junction target consistently for the
-  // optimiser. During build retain the visible Desktop root so the single-file
-  // output remains in the Tauri directory expected by the desktop app.
   root: command === 'serve' ? physicalFrontendRoot : logicalFrontendRoot,
-  plugins: [react(), viteSingleFile()],
+  plugins: useSingleFile ? [react(), viteSingleFile()] : [react()],
   resolve: {
-    // `Desktop` is a Windows Junction to OneDrive on this workstation. Keep
-    // Vite's module ids under the configured root so the HTML entry is emitted
-    // as `index.html`, rather than a `../../../OneDrive/...` relative path.
-    // This only affects dev/build path resolution; Tauri still consumes dist/.
-    // Build needs logical Desktop paths for vite-plugin-singlefile's emitted
-    // HTML name. Dev has no emitted HTML, and resolving the junction there
-    // avoids an optimiser bug triggered by duplicate symlink module ids.
-    preserveSymlinks: command === 'build',
+    preserveSymlinks: command === 'build' && useSingleFile,
     alias: {
       '@': resolve(__dirname, 'src'),
       '@components': resolve(__dirname, 'src/components'),
@@ -38,9 +29,6 @@ export default defineConfig(({ command }) => ({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
-    // Permit the one resolved frontend root as well as its visible Desktop
-    // junction. This is intentionally narrower than Vite's broad default and
-    // lets /src requests work when Windows resolves the junction to OneDrive.
     fs: { allow: [logicalFrontendRoot, physicalFrontendRoot] },
     proxy: {
       '/api': {
@@ -49,14 +37,45 @@ export default defineConfig(({ command }) => ({
       },
     },
   },
-  build: {
-    target: 'es2022',
-    sourcemap: false,
-    assetsInlineLimit: 100000000,
-    rollupOptions: {
-      output: {
-        inlineDynamicImports: true,
+  build: useSingleFile
+    ? {
+        target: 'es2022',
+        sourcemap: false,
+        assetsInlineLimit: 100_000_000,
+        rollupOptions: { output: { inlineDynamicImports: true } },
+      }
+    : {
+        target: 'es2022',
+        sourcemap: false,
+        chunkSizeWarningLimit: 1200,
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules')) {
+                if (id.includes('echarts') || id.includes('zrender')) return 'vendor-echarts';
+                if (id.includes('pdfjs-dist')) return 'vendor-pdf';
+                if (
+                  id.includes('react-markdown')
+                  || id.includes('remark-')
+                  || id.includes('rehype-')
+                  || id.includes('katex')
+                  || id.includes('micromark')
+                  || id.includes('mdast-')
+                  || id.includes('hast-')
+                  || id.includes('unified')
+                ) {
+                  return 'vendor-markdown';
+                }
+                if (id.includes('react-dom') || id.includes('react/') || id.includes('scheduler') || id.includes('zustand')) {
+                  return 'vendor-react';
+                }
+              }
+              if (id.includes('/src/data/disciplines') || id.includes('\\src\\data\\disciplines') || id.includes('/src/data/expansion/') || id.includes('\\src\\data\\expansion\\')) {
+                return 'data-disciplines';
+              }
+              return undefined;
+            },
+          },
+        },
       },
-    },
-  },
 }));

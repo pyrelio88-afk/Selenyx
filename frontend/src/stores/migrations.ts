@@ -5,11 +5,11 @@ import { normalizeTheme } from '@lib/themes';
 /** v4 IA 重排：旧导航 key → 新容器视图（侧边栏 7 项 + 设置弹窗） */
 const V4_VIEW_MAP: Record<string, string> = {
   dashboard: 'newTask',
-  aiChat: 'assistant',
+  aiChat: 'newTask',
   settings: 'newTask',
   references: 'library',
   notes: 'library',
-  tables: 'library',
+  tables: 'more',
   clinicalData: 'library',
   experts: 'extensions',
   skills: 'extensions',

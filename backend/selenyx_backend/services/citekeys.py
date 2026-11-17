@@ -14,7 +14,7 @@ import re
 import unicodedata
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from selenyx_backend.models import Reference
 
@@ -55,6 +55,10 @@ def _title_word(title: str) -> str:
     return ""
 
 
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def make_cite_key(
     session: Session,
     creators: list[dict[str, Any]],
@@ -66,10 +70,13 @@ def make_cite_key(
     year_part = (year or "").strip()[:4]
     year_part = year_part if year_part.isdigit() else ""
     base = f"{author_part}{year_part}"
+    escaped_base = _escape_like(base)
 
     existing = set(
         session.exec(
-            select(Reference.cite_key).where(Reference.cite_key.like(f"{base}%"))
+            select(Reference.cite_key).where(
+                col(Reference.cite_key).like(f"{escaped_base}%", escape="\\")
+            )
         ).all()
     )
     if base not in existing:

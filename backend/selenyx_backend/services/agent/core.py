@@ -61,17 +61,25 @@ SYSTEM_PROMPT = """你是 Selenyx 的本机研究 agent。你通过「规划→�
 通常先 project_context 或 search_library 摸底，再按需补查，然后 final 成稿。"""
 
 
+_JSON_DECODER = json.JSONDecoder()
+
+
 def extract_action(text: str) -> dict[str, Any]:
     """把模型输出解析为一个动作；失败则整体视为 final 文本。"""
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end > start:
+    pos = 0
+    length = len(text)
+    while pos < length:
+        start = text.find("{", pos)
+        if start == -1:
+            break
         try:
-            action = json.loads(text[start : end + 1])
-            if isinstance(action, dict) and ("tool" in action or "final" in action or "plan" in action):
-                return action
+            action, end = _JSON_DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
-            pass
+            pos = start + 1
+            continue
+        if isinstance(action, dict) and ("tool" in action or "final" in action or "plan" in action):
+            return action
+        pos = max(start + 1, end)
     return {"thought": "", "final": text.strip() or "（模型未产出内容）"}
 
 

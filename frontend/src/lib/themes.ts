@@ -1,4 +1,4 @@
-/** Theme identity: neutral chrome everywhere; themes only change the accent. */
+/** Theme identity: crisp neutral surfaces with expressive scholarly accents. */
 export const THEME_KEYS = ['forest', 'mono', 'minimal-white', 'ink-classic'] as const;
 export type ThemeName = (typeof THEME_KEYS)[number];
 
@@ -11,10 +11,10 @@ export interface ThemeOption {
 }
 
 export const THEME_OPTIONS: readonly ThemeOption[] = [
-  { key: 'forest', name: '森林', description: '抹茶绿只落在按钮、焦点与进度', swatch: '#4b6f5a' },
-  { key: 'mono', name: '墨白', description: '纯中性黑白，不引入彩色', swatch: '#262626' },
-  { key: 'minimal-white', name: '靛蓝', description: '靛蓝只落在主操作与状态', swatch: '#2e5fa3' },
-  { key: 'ink-classic', name: '朱砂', description: '朱砂只落在关键操作与标记', swatch: '#b13833' },
+  { key: 'forest', name: '森林', description: 'Qoder 森林抹茶绿，温润克制地落在主操作、导航高亮与进度', swatch: '#386b52' },
+  { key: 'mono', name: '墨白', description: '纯粹黑白学术中性，不引入彩色视觉干扰', swatch: '#242926' },
+  { key: 'minimal-white', name: '靛蓝', description: '清朗靛蓝点缀关键交互、焦点环与状态标记', swatch: '#2b5ca8' },
+  { key: 'ink-classic', name: '朱砂', description: '传统朱砂印色聚焦核心落锤操作与待审标记', swatch: '#b33932' },
 ];
 
 export function normalizeTheme(value: unknown): ThemeName {

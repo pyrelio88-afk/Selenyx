@@ -21,7 +21,7 @@ const EXPERT_ICONS: Record<string, IconName> = {
 };
 
 export function ExpertsView() {
-  const setView = useAppStore((s) => s.setView);
+  const requestChatDraft = useAppStore((s) => s.requestChatDraft);
   const requestRunFocus = useAppStore((s) => s.requestRunFocus);
   const [experts, setExperts] = useState<ExpertDef[]>([]);
   const [offline, setOffline] = useState(false);
@@ -48,9 +48,10 @@ export function ExpertsView() {
   }, [refresh]);
 
   const activate = (expert: ExpertDef) => {
-    sessionStorage.setItem('selenyx_skill_prompt', `${expert.systemPrompt}\n\n请先问我：这次需要协助的材料或问题是什么。`);
-    sessionStorage.setItem('selenyx_skill_name', `专家 · ${expert.name}`);
-    setView('aiChat');
+    requestChatDraft(
+      `${expert.systemPrompt}\n\n请先问我：这次需要协助的材料或问题是什么。`,
+      `专家 · ${expert.name}`,
+    );
   };
 
   /* 详情展开：工具边界随列表已下发，被委托记录按需拉取 */

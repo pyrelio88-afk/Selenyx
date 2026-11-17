@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlmodel import Session, select
 import httpx
 
@@ -101,13 +102,13 @@ async def reindex_library(session: Session = Depends(get_session)):
     total = 0
     for ref in refs:
         total += await rag_service.index_reference_record(session, ref, settings=get_settings())
-    chunk_count = len(list(session.exec(select(DocumentChunk)).all()))
+    chunk_count = session.exec(select(func.count()).select_from(DocumentChunk)).one()
     return {"references": len(refs), "chunksWritten": total, "chunksTotal": chunk_count}
 
 
 @router.post("/related")
 async def related_papers(body: RelatedBody):
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, trust_env=False) as client:
         if body.pmid:
             items, meta = await scholarly.related_by_pmid(client, body.pmid.strip())
             return {"results": items, "count": len(items), "diagnostics": meta}

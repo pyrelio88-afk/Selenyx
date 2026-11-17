@@ -104,31 +104,6 @@ class KanbanTask(SQLModel, table=True):
     updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
-class RefCollection(SQLModel, table=True):
-    """文献集合"""
-    __tablename__ = "collections"
-
-    id: str = Field(default_factory=gen_id, primary_key=True)
-    name: str = ""
-    parent_id: Optional[str] = None
-    color: str = "#7a9b6a"
-    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-
-
-class ChatHistory(SQLModel, table=True):
-    """AI 聊天历史"""
-    __tablename__ = "chat_history"
-
-    id: str = Field(default_factory=gen_id, primary_key=True)
-    project_id: Optional[str] = None
-    role: str = "user"
-    content: str = ""
-    tool_calls_json: str = "[]"
-    reference_ids_json: str = "[]"
-    tokens_used: int = 0
-    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
-
-
 class AgentRun(SQLModel, table=True):
     """Agent 运行记录"""
     __tablename__ = "agent_runs"

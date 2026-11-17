@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlmodel import Session, select
@@ -11,7 +9,11 @@ from sqlmodel import Session, select
 from selenyx_backend.database import get_engine
 from selenyx_backend.models import AgentRun, AutomationTask
 from selenyx_backend.services.cronparse import parse_cron
-from selenyx_backend.services.scheduler import _execute_automation, launch_automation_run
+from selenyx_backend.services.scheduler import (
+    _execute_automation,
+    launch_automation_run,
+    spawn_automation_task,
+)
 
 router = APIRouter()
 
@@ -59,7 +61,9 @@ def _serialize(task: AutomationTask) -> dict:
 @router.get("")
 def list_automations():
     with Session(get_engine()) as session:
-        tasks = list(session.exec(select(AutomationTask)).all())
+        tasks = list(
+            session.exec(select(AutomationTask).order_by(AutomationTask.created_at.desc()).limit(500)).all()
+        )
     return {"automations": [_serialize(t) for t in tasks]}
 
 
@@ -130,16 +134,24 @@ def delete_automation(task_id: str):
 
 @router.post("/{task_id}/run", status_code=202)
 async def run_automation_now(task_id: str):
-    """手动立即触发一次（不刷新 last_run_at，不影响既定节奏，不参与失败重试）。"""
+    """手动立即触发一次（即使已暂停也可运行；不刷新 last_run_at，不参与失败重试）。"""
     with Session(get_engine()) as session:
         task = session.get(AutomationTask, task_id)
         if not task:
             raise HTTPException(404, "自动化任务不存在。")
+        if not task.prompt.strip():
+            raise HTTPException(400, "自动化任务提示词不能为空。")
         prompt, project_id = task.prompt, task.project_id or None
-    run_id = launch_automation_run(task_id, touch_last_run=False)
+    run_id = launch_automation_run(task_id, touch_last_run=False, allow_disabled=True)
     if not run_id:
+        with Session(get_engine()) as session:
+            current = session.get(AutomationTask, task_id)
+            if not current:
+                raise HTTPException(404, "自动化任务不存在。")
+            if not current.prompt.strip():
+                raise HTTPException(400, "自动化任务提示词不能为空。")
         raise HTTPException(409, "该任务已有正在运行的实例。")
-    asyncio.create_task(_execute_automation(task_id, run_id, prompt, project_id, scheduled=False))
+    spawn_automation_task(_execute_automation(task_id, run_id, prompt, project_id, scheduled=False))
     return {"runId": run_id, "status": "running"}
 
 
@@ -155,8 +167,9 @@ def automation_run_history(task_id: str):
                 select(AgentRun)
                 .where(AgentRun.recipe_id == f"automation:{task_id}")
                 .order_by(AgentRun.started_at.desc())
+                .limit(20)
             ).all()
-        )[:20]
+        )
     return {
         "runs": [
             {

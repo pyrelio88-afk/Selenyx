@@ -97,6 +97,11 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     customInstructions,
     replyStyle,
     requestRunFocus,
+    requestPdfOpen,
+    chatSurfaceMode,
+    setChatSurfaceMode,
+    pendingChatDraft,
+    clearPendingChatDraft,
     taskLaunchNonce,
     claimTaskLaunch,
     pendingChatOpen,
@@ -221,13 +226,6 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   }, [activeProjectId, refreshEvidence]);
 
   useEffect(() => {
-    try {
-      persistChatSessions(localStorage, sessionScope, scope, sessions, activeId);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('selenyx-chat-changed'));
-    } catch { /* Browser storage can be unavailable in a restricted preview. */ }
-  }, [activeId, scope, sessionScope, sessions]);
-
-  useEffect(() => {
     if (sessionScope === scope) return;
     setSessionState(loadSessions(scope));
     setSessionScope(scope);
@@ -253,8 +251,9 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     if (pendingChatOpen.scope !== scope) return;
     if (!sessions.some((session) => session.id === pendingChatOpen.sessionId)) return;
     setSessionState((previous) => ({ ...previous, activeId: pendingChatOpen.sessionId }));
+    setChatSurfaceMode('chat');
     clearPendingChatOpen();
-  }, [clearPendingChatOpen, pendingChatOpen, scope, sessions]);
+  }, [clearPendingChatOpen, pendingChatOpen, scope, sessions, setChatSurfaceMode]);
 
   const patchSession = useCallback((target: ChatStreamTarget, updater: (session: Session) => Session) => {
     setSessionState((previous) => {
@@ -323,22 +322,26 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
   });
 
   useEffect(() => {
+    if (busy) return;
+    try {
+      persistChatSessions(localStorage, sessionScope, scope, sessions, activeId);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('selenyx-chat-changed'));
+    } catch { /* Browser storage can be unavailable in a restricted preview. */ }
+  }, [activeId, busy, scope, sessionScope, sessions]);
+
+  useEffect(() => {
     setChatStreamBusy(busy);
   }, [busy, setChatStreamBusy]);
 
   useEffect(() => () => setChatStreamBusy(false), [setChatStreamBusy]);
 
   useEffect(() => {
-    try {
-      const skillPrompt = sessionStorage.getItem('selenyx_skill_prompt');
-      const skillName = sessionStorage.getItem('selenyx_skill_name');
-      if (!skillPrompt) return;
-      sessionStorage.removeItem('selenyx_skill_prompt');
-      sessionStorage.removeItem('selenyx_skill_name');
-      createSession(skillName ? `技能：${skillName}` : '技能调用');
-      setInput(skillPrompt);
-    } catch { /* Session storage is optional in preview contexts. */ }
-  }, [createSession]);
+    if (!pendingChatDraft) return;
+    createSession(pendingChatDraft.title || '新对话');
+    setInput(pendingChatDraft.prompt);
+    setChatSurfaceMode('chat');
+    clearPendingChatDraft();
+  }, [clearPendingChatDraft, createSession, pendingChatDraft, setChatSurfaceMode]);
 
   const applyTerminalRunOutput = useCallback((link: PendingRunBacklink, run: AgentRunDetail) => {
     try {
@@ -695,8 +698,8 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
     requestRunFocus(runId);
   }, [requestRunFocus]);
 
-  if (messages.length === 0) {
-    return <NewTaskHome onStarted={openStartedResearch} />;
+  if (!embedded && chatSurfaceMode !== 'chat' && !pendingChatDraft && messages.length === 0) {
+    return <NewTaskHome onStarted={openStartedResearch} onEnterChat={() => setChatSurfaceMode('chat')} />;
   }
 
   return (
@@ -731,7 +734,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
             open={visibleSidebar}
             isMobile={isMobile}
             onOpenChange={setSessionPanelOpen}
-            onCreate={() => { createSession(); }}
+            onCreate={() => { setChatSurfaceMode('chat'); createSession(); }}
             onSelect={selectSession}
             onDelete={deleteSession}
             onRename={renameSession}
@@ -942,12 +945,7 @@ export function AIChatView({ embedded = false }: { embedded?: boolean } = {}) {
                           {reference ? (
                             <button
                               type="button"
-                              onClick={() => {
-                                try {
-                                  sessionStorage.setItem('selenyx:open-evidence-source', JSON.stringify({ referenceId: item.reference_id, page: item.page ?? null }));
-                                } catch { /* Routing remains available when storage is unavailable. */ }
-                                setView('references');
-                              }}
+                              onClick={() => requestPdfOpen(item.reference_id, item.page ?? 1)}
                               aria-label={`打开证据来源：${reference.title}`}
                             >
                               查看原文

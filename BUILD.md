@@ -1,109 +1,68 @@
 # Selenyx 本地前后端构建与平台边界
 
-Selenyx 的完整交付物是 Tauri 桌面应用：React/Vite 提供交互层，本机 FastAPI sidecar 提供 SQLite、RAG、学术连接器、证据链与密钥网关。浏览器存储是离线缓存和降级路径，不是完整版本的唯一数据源。
+Selenyx 的完整交付物是 Tauri 2 桌面应用：React/Vite 提供交互层，本机 FastAPI sidecar 提供 SQLite、RAG、学术连接器、证据链与密钥网关。浏览器存储作为离线缓存与降级路径，与 SQLite 通过显式仓库层同步对账。
 
-\`frontend/\` 是应用界面，\`backend/\` 是只监听 loopback 的本机服务，\`desktop/\` 负责把两者组成桌面应用。
+`frontend/` 是应用界面，`backend/` 是只监听 loopback（`127.0.0.1:8770`）的本机服务，`desktop/` 负责把两者封装为原生桌面安装包并托管子进程生命周期。
 
 ## 1. 本地开发
 
 在仓库根目录执行：
 
-\`\`\`powershell
+```powershell
 npm install
 npm run dev:local
-\`\`\`
+```
 
-\`npm run dev:local\` 同时启动 FastAPI 与 Vite，是完整功能的开发入口。\`npm run dev\` 只启动前端，适合验证后端离线时的降级行为，不包含 RAG、证据链或学术连接器。
+`npm run dev:local` 同时启动 FastAPI 与 Vite，是完整功能的开发入口。`npm run dev` 只启动前端，适合验证后端离线时的降级行为。
 
-## 2. 前端构建与降级预览
+## 2. 前端按需分包构建与预览
 
-\`\`\`powershell
+```powershell
 npm run build
-npx serve frontend/dist
-\`\`\`
+npm --workspace @selenyx/frontend run preview
+```
 
-构建输出位于：
+构建输出位于 `frontend/dist/`。默认采用标准多 chunk 分包模式（核心壳层极速启动，PDF 阅读器、ECharts 图表、统计计算器与学科资料库按需异步加载）。若特殊场景需要单 HTML 文件归档，可显式设置环境变量 `VITE_SINGLEFILE=1 npm run build`。
 
-\`\`\`text
-frontend/dist/
-\`\`\`
+## 3. 完整桌面应用构建（Windows EXE / macOS / Linux）
 
-\`npx serve frontend/dist\` 只验证前端降级产物。不要用 \`file://\` 直接打开页面：PDF、OCR 等 Web Worker 资源需要同源 HTTP 环境。它不能替代完整桌面/RAG 验收。
+桌面构建会先通过 PyInstaller 生成 Python sidecar，再由 Tauri 打包前端静态产物与本机后端。需要对应平台的 Rust 与 Python（`uv`）工具链：
 
-## 3. 完整桌面应用
-
-桌面构建会先生成 Python sidecar，再由 Tauri 打包前端与本机后端。需要对应平台的 Rust 与 Python/uv 工具链：
-
-\`\`\`powershell
+```powershell
 npm run desktop:doctor
 npm run desktop:build
-\`\`\`
+```
 
-安装包输出通常位于 \`desktop/target/release/bundle/\`。Windows 打包使用当前用户安装模式；实际发布前必须在目标平台验证 sidecar 健康、SQLite 重启持久化、RAG、导入导出与离线 OCR。
+安装包输出位于 `desktop/target/release/bundle/`（Windows NSIS `*-setup.exe` 与 MSI）。桌面壳在主窗口退出时会自动关闭仙鹤桌宠副窗并清理 `selenyx-backend` 子进程树，避免端口残留占用。
 
-默认 Windows 包使用 Tauri 的小型 WebView2 下载引导模式，不附带 AI 模型、WebView2 离线安装器或 Ollama 安装器。目标机器尚无 WebView2 时，首次安装需要联网完成该系统前置依赖。
+Windows 可显式制作含 WebView2 离线引导器的能力包：
 
-Windows 可显式制作离线能力包：
-
-\`\`\`powershell
+```powershell
 npm run desktop:build:offline-pack
-\`\`\`
+```
 
-该命令选择 Tauri 的 WebView2 离线前置包，除此以外与普通包一致：**任何构建都不附带 Ollama 安装器或 AI 模型权重**（桌面前置检查脚本会强制拦截此类资源）。Ollama 属于用户自行安装的 BYOK 运行时——应用在「设置 → AI 配置」提供 ollama.com 官网下载引导，装好后由用户自行 \`ollama pull <模型>\`。旧命令 \`desktop:build:with-ollama\` 仅作为兼容别名保留，行为与 offline-pack 相同。
+> **体积与纯净边界**：任何构建均**不附带** Ollama 安装器或本地大模型权重。用户可在「设置 → 模型」中接入任意兼容 OpenAI / Anthropic / Google / 本地 Ollama 或本机网关服务。
 
-通过桌面 Junction 启动脚本时，发布脚本会先解析到真实物理目录，再将同一条规范路径交给 Node、Cargo 和 Tauri，避免同一仓库因 Desktop/OneDrive 两种路径产生重复缓存或 sidecar 资源错位。
+## 4. 离线 OCR 资源校验
 
-## 4. 离线 OCR 资源
+`frontend/public/ocr/` 随前端构建复制为 `frontend/dist/ocr/`，包含 Tesseract.js 运行时、WASM 核心以及 `chi_sim`、`eng` 模型。运行时仅加载同源本地资源，绝不外连 CDN：
 
-\`frontend/public/ocr/\` 随前端构建复制为 \`frontend/dist/ocr/\`，包含 Tesseract.js 运行时、四个兼容性核心以及 \`chi_sim\`、\`eng\` 的 \`4.0.0_best_int\` 模型。运行时只加载这些同源本地资源，不会回退到 CDN。
-
-\`\`\`powershell
+```powershell
 npm run offline:check
-\`\`\`
+```
 
-该命令校验源码和构建产物中的文件大小及 SHA-256。相关 Apache-2.0 许可证位于 \`frontend/public/ocr/licenses/\`；替换资源时必须同步更新校验清单。
+## 5. 本地数据与密钥安全边界
 
-## 5. Android 的当前范围
+- SQLite 默认位于 `~/.selenyx/selenyx.sqlite3`（启用 WAL 与 `busy_timeout`）。
+- 长期 API 密钥仅存于本机 `~/.selenyx/.env.local` 或 `backend/.env.local`，**永不**打入前端可分发构建产物。
+- `desktop/Cargo.lock` 与根目录 `package-lock.json`、`backend/uv.lock` 为唯一锁文件基线（子工作区不再保留重复锁文件）。
 
-Android 使用同一份前端能力，但当前只承诺设备本地、离线核心功能：
+## 6. 发布前全量验证
 
-- 工作区保存在该设备自己的浏览器/WebView 存储中。
-- 不提供账号同步、设备配对、局域网协作或远程控制。
-- 不应把电脑地址写入移动端环境变量来充当正式能力。
-
-不要把 Android APK 当成桌面端数据的同步端或远程控制器。iOS 当前没有构建、签名、发布或支持承诺。
-
-## 6. 本地数据与环境变量
-
-- SQLite 默认位于 \`~/.selenyx/selenyx.sqlite3\`；前端 localStorage 是离线缓存，两者需要通过仓库层显式对账。
-- JSON 备份、聊天缓存和数据库都由用户在本机管理；定期做可验证的版本化导出。
-- \`.env\` 和 \`.env.local\` 不应提交。前端开发变量使用 \`frontend/.env.local\`，样例见 \`frontend/.env.example\`。
-- 源码通过 \`import.meta.env\` 读取公开构建配置。Vite 会把所有 \`VITE_*\` 值写入最终的浏览器文件，因此这些变量不能保存长期生产密钥。
-- \`desktop/Cargo.lock\` 是原生壳依赖锁定文件；修改原生壳依赖时必须一并提交，以保证构建可复现。
-
-## 7. CI 与发布前验证
-
-基础验证：
-
-\`\`\`powershell
+```powershell
 npm run typecheck
-npm run test
+npm run lint
+npm test
 npm run backend:test
-npm run build
-npm run offline:check
 npm run verify:local
-\`\`\`
-
-发布桌面应用时，再在目标平台运行 \`npm run desktop:doctor\` 和 \`npm run desktop:build\`。工作流产物不等于已验收发布；发布前仍应实际安装并检查 sidecar、数据持久化、导入导出、RAG、离线 OCR 和主流程。
-
-## 8. 体积基线
-
-**v0.2.0（2026-08-12，V4 全模块后）复测**：
-- 前端单文件 \`index.html\` 9.78MB（gzip 2.02MB）——较 8-09 基线 9.72MB / 2.00MB 涨幅 **+0.7%**（约束 ≤10%）。后端零新增依赖（cron 解析为标准库自实现，MCP 复用 httpx），sidecar 体积无实质变化（CI 构建复核）。
-- 新增静态资产：\`brand-crane-cloud-512-v1.png\` 244KB（品牌鹤云图，主页 Composer 与侧栏）。
-
-2026-08-09（P8 后）基线：
-- 前端 \`frontend/dist/\` 共 28MB：单文件 \`index.html\` 9.72MB（gzip 2.00MB，KaTeX 仅 woff2）、\`anydoc.wasm\` 6.4MB、OCR 四核心与双语模型、\`pet.html\` 3.6KB（仙鹤桌宠窗口页）。
-- 后端 sidecar \`selenyx-backend.exe\` 21.4MB（PyInstaller onefile；已 exclude tkinter/turtle/unittest/pydoc/test，较未排除时 -0.29MB）。
-- 前端按需化：echarts 走 \`echarts/core\` 按需注册；pdfjs-dist 动态 import 延迟到首次打开 PDF。构建为单文件模式（viteSingleFile + inlineDynamicImports），manualChunks 不适用。
-- 本机注意：构建前需在沙箱外 \`rm -rf frontend/dist\`（safe-delete 会拦截 vite emptyDir 删 anydoc.wasm）；PyInstaller 勿用 \`--clean\` 同因，改为手动删 \`backend/build/pyinstaller\`。
+```

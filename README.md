@@ -6,7 +6,7 @@
 
 展翼丹顶鹤为记 —— 安静、专注、行稳致远。
 
-`v0.3.0` &nbsp;·&nbsp; `React + TypeScript + Vite` &nbsp;·&nbsp; `Tauri 2 (Rust)` &nbsp;·&nbsp; `FastAPI + SQLite`
+`v0.4.0` &nbsp;·&nbsp; `React 19 + TypeScript + Vite` &nbsp;·&nbsp; `Tauri 2 (Rust)` &nbsp;·&nbsp; `FastAPI + SQLite`
 
 ![新研究主页](docs/screenshots/v5/home.png)
 
@@ -125,19 +125,19 @@ npm run dev:local   # 同时启动前端 + 本地后端（/api 代理）
 ## 验证
 
 ```powershell
-npm run typecheck    # TypeScript
-npm run lint         # ESLint
-npm test             # 前端单元测试（349）
-npm run backend:test # 后端 pytest（210）
-npm run verify:local # 本地优先整体验证
+npm run typecheck    # TypeScript 严格类型检查
+npm run lint         # ESLint 零告警校验
+npm test             # 前端单元测试（360）
+npm run backend:test # 后端 pytest（236）
+npm run verify:local # 本地优先整体验证（含分包构建与离线 OCR 资产哈希校验）
 ```
 
 ## 技术栈与架构
 
-- **前端**：React + TypeScript + Vite（单文件构建）+ Zustand；三栏工作台骨架（对象目录 — 主工作区 — 证据检查器）
-- **桌面**：Tauri 2（Rust）；仙鹤桌宠为透明置顶窗
-- **后端**：FastAPI + SQLModel/SQLite 本地 sidecar（127.0.0.1:8770，BYOK 密钥网关，WAL + 外键）
-- **PDF / OCR**：pdf.js + anydoc
+- **前端**：React 19 + TypeScript + Vite（按需多 chunk 懒加载构建）+ Zustand；三栏工作台骨架（对象目录 — 主工作区 — 证据检查器），Qoder 森林抹茶绿主题体系
+- **桌面**：Tauri 2（Rust）；托管本机 Python Sidecar 进程树生命周期、原生浅色/深色标题栏同步与仙鹤透明桌宠窗
+- **后端**：FastAPI + SQLModel/SQLite 本地 sidecar（`127.0.0.1:8770`，BYOK 密钥网关，WAL + 外键 + `busy_timeout`，事件驱动证据门）
+- **PDF / OCR**：pdf.js + Tesseract 离线双语模型 + anydoc WASM
 
 架构细节见 [ARCHITECTURE.md](ARCHITECTURE.md)；构建与体积基线见 [BUILD.md](BUILD.md)；本地 RAG 见 [docs/LOCAL-RAG-EMBEDDINGS.md](docs/LOCAL-RAG-EMBEDDINGS.md)；信息架构见 [docs/IA.md](docs/IA.md)。
 

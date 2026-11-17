@@ -228,7 +228,9 @@ let bootstrapPromise: Promise<WorkspaceBootstrapResult> | null = null;
 export function bootstrapWorkspaceRepository(
   localProjects: ResearchProject[],
   localTasks: KanbanTask[],
+  options?: { force?: boolean },
 ): Promise<WorkspaceBootstrapResult> {
+  if (options?.force) bootstrapPromise = null;
   if (bootstrapPromise) return bootstrapPromise;
   bootstrapPromise = (async () => {
     // Never replay the old restore-as-replacement behavior after upgrading.
@@ -266,6 +268,7 @@ export function bootstrapWorkspaceRepository(
         message: `SQLite 已同步 ${workspace.projects.length} 个项目、${workspace.tasks.length} 个任务`,
       };
     } catch (error) {
+      bootstrapPromise = null;
       return {
         projects: localProjects,
         tasks: localTasks,

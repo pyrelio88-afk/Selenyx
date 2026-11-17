@@ -82,7 +82,7 @@ def _serialize(expert: Expert) -> dict:
 @router.get("")
 def list_experts():
     with Session(get_engine()) as session:
-        experts = list(session.exec(select(Expert)).all())
+        experts = list(session.exec(select(Expert).limit(200)).all())
     return {"experts": [_serialize(e) for e in experts]}
 
 
@@ -166,8 +166,9 @@ def expert_delegations(expert_id: str):
                 select(AgentRun)
                 .where(AgentRun.audit_log_json.contains(f'"expert": "{expert.name}"'))
                 .order_by(AgentRun.started_at.desc())
+                .limit(50)
             ).all()
-        )[:50]
+        )
         delegations: list[dict[str, Any]] = []
         for run in candidates:
             try:

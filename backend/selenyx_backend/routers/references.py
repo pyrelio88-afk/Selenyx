@@ -8,12 +8,16 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlmodel import Session, col, func, select
 
 from selenyx_backend.database import get_session
 from selenyx_backend.models import Reference
 from selenyx_backend.services.citekeys import make_cite_key
 from selenyx_backend.services.dedup import find_duplicate_sets
+from selenyx_backend.services.evidence_domain import (
+    repair_evidence_domain_after_delete as _repair_evidence_domain_after_source_delete,
+)
 
 router = APIRouter()
 
@@ -229,45 +233,6 @@ def _replace_project_reference(session: Session, old_id: str, replacement_id: st
         session.add(project)
 
 
-def _repair_evidence_domain_after_source_delete(session: Session, removed_evidence_ids: set[str]) -> None:
-    """Prune deleted evidence IDs from claims/cases without inventing support.
-
-    Claims are user-authored research objects, so deleting one source does not
-    delete the claim text.  It does, however, return an active claim to draft
-    and reopen a contradiction case whenever its evidence graph changed.
-    """
-    if not removed_evidence_ids:
-        return
-    from selenyx_backend.models import ContradictionCase, ResearchClaim
-
-    now = datetime.now().isoformat()
-    for claim in session.exec(select(ResearchClaim)).all():
-        evidence_ids = _json_list(claim.evidence_ids_json)
-        retained = [item_id for item_id in evidence_ids if item_id not in removed_evidence_ids]
-        if retained == evidence_ids:
-            continue
-        claim.evidence_ids_json = json.dumps(retained, ensure_ascii=False, separators=(",", ":"))
-        if claim.status == "active":
-            claim.status = "draft"
-        claim.updated_at = now
-        session.add(claim)
-
-    for case in session.exec(select(ContradictionCase)).all():
-        evidence_ids = _json_list(case.evidence_ids_json)
-        retained = [item_id for item_id in evidence_ids if item_id not in removed_evidence_ids]
-        if retained == evidence_ids:
-            continue
-        case.evidence_ids_json = json.dumps(retained, ensure_ascii=False, separators=(",", ":"))
-        # A resolved conflict cannot remain resolved after one of the inputs
-        # vanished.  Do not synthesize a replacement or silently keep a claim.
-        case.status = "open"
-        marker = "[A linked source was removed; review the remaining evidence.]"
-        if marker not in case.resolution:
-            case.resolution = f"{marker}\n{case.resolution}".strip()
-        case.updated_at = now
-        session.add(case)
-
-
 def _delete_reference_graph(session: Session, reference: Reference, *, replacement_id: str | None = None) -> None:
     """Delete or merge a source without leaving locators or evidence edges dangling."""
     from selenyx_backend.models import DocumentChunk, EvidenceItem, ProvenanceAnchor
@@ -315,9 +280,21 @@ def list_references(
     if stage:
         statement = statement.where(Reference.pipeline_stage == stage)
     if collection:
-        statement = statement.where(Reference.collections_json.contains(collection))
+        statement = statement.where(
+            text(
+                'json_valid("references".collections_json) AND EXISTS ('
+                'SELECT 1 FROM json_each("references".collections_json) '
+                "WHERE json_each.value = :collection_val)"
+            ).bindparams(collection_val=collection)
+        )
     if tag:
-        statement = statement.where(Reference.tags_json.contains(tag))
+        statement = statement.where(
+            text(
+                'json_valid("references".tags_json) AND EXISTS ('
+                'SELECT 1 FROM json_each("references".tags_json) '
+                "WHERE json_each.value = :tag_val)"
+            ).bindparams(tag_val=tag)
+        )
     return [_serialize(row) for row in session.exec(statement.order_by(Reference.updated_at.desc())).all()]
 
 
@@ -503,7 +480,7 @@ def deduplicate_references(session: Session = Depends(get_session)):
 async def lookup_doi(doi: str):
     from selenyx_backend.services.scholarly import lookup_doi as scholarly_lookup_doi
 
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, trust_env=False) as client:
         work, meta = await scholarly_lookup_doi(client, doi)
     if not work:
         raise HTTPException(404, f"Crossref could not find DOI: {doi}")
@@ -514,7 +491,7 @@ async def lookup_doi(doi: str):
 async def lookup_pmid(pmid: str):
     from selenyx_backend.services.scholarly import search_pubmed
 
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, trust_env=False) as client:
         items, meta = await search_pubmed(client, f"{pmid}[uid]", retmax=1)
     if not items:
         raise HTTPException(404, f"PubMed could not find PMID: {pmid}")

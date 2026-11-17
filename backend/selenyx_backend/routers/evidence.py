@@ -28,6 +28,8 @@ from selenyx_backend.models import (
     ResearchProject,
     StageArtifact,
 )
+from selenyx_backend.services.agent.loop import notify_evidence_changed
+from selenyx_backend.services.evidence_domain import repair_evidence_domain_after_delete
 
 router = APIRouter()
 
@@ -435,6 +437,7 @@ def patch_evidence(item_id: str, body: EvidencePatch, session: Session = Depends
     session.add(item)
     session.commit()
     session.refresh(item)
+    notify_evidence_changed()
     return item
 
 
@@ -443,8 +446,10 @@ def delete_evidence(item_id: str, session: Session = Depends(get_session)):
     item = session.get(EvidenceItem, item_id)
     if not item:
         raise HTTPException(404, "Evidence not found")
+    repair_evidence_domain_after_delete(session, {item_id})
     session.delete(item)
     session.commit()
+    notify_evidence_changed()
     return {"deleted": item_id}
 
 

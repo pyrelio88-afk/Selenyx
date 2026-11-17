@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LLMConfig } from '@apptypes/index';
 import { isActiveRun, type AgentRunDetail } from '@services/agent';
 import { observeRun } from '@services/runObserver';
-import { LLMError, streamChat, type LLMMessage } from '@services/llm';
+import { LLMError, streamSmartChat, type LLMMessage } from '@services/llm';
 
 export interface PendingRunBacklink {
   runId: string;
@@ -74,19 +74,20 @@ export function useChatStreamController({
     appendUser: { content: string } | undefined,
     target: ChatStreamTarget,
   ) => {
+    if (busyRef.current) return;
     const config = llmConfig;
-    if (!config || busyRef.current) return;
+    const modelLabel = config?.model || 'local-gateway';
 
     busyRef.current = true;
     pendingContentRef.current = '';
     setBusy(true);
-    onStart(appendUser, config.model, target);
+    onStart(appendUser, modelLabel, target);
     onScrollToBottom(true);
 
     const abort = new AbortController();
     abortRef.current = abort;
     try {
-      const result = await streamChat(config, history, (content) => {
+      const result = await streamSmartChat(config, history, (content) => {
         pendingContentRef.current = content;
         if (frameRef.current !== null) return;
         frameRef.current = requestAnimationFrame(() => {
@@ -95,7 +96,7 @@ export function useChatStreamController({
           onScrollToBottom();
         });
       }, abort.signal);
-      if (mountedRef.current) onUsage(result.tokensUsed, config);
+      if (mountedRef.current && config) onUsage(result.tokensUsed, config);
     } catch (error) {
       const mapped = streamErrorMessage(error);
       if (mountedRef.current) onError(mapped.message, mapped.isAbort, target);

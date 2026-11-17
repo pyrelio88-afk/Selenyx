@@ -6,8 +6,7 @@ import type { ResearchProject } from '@apptypes/project';
 import { AIChatView } from '../../views/AIChatView';
 import * as newTaskHome from '../../views/NewTaskHome';
 import * as streamController from '../StreamController';
-import { handoffNewTaskToAssistant } from '../handoffNewTask';
-import { createEmptySession, loadSessions } from '../chatShared';
+import { createEmptySession } from '../chatShared';
 import { loadPendingRunBacklinks } from '../chatRunBacklinks';
 
 function makeStore() {
@@ -20,7 +19,7 @@ function makeStore() {
   };
 }
 
-describe('handoffNewTaskToAssistant', () => {
+describe('AIChatView home and draft handoff', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', makeStore());
   });
@@ -30,23 +29,19 @@ describe('handoffNewTaskToAssistant', () => {
     vi.unstubAllGlobals();
   });
 
-  it('creates a scoped session and run backlink without sending chat text to the backend', () => {
-    handoffNewTaskToAssistant('盘点当前项目的证据链', 'proj-1', 'run-9');
-    const loaded = loadSessions('proj-1');
-    expect(loaded.sessions).toHaveLength(1);
-    expect(loaded.sessions[0].messages[0].content).toBe('盘点当前项目的证据链');
-    expect(loaded.activeId).toBe(loaded.sessions[0].id);
-    const links = loadPendingRunBacklinks(localStorage);
-    expect(links).toEqual([{ runId: 'run-9', sessionId: loaded.sessions[0].id, scope: 'proj-1' }]);
-  });
-
   it('opens a global research run without manufacturing a chat or overwriting project drafts', () => {
     const project: ResearchProject = {
       id: 'proj-1', name: '原项目', description: '', currentStage: 'problem',
       tags: [], referenceIds: [], taskIds: [], status: 'active',
       startDate: null, endDate: null, createdAt: '', updatedAt: '',
     };
-    const state = { ...appStore.useAppStore.getState(), projects: [project], currentProjectId: project.id as string | null };
+    const state = {
+      ...appStore.useAppStore.getState(),
+      projects: [project],
+      currentProjectId: project.id as string | null,
+      chatSurfaceMode: 'home' as const,
+      pendingChatDraft: null,
+    };
     state.setCurrentProject = vi.fn((projectId: string | null) => { state.currentProjectId = projectId; });
     state.requestRunFocus = vi.fn();
     vi.spyOn(appStore, 'useAppStore').mockImplementation(() => state);
@@ -73,5 +68,18 @@ describe('handoffNewTaskToAssistant', () => {
     expect(home).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem('selenyx_chat_sessions_proj-1')).toBe(projectSessions);
     expect(localStorage.getItem('selenyx_chat_active_proj-1')).toBe('project-draft');
+  });
+
+  it('switches into chat surface mode when requestChatDraft is invoked', () => {
+    appStore.useAppStore.setState({ currentView: 'extensions', chatSurfaceMode: 'home', pendingChatDraft: null, chatStreamBusy: false });
+    appStore.useAppStore.getState().requestChatDraft('请帮我审查方法学偏倚', '专家 · 论文批评员');
+
+    const next = appStore.useAppStore.getState();
+    expect(next.currentView).toBe('newTask');
+    expect(next.chatSurfaceMode).toBe('chat');
+    expect(next.pendingChatDraft).toEqual({
+      prompt: '请帮我审查方法学偏倚',
+      title: '专家 · 论文批评员',
+    });
   });
 });

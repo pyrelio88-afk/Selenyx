@@ -4,6 +4,6 @@
 """
 
 from selenyx_backend.services.agent import events, registry
-from selenyx_backend.services.agent.loop import execute_run
+from selenyx_backend.services.agent.loop import execute_run, notify_evidence_changed
 
-__all__ = ["execute_run", "registry", "events"]
+__all__ = ["execute_run", "notify_evidence_changed", "registry", "events"]

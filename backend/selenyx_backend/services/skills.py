@@ -15,17 +15,17 @@ import re
 from pathlib import Path
 from typing import Any
 
+from selenyx_backend.services.path_safety import safe_slug
 from selenyx_backend.settings import get_settings
 
-_SAFE_NAME_RE = re.compile(r"[^\w.一-鿿-]+", re.UNICODE)
 _FM_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?(.*)\Z", re.DOTALL)
 _MAX_INSTRUCTIONS = 6000
 _MAX_NAME = 60
+_slug = safe_slug
 
 
-def _slug(text: str, fallback: str = "skill") -> str:
-    slug = _SAFE_NAME_RE.sub("-", (text or "").strip()).strip("-.")[:48]
-    return slug or fallback
+def _clean_header_value(value: Any) -> str:
+    return str(value or "").replace("\r", " ").replace("\n", " ").strip()
 
 
 def skills_dir() -> Path:
@@ -35,7 +35,7 @@ def skills_dir() -> Path:
 
 
 def project_skills_dir(project_id: str) -> Path:
-    path = get_settings().data_dir / "projects" / _slug(project_id, "project") / "skills"
+    path = get_settings().data_dir / "projects" / safe_slug(project_id, "project") / "skills"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -66,11 +66,17 @@ def parse_skill(text: str) -> dict[str, Any] | None:
 
 
 def _serialize_md(skill: dict[str, Any]) -> str:
-    tools = ", ".join(skill.get("allowedTools") or [])
+    clean_name = _clean_header_value(skill["name"])
+    clean_desc = _clean_header_value(skill.get("description", ""))
+    tools = ", ".join(
+        cleaned
+        for item in (skill.get("allowedTools") or [])
+        if (cleaned := _clean_header_value(item).replace(",", ""))
+    )
     lines = [
         "---",
-        f"name: {skill['name']}",
-        f"description: {skill.get('description', '')}",
+        f"name: {clean_name}",
+        f"description: {clean_desc}",
         f"allowed_tools: {tools}",
         f"enabled: {'true' if skill.get('enabled', True) else 'false'}",
         "---",
@@ -110,15 +116,22 @@ def list_skills(project_id: str | None = None) -> list[dict[str, Any]]:
 
 def get_skill(name: str, project_id: str | None = None) -> dict[str, Any] | None:
     """按名解析：项目级优先。"""
-    wanted = (name or "").strip().lstrip("/")
+    wanted = _clean_header_value(name).lstrip("/")
+    if not wanted:
+        return None
     if project_id:
-        skill = _load_file(project_skills_dir(project_id) / f"{_slug(wanted)}.md", "project")
-        if skill:
+        skill = _load_file(project_skills_dir(project_id) / f"{safe_slug(wanted, 'skill')}.md", "project")
+        if skill and skill["name"] == wanted:
             return skill
-    path = skills_dir() / f"{_slug(wanted)}.md"
+        for candidate in sorted(project_skills_dir(project_id).glob("*.md")):
+            loaded = _load_file(candidate, "project")
+            if loaded and loaded["name"] == wanted:
+                return loaded
+    path = skills_dir() / f"{safe_slug(wanted, 'skill')}.md"
     if path.exists():
-        return _load_file(path, "user")
-    # 文件名与技能名可能不一致（改名过），兜底全量匹配
+        loaded = _load_file(path, "user")
+        if loaded and loaded["name"] == wanted:
+            return loaded
     for skill in list_skills(project_id):
         if skill["name"] == wanted:
             return skill
@@ -133,30 +146,53 @@ def save_skill(
     enabled: bool = True,
     project_id: str | None = None,
 ) -> dict[str, Any]:
-    name = (name or "").strip()[:_MAX_NAME]
-    if not name:
+    clean_name = _clean_header_value(name)[:_MAX_NAME]
+    if not clean_name:
         return {"error": "name 不能为空"}
     if not (instructions or "").strip():
         return {"error": "instructions 不能为空"}
-    skill = {
-        "name": name,
-        "description": (description or "").strip()[:200],
-        "allowedTools": [t for t in (allowed_tools or []) if t],
+    skill: dict[str, Any] = {
+        "name": clean_name,
+        "description": _clean_header_value(description)[:200],
+        "allowedTools": [
+            cleaned
+            for t in (allowed_tools or [])
+            if (cleaned := _clean_header_value(t).replace(",", ""))
+        ],
         "enabled": enabled,
         "instructions": instructions.strip()[:_MAX_INSTRUCTIONS],
     }
     folder = project_skills_dir(project_id) if project_id else skills_dir()
-    (folder / f"{_slug(name)}.md").write_text(_serialize_md(skill), encoding="utf-8")
+    target = folder / f"{safe_slug(clean_name, 'skill')}.md"
+    target.write_text(_serialize_md(skill), encoding="utf-8")
     skill["scope"] = "project" if project_id else "user"
+    skill["file"] = target.name
     return skill
+
+
+def _resolve_skill_path_in_folder(folder: Path, scope: str, name: str) -> Path | None:
+    wanted = _clean_header_value(name).lstrip("/")
+    if not wanted:
+        return None
+    direct = folder / f"{safe_slug(wanted, 'skill')}.md"
+    if direct.is_file():
+        loaded = _load_file(direct, scope)
+        if loaded is None or loaded["name"] == wanted:
+            return direct
+    for candidate in sorted(folder.glob("*.md")):
+        loaded = _load_file(candidate, scope)
+        if loaded and loaded["name"] == wanted:
+            return candidate
+    return None
 
 
 def delete_skill(name: str, project_id: str | None = None) -> bool:
     folder = project_skills_dir(project_id) if project_id else skills_dir()
-    path = folder / f"{_slug(name)}.md"
-    if not path.exists():
+    scope = "project" if project_id else "user"
+    target = _resolve_skill_path_in_folder(folder, scope, name)
+    if target is None or not target.exists():
         return False
-    path.unlink()
+    target.unlink()
     return True
 
 
@@ -165,7 +201,7 @@ def set_enabled(name: str, enabled: bool, project_id: str | None = None) -> dict
     if not skill:
         return None
     scope_project = project_id if skill.get("scope") == "project" else None
-    return save_skill(
+    saved = save_skill(
         skill["name"],
         skill["instructions"],
         skill.get("description", ""),
@@ -173,6 +209,13 @@ def set_enabled(name: str, enabled: bool, project_id: str | None = None) -> dict
         enabled,
         scope_project,
     )
+    old_file = skill.get("file")
+    if old_file and saved.get("file") and old_file != saved["file"]:
+        folder = project_skills_dir(scope_project) if scope_project else skills_dir()
+        stale = folder / Path(old_file).name
+        if stale.is_file():
+            stale.unlink(missing_ok=True)
+    return saved
 
 
 __all__ = [

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 import xml.etree.ElementTree as ET
 from typing import Any
@@ -12,7 +13,8 @@ import httpx
 from selenyx_backend.services.rate_limit import await_host
 from selenyx_backend.settings import Settings, get_settings
 
-USER_AGENT = "Selenyx/0.01 (local research workbench; mailto:selenyx@research.local)"
+USER_AGENT = "Selenyx/0.4.0 (local research workbench; mailto:selenyx@research.local)"
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
 _ATOM_NS = {"a": "http://www.w3.org/2005/Atom"}
 _YEAR_RE = re.compile(r"(16|17|18|19|20|21)\d{2}")
 
@@ -24,6 +26,25 @@ def _text(value: Any) -> str:
 def _year_from(value: Any) -> str:
     match = _YEAR_RE.search(_text(value))
     return match.group(0) if match else ""
+
+
+def reconstruct_openalex_abstract(inverted_index: Any) -> str:
+    """Reconstruct plain abstract text from OpenAlex ``abstract_inverted_index``."""
+    if not isinstance(inverted_index, dict) or not inverted_index:
+        return ""
+    positioned: dict[int, str] = {}
+    for token, positions in inverted_index.items():
+        if not isinstance(token, str) or not isinstance(positions, list):
+            continue
+        word = token.strip()
+        if not word:
+            continue
+        for pos in positions:
+            if type(pos) is int and 0 <= pos < 20_000:
+                positioned[pos] = word
+    if not positioned:
+        return ""
+    return " ".join(positioned[idx] for idx in sorted(positioned))
 
 
 async def _get_json(client: httpx.AsyncClient, url: str, *, params: dict[str, Any] | None = None) -> tuple[int, Any]:
@@ -68,13 +89,16 @@ async def search_openalex(client: httpx.AsyncClient, query: str, *, per_page: in
         publication = _text((source or {}).get("display_name") if isinstance(source, dict) else "") or _text(
             host.get("display_name") if isinstance(host, dict) else ""
         )
+        abstract = _text(work.get("abstract")) or reconstruct_openalex_abstract(
+            work.get("abstract_inverted_index")
+        )
         results.append(
             {
                 "title": _text(work.get("title")) or _text(work.get("display_name")),
                 "doi": doi,
                 "year": str(work.get("publication_year") or ""),
                 "publication": publication,
-                "abstract": "",  # OpenAlex inverted abstract omitted for honesty/size
+                "abstract": abstract,
                 "url": _text(work.get("id")),
                 "openAccess": bool((work.get("open_access") or {}).get("is_oa")) if isinstance(work.get("open_access"), dict) else False,
                 "source": "openalex",
@@ -149,9 +173,9 @@ async def search_crossref(client: httpx.AsyncClient, query: str, *, rows: int = 
 
 
 async def search_arxiv(client: httpx.AsyncClient, query: str, *, max_results: int = 25) -> tuple[list[dict], dict]:
-    await await_host("http://export.arxiv.org/api/query")
+    await await_host(ARXIV_API_URL)
     resp = await client.get(
-        "http://export.arxiv.org/api/query",
+        ARXIV_API_URL,
         params={"search_query": f"all:{query}", "start": 0, "max_results": max_results},
         headers={"User-Agent": USER_AGENT},
     )
@@ -287,7 +311,6 @@ async def related_by_pmid(client: httpx.AsyncClient, pmid: str, *, retmax: int =
     if not ids:
         meta["count"] = 0
         return [], meta
-    # reuse pubmed summary
     status2, summary = await _get_json(
         client,
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
@@ -360,25 +383,32 @@ async def lookup_doi(client: httpx.AsyncClient, doi: str) -> tuple[dict | None, 
 async def multi_search(query: str, sources: list[str], settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     wanted = [s.lower() for s in sources] or ["openalex", "crossref", "pubmed", "arxiv"]
+    ordered_sources = [
+        s for s in dict.fromkeys(wanted) if s in {"openalex", "crossref", "pubmed", "arxiv"}
+    ]
     results: list[dict] = []
     diagnostics: list[dict] = []
-    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-        if "openalex" in wanted:
-            items, meta = await search_openalex(client, query, settings=settings)
-            results.extend(items)
-            diagnostics.append(meta)
-        if "crossref" in wanted:
-            items, meta = await search_crossref(client, query)
-            results.extend(items)
-            diagnostics.append(meta)
-        if "pubmed" in wanted:
-            items, meta = await search_pubmed(client, query)
-            results.extend(items)
-            diagnostics.append(meta)
-        if "arxiv" in wanted:
-            items, meta = await search_arxiv(client, query)
-            results.extend(items)
-            diagnostics.append(meta)
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, trust_env=False) as client:
+        coros = []
+        for src in ordered_sources:
+            if src == "openalex":
+                coros.append(search_openalex(client, query, settings=settings))
+            elif src == "crossref":
+                coros.append(search_crossref(client, query))
+            elif src == "pubmed":
+                coros.append(search_pubmed(client, query))
+            elif src == "arxiv":
+                coros.append(search_arxiv(client, query))
+        outcomes = await asyncio.gather(*coros, return_exceptions=True)
+        for src, outcome in zip(ordered_sources, outcomes):
+            if isinstance(outcome, BaseException):
+                if isinstance(outcome, asyncio.CancelledError):
+                    raise outcome
+                diagnostics.append({"source": src, "status": None, "error": "network_error"})
+            else:
+                items, meta = outcome
+                results.extend(items)
+                diagnostics.append(meta)
 
     # Dedup by DOI then normalized title
     seen: set[str] = set()
@@ -396,3 +426,6 @@ async def multi_search(query: str, sources: list[str], settings: Settings | None
         "diagnostics": diagnostics,
         "query": query,
     }
+
+
+search_all = multi_search

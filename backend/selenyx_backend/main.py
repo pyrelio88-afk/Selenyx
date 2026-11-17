@@ -1,16 +1,36 @@
 """Selenyx local FastAPI application."""
 
 import asyncio
+import hmac
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from selenyx_backend.database import init_db
-from selenyx_backend.routers import agent, ai, automations, citations, clinical, connectors, evidence, experts, memory, projects, references, search, skills, zotero
+from selenyx_backend.routers import (
+    agent,
+    ai,
+    automations,
+    citations,
+    clinical,
+    connectors,
+    evidence,
+    experts,
+    memory,
+    projects,
+    references,
+    search,
+    skills,
+    zotero,
+)
 from selenyx_backend.services.agent import registry
 from selenyx_backend.services.embeddings import embedding_runtime_summary
-from selenyx_backend.services.scheduler import scheduler_loop
+from selenyx_backend.services.scheduler import (
+    cancel_background_tasks as cancel_scheduler_tasks,
+    scheduler_loop,
+)
 from selenyx_backend.settings import get_settings
 
 
@@ -26,7 +46,9 @@ async def lifespan(_: FastAPI):
         yield
     finally:
         stop.set()
-        await scheduler
+        await asyncio.gather(scheduler, return_exceptions=True)
+        await cancel_scheduler_tasks()
+        await agent.cancel_background_tasks()
 
 
 # CORS is a startup-only transport setting. Secrets and AI configuration are
@@ -35,10 +57,38 @@ async def lifespan(_: FastAPI):
 startup_settings = get_settings()
 app = FastAPI(
     title="Selenyx API",
-    version="0.3.0",
+    version="0.4.0",
     description="Local-first research workspace backend (SQLite + RAG + scholarly connectors).",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def verify_api_token(request: Request, call_next):
+    path = request.url.path
+    if (
+        request.method == "OPTIONS"
+        or (path != "/api" and not path.startswith("/api/"))
+        or path == "/api/health"
+    ):
+        return await call_next(request)
+    expected = get_settings().api_token.strip()
+    if not expected:
+        return await call_next(request)
+    provided = ""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        provided = auth_header[7:].strip()
+    if not provided:
+        provided = request.headers.get("x-selenyx-token", "").strip()
+    if not provided or not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid or missing Selenyx API token."},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await call_next(request)
+
 
 app.add_middleware(
     CORSMiddleware,

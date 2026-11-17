@@ -9,7 +9,7 @@
 import { PIPELINE_STAGES } from '@apptypes/project';
 import type { ResearchProject, Reference, PipelineStageKey } from '@apptypes/index';
 import type { LLMConfig } from '@apptypes/index';
-import { streamChat, type LLMMessage } from '@services/llm';
+import { streamSmartChat, type LLMMessage } from '@services/llm';
 
 /** 每段的角色化系统提示（贴合该段产出物与门控） */
 const STAGE_SYSTEM: Record<PipelineStageKey, string> = {
@@ -78,7 +78,7 @@ export async function runPipelineStage({ config, project, references, stageKey, 
     },
   ];
 
-  const result = await streamChat(config, messages, onDelta, signal);
+  const result = await streamSmartChat(config, messages, onDelta, signal);
   return result;
 }
 

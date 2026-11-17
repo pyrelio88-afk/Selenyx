@@ -1,25 +1,27 @@
 /**
- * 知识库：文献 / 证据卡 / 文档·笔记 / 临床数据。
- * 表格在「工具」；PDF 附件随文献条目打开，避免虚构一个独立文件库。
+ * 知识库：文献 / 证据卡 / 文档·笔记 / 学科资料。
+ * 各子面板按需异步加载，避免首帧同步拉起 PDF/WASM 与全学科词库。
  */
 
+import { lazy, Suspense } from 'react';
 import { useAppStore, type LibraryTab } from '@stores/appStore';
 import { Icon, type IconName } from '@components/ui/Icon';
-import { ReferencesView } from '@components/views/ReferencesView';
-import { NotesView } from '@components/views/NotesView';
-import { ClinicalDataView } from '@components/views/ClinicalDataView';
-import { EvidenceReviewPanel } from '@components/library/EvidenceReview';
 
-const TABS: { key: LibraryTab; label: string; icon: IconName }[] = [
+const ReferencesView = lazy(() => import('@components/views/ReferencesView').then((m) => ({ default: m.ReferencesView })));
+const EvidenceReviewPanel = lazy(() => import('@components/library/EvidenceReview').then((m) => ({ default: m.EvidenceReviewPanel })));
+const NotesView = lazy(() => import('@components/views/NotesView').then((m) => ({ default: m.NotesView })));
+const ClinicalDataView = lazy(() => import('@components/views/ClinicalDataView').then((m) => ({ default: m.ClinicalDataView })));
+
+const TABS: { key: LibraryTab; label: string; icon: IconName; badgeKey?: 'evidence' }[] = [
   { key: 'references', label: '文献', icon: 'references' },
-  { key: 'evidence', label: '证据卡', icon: 'stageEvidence' },
+  { key: 'evidence', label: '证据卡', icon: 'stageEvidence', badgeKey: 'evidence' },
   { key: 'notes', label: '文档·笔记', icon: 'notes' },
-  { key: 'clinical', label: '临床数据', icon: 'clinicalData' },
+  { key: 'clinical', label: '学科资料', icon: 'clinicalData' },
 ];
 
 export function LibraryView() {
-  const { libraryTab, setLibraryTab, setView } = useAppStore();
-  const tab = libraryTab === 'tables' || libraryTab === 'files' ? 'references' : libraryTab;
+  const { libraryTab, setLibraryTab } = useAppStore();
+  const tab: LibraryTab = libraryTab === 'tables' || libraryTab === 'files' ? 'references' : libraryTab;
 
   return (
     <div className="tabbed-view">
@@ -39,18 +41,12 @@ export function LibraryView() {
       </div>
 
       <div className="tabbed-panel" role="tabpanel">
-        {tab === 'references' && <ReferencesView />}
-        {tab === 'notes' && <NotesView />}
-        {tab === 'evidence' && <EvidenceReviewPanel />}
-        {tab === 'clinical' && <ClinicalDataView />}
-        {(libraryTab === 'tables' || libraryTab === 'files') && (
-          <p className="v4-placeholder">
-            {libraryTab === 'tables' ? '表格已移到' : '此旧入口不再提供独立文件库；PDF 附件可在文献详情中打开。'}
-            <button type="button" className="btn" onClick={() => setView(libraryTab === 'tables' ? 'tables' : 'references')}>
-              {libraryTab === 'tables' ? '工具' : '文献'}
-            </button>
-          </p>
-        )}
+        <Suspense fallback={<div className="view-loading-skeleton" role="status">正在加载知识库模块…</div>}>
+          {tab === 'references' && <ReferencesView />}
+          {tab === 'evidence' && <EvidenceReviewPanel />}
+          {tab === 'notes' && <NotesView />}
+          {tab === 'clinical' && <ClinicalDataView />}
+        </Suspense>
       </div>
     </div>
   );

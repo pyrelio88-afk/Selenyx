@@ -6,15 +6,17 @@ import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus'
 import { UserPanel } from '@components/layout/UserPanel';
 import { CHAT_CHANGED_EVENT, listRecentConversations, type RecentConversation } from '@components/assistant/recentConversations';
 
-const NAV_ITEMS: { key: ViewKey; label: string; icon: IconName; hint: string }[] = [
-  { key: 'tasks', label: '研究记录', icon: 'list', hint: '进度、确认与成果' },
-  { key: 'library', label: '文献与证据', icon: 'references', hint: '文献、证据与笔记' },
+const CORE_NAV_ITEMS: { key: ViewKey; label: string; icon: IconName; hint: string }[] = [
+  { key: 'tasks', label: '研究记录', icon: 'list', hint: '执行计划、步骤追踪与染色成稿' },
+  { key: 'projects', label: '研究项目', icon: 'projects', hint: '课题立项、进度与截止日管理' },
+  { key: 'pipeline', label: '科研流水线', icon: 'pipeline', hint: '问题 → 检索 → 精读 → 证据 → 写作八段闭环' },
+  { key: 'library', label: '文献与证据', icon: 'references', hint: '文献库、证据门裁决、笔记与学科资料' },
 ];
 
-const RESEARCH_TOOLS: { key: ViewKey; label: string; icon: IconName; hint: string }[] = [
-  { key: 'more', label: '工具与统计', icon: 'chart', hint: '工具、表格与统计' },
-  { key: 'automations', label: '定时任务', icon: 'calendar', hint: '按时间自动运行研究' },
-  { key: 'extensions', label: '专家与技能', icon: 'connector', hint: '专家、技能与连接器' },
+const WORKBENCH_ITEMS: { key: ViewKey; label: string; icon: IconName; hint: string }[] = [
+  { key: 'more', label: '工具与统计', icon: 'chart', hint: '科研工具箱、数据表与统计检验' },
+  { key: 'automations', label: '定时任务', icon: 'calendar', hint: '周期性追踪与无人值守自动执行' },
+  { key: 'extensions', label: '专家与技能', icon: 'connector', hint: '角色化研究专家、本机技能与学术连接器' },
 ];
 
 const CHAT_BUSY_HINT = '正在生成回复，请等待完成或停止生成后再切换对话';
@@ -32,11 +34,9 @@ export function Sidebar({ mobileOpen, onMobileOpenChange }: SidebarProps) {
   } = useAppStore();
   const backend = useLocalBackendStatus();
   const [recent, setRecent] = useState<RecentConversation[]>([]);
-  const [toolsOpen, setToolsOpen] = useState(() => RESEARCH_TOOLS.some((item) => item.key === currentView));
-  const [chatsOpen, setChatsOpen] = useState(false);
+  const [chatsOpen, setChatsOpen] = useState(true);
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
-  const toolsActive = RESEARCH_TOOLS.some((item) => item.key === currentView);
   const showLabels = !sidebarCollapsed || mobileOpen;
   const recentProjects = projects.filter((project) => project.status !== 'archived')
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4);
@@ -96,7 +96,7 @@ export function Sidebar({ mobileOpen, onMobileOpenChange }: SidebarProps) {
   useEffect(() => {
     const refresh = () => {
       try {
-        setRecent(listRecentConversations(Object.keys(localStorage), localStorage, 8)
+        setRecent(listRecentConversations(Object.keys(localStorage), localStorage, 6)
           .filter((chat) => chat.scope === 'global' || projects.some((project) => project.id === chat.scope)));
       } catch { setRecent([]); }
     };
@@ -128,14 +128,23 @@ export function Sidebar({ mobileOpen, onMobileOpenChange }: SidebarProps) {
       tabIndex={-1}
     >
       <div className="workspace-brand v4-brand">
-        <span className="workspace-brand-mark sidebar-desktop-mark" aria-hidden="true"><Crane size={38} /></span>
+        <span className="workspace-brand-mark sidebar-desktop-mark" aria-hidden="true"><Crane size={36} /></span>
         <button ref={mobileToggleRef} type="button" className="workspace-brand-mark sidebar-mobile-toggle"
           aria-label={mobileOpen ? '收起侧栏' : '展开侧栏'} aria-expanded={mobileOpen} aria-controls="sidebar-main-content"
           onClick={() => onMobileOpenChange(!mobileOpen)} title={mobileOpen ? '收起侧栏' : '展开侧栏'}>
-          <Crane size={38} />
+          <Crane size={36} />
         </button>
-        {showLabels && <div className="v4-brand-copy"><div id="sidebar-dialog-title" className="workspace-brand-name">Selenyx 导航</div><span className="workspace-brand-caption">科研工作台</span></div>}
-        {mobileOpen && <button type="button" className="sidebar-mobile-close" aria-label="收起侧栏" onClick={closeMobileNavigation}><Icon name="chevronLeft" size={16} /></button>}
+        {showLabels && (
+          <div className="v4-brand-copy">
+            <div id="sidebar-dialog-title" className="workspace-brand-name">Selenyx</div>
+            <span className="workspace-brand-caption">科研工作台</span>
+          </div>
+        )}
+        {mobileOpen && (
+          <button type="button" className="sidebar-mobile-close" aria-label="收起侧栏" onClick={closeMobileNavigation}>
+            <Icon name="chevronLeft" size={16} />
+          </button>
+        )}
         <div className="v4-brand-actions">
           <button type="button" className="icon-btn" onClick={toggleSidebar}
             aria-label={sidebarCollapsed ? '展开侧栏' : '折叠侧栏'}
@@ -144,83 +153,92 @@ export function Sidebar({ mobileOpen, onMobileOpenChange }: SidebarProps) {
           </button>
         </div>
       </div>
+
       <div id="sidebar-main-content" className="sidebar-main-content">
-
-      <button type="button" className={`sidebar-new-task${currentView === 'newTask' ? ' is-active' : ''}`} onClick={() => { requestNewTask(); closeMobileNavigation(); }} aria-label="新研究" aria-current={currentView === 'newTask' ? 'page' : undefined} title="新研究（Ctrl+N）">
-        <Icon name="plus" size={18} />
-        {showLabels && <><span>新研究</span><kbd>Ctrl N</kbd></>}
-      </button>
-      <button type="button" className="sidebar-search" onClick={search} aria-label="搜索工作区" title="搜索工作区（快捷键 K / Ctrl+K）">
-        <Icon name="search" size={16} />
-        {showLabels && <><span className="sidebar-search-label">搜索工作区</span><kbd>K</kbd></>}
-      </button>
-
-      <nav className="sidebar-nav" aria-label="主导航">
-        {NAV_ITEMS.map((item) => (
-          <button key={item.key} type="button"
-            className={`nav-item ${currentView === item.key ? 'active' : ''}`}
-            onClick={() => navigate(item.key)} aria-label={item.label}
-            aria-current={currentView === item.key ? 'page' : undefined} title={item.hint}>
-            <span className="icon"><Icon name={item.icon} size={17} /></span>
-            {showLabels && <span className="nav-item-label">{item.label}</span>}
-          </button>
-        ))}
-        <button type="button" className={`nav-item sidebar-compact-project ${currentView === 'projects' ? 'active' : ''}`}
-          onClick={() => navigate('projects')} aria-label="研究项目"
-          aria-current={currentView === 'projects' ? 'page' : undefined} title="研究项目">
-          <span className="icon"><Icon name="projects" size={17} /></span>
+        <button
+          type="button"
+          className={`sidebar-new-task${currentView === 'newTask' ? ' is-active' : ''}`}
+          onClick={() => { requestNewTask(); closeMobileNavigation(); }}
+          aria-label="新研究"
+          aria-current={currentView === 'newTask' ? 'page' : undefined}
+          title="新研究（Ctrl+N）"
+        >
+          <Icon name="plus" size={17} />
+          {showLabels && <><span>新研究</span><kbd>Ctrl N</kbd></>}
         </button>
-        <button type="button" className={`nav-item sidebar-tools-trigger ${toolsActive ? 'active' : ''}`}
-          aria-label="更多工具" aria-expanded={toolsOpen} aria-controls="sidebar-research-tools"
-          onClick={() => setToolsOpen((open) => !open)} title="工具与统计、定时任务、专家与技能">
-          <span className="icon"><Icon name="more" size={17} /></span>
-          {showLabels && <><span className="nav-item-label">更多工具</span><Icon name="chevronDown" size={13} /></>}
+
+        <button type="button" className="sidebar-search" onClick={search} aria-label="搜索工作区" title="搜索工作区（快捷键 K / Ctrl+K）">
+          <Icon name="search" size={16} />
+          {showLabels && <><span className="sidebar-search-label">搜索工作区</span><kbd>K</kbd></>}
         </button>
-        {toolsOpen && <div id="sidebar-research-tools" className="sidebar-tools-list">
-          {RESEARCH_TOOLS.map((item) => (
-            <button key={item.key} type="button" className={`nav-item ${currentView === item.key ? 'active' : ''}`}
+
+        <nav className="sidebar-nav" aria-label="主导航">
+          {showLabels && <div className="sidebar-group-title">研究闭环</div>}
+          {CORE_NAV_ITEMS.map((item) => (
+            <button key={item.key} type="button"
+              className={`nav-item ${currentView === item.key ? 'active' : ''}`}
               onClick={() => navigate(item.key)} aria-label={item.label}
               aria-current={currentView === item.key ? 'page' : undefined} title={item.hint}>
               <span className="icon"><Icon name={item.icon} size={17} /></span>
               {showLabels && <span className="nav-item-label">{item.label}</span>}
             </button>
           ))}
-        </div>}
-      </nav>
 
-      {showLabels && (
-        <div className="sidebar-dynamic">
-          <section className="dynamic-section" aria-label="研究项目">
-            <div className="sidebar-section-heading sidebar-project-heading">
-              <button type="button" className={`sidebar-section-link ${currentView === 'projects' ? 'is-current' : ''}`}
-                onClick={() => navigate('projects')} aria-current={currentView === 'projects' ? 'page' : undefined}>
-                <Icon name="projects" size={16} /> 研究项目
-              </button>
-              <button type="button" onClick={() => { requestCreateProject(); closeMobileNavigation(); }} aria-label="新建项目" title="新建项目"><Icon name="plus" size={14} /></button>
-            </div>
-            {recentProjects.map((project) => (
-              <button key={project.id} type="button" className={`dynamic-item sidebar-project-item ${currentView === 'projects' && currentProjectId === project.id ? 'is-current' : ''}`}
-                onClick={() => { setCurrentProject(project.id); navigate('projects'); }} title={project.name}>
-                <span className="dynamic-item-text">{project.name}</span>
-              </button>
-            ))}
-          </section>
-          {recent.length > 0 && <section className="dynamic-section" aria-label="最近对话">
-            <button type="button" className="sidebar-section-heading sidebar-section-toggle" aria-expanded={chatsOpen}
-              onClick={() => setChatsOpen((open) => !open)}>
-              <span>最近对话</span><Icon name="chevronDown" size={13} />
+          {showLabels && <div className="sidebar-group-title">工作台与扩展</div>}
+          {WORKBENCH_ITEMS.map((item) => (
+            <button key={item.key} type="button"
+              className={`nav-item ${currentView === item.key ? 'active' : ''}`}
+              onClick={() => navigate(item.key)} aria-label={item.label}
+              aria-current={currentView === item.key ? 'page' : undefined} title={item.hint}>
+              <span className="icon"><Icon name={item.icon} size={17} /></span>
+              {showLabels && <span className="nav-item-label">{item.label}</span>}
             </button>
-            {chatsOpen && recent.map((chat) => (
-              <button key={`${chat.scope}:${chat.sessionId}`} type="button" className="dynamic-item"
-                onClick={() => { requestChatOpen(chat.scope, chat.sessionId); closeMobileNavigation(); }} disabled={chatStreamBusy}
-                title={chatStreamBusy ? `${chat.title} · ${CHAT_BUSY_HINT}` : chat.title}
-                aria-label={chatStreamBusy ? `${chat.title}，${CHAT_BUSY_HINT}` : chat.title}>
-                <Icon name="aiChat" size={15} /><span className="dynamic-item-text">{chat.title}</span>
-              </button>
-            ))}
-          </section>}
-        </div>
-      )}
+          ))}
+        </nav>
+
+        {showLabels && (
+          <div className="sidebar-dynamic">
+            <section className="dynamic-section" aria-label="活跃课题">
+              <div className="sidebar-section-heading">
+                <span>活跃课题</span>
+                <button type="button" onClick={() => { requestCreateProject(); closeMobileNavigation(); }} aria-label="新建项目" title="新建项目">
+                  <Icon name="plus" size={14} />
+                </button>
+              </div>
+              {recentProjects.length === 0 ? (
+                <button type="button" className="sidebar-empty-action" onClick={() => { requestCreateProject(); closeMobileNavigation(); }}>
+                  + 创建第一个研究项目
+                </button>
+              ) : (
+                recentProjects.map((project) => (
+                  <button key={project.id} type="button"
+                    className={`dynamic-item sidebar-project-item ${currentProjectId === project.id ? 'is-current' : ''}`}
+                    onClick={() => { setCurrentProject(project.id); navigate('projects'); }} title={project.name}>
+                    <span className="sidebar-project-dot" aria-hidden="true" />
+                    <span className="dynamic-item-text">{project.name}</span>
+                  </button>
+                ))
+              )}
+            </section>
+
+            {recent.length > 0 && (
+              <section className="dynamic-section" aria-label="最近对话">
+                <button type="button" className="sidebar-section-heading sidebar-section-toggle" aria-expanded={chatsOpen}
+                  onClick={() => setChatsOpen((open) => !open)}>
+                  <span>最近对话</span><Icon name="chevronDown" size={13} />
+                </button>
+                {chatsOpen && recent.map((chat) => (
+                  <button key={`${chat.scope}:${chat.sessionId}`} type="button" className="dynamic-item"
+                    onClick={() => { requestChatOpen(chat.scope, chat.sessionId); closeMobileNavigation(); }} disabled={chatStreamBusy}
+                    title={chatStreamBusy ? `${chat.title} · ${CHAT_BUSY_HINT}` : chat.title}
+                    aria-label={chatStreamBusy ? `${chat.title}，${CHAT_BUSY_HINT}` : chat.title}>
+                    <Icon name="aiChat" size={14} /><span className="dynamic-item-text">{chat.title}</span>
+                  </button>
+                ))}
+              </section>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="workspace-sidebar-footer v4-footer">

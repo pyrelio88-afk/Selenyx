@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@stores/appStore';
 import { readEnvironmentLLM } from '@services/envLLM';
-import { bootstrapReferenceRepository } from '@services/referenceRepository';
-import { bootstrapWorkspaceRepository } from '@services/workspaceRepository';
-import { isDesktopTauri, setPetVisible } from '@services/nativeRuntime';
+import { bootstrapReferenceRepository, reconcileReferences } from '@services/referenceRepository';
+import { bootstrapWorkspaceRepository, reconcileWorkspace } from '@services/workspaceRepository';
+import { isDesktopTauri, setNativeWindowTheme, setPetVisible } from '@services/nativeRuntime';
+import { useLocalBackendStatus } from '@components/layout/useLocalBackendStatus';
 
 /** Owns application-wide startup effects; feature views remain focused on their workflows. */
 export function useAppLifecycle(): { desktopPetActive: boolean } {
-  const currentView = useAppStore((state) => state.currentView);
   const theme = useAppStore((state) => state.theme);
   const mode = useAppStore((state) => state.mode);
   const density = useAppStore((state) => state.density);
@@ -18,12 +18,15 @@ export function useAppLifecycle(): { desktopPetActive: boolean } {
   const setReferenceSync = useAppStore((state) => state.setReferenceSync);
   const replaceWorkspace = useAppStore((state) => state.replaceWorkspace);
   const setWorkspaceSync = useAppStore((state) => state.setWorkspaceSync);
+  const backend = useLocalBackendStatus();
   const [petWindowFailed, setPetWindowFailed] = useState(false);
+  const prevBackendOnlineRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.dataset.mode = mode;
     document.documentElement.dataset.density = density;
+    setNativeWindowTheme(mode);
   }, [theme, mode, density]);
 
   useEffect(() => {
@@ -32,32 +35,45 @@ export function useAppLifecycle(): { desktopPetActive: boolean } {
   }, [fontScale]);
 
   useEffect(() => {
-    // Environment credentials replace persisted UI config but never enter storage.
-    setLLMConfig(readEnvironmentLLM().config);
+    // Only override persisted UI LLM configuration when explicit VITE_LLM_* env vars exist.
+    const env = readEnvironmentLLM();
+    if (env.config) setLLMConfig(env.config);
   }, [setLLMConfig]);
 
-  useEffect(() => {
+  const syncRepositories = useCallback((force = false) => {
     setReferenceSync('syncing', '正在连接本机 SQLite 与 RAG 索引…');
-    void bootstrapReferenceRepository(useAppStore.getState().references).then((result) => {
-      replaceReferences(result.references);
+    void bootstrapReferenceRepository(useAppStore.getState().references, { force }).then((result) => {
+      const latestRefs = useAppStore.getState().references;
+      const mergedRefs = result.status === 'synced'
+        ? reconcileReferences(latestRefs, result.references)
+        : latestRefs;
+      replaceReferences(mergedRefs);
       setReferenceSync(result.status, result.message);
     });
-  }, [replaceReferences, setReferenceSync]);
 
-  useEffect(() => {
     setWorkspaceSync('syncing', '正在同步本机项目与任务…');
-    const state = useAppStore.getState();
-    void bootstrapWorkspaceRepository(state.projects, state.tasks).then((result) => {
-      replaceWorkspace(result.projects, result.tasks);
+    const snapshot = useAppStore.getState();
+    void bootstrapWorkspaceRepository(snapshot.projects, snapshot.tasks, { force }).then((result) => {
+      const latest = useAppStore.getState();
+      if (result.status === 'synced') {
+        const merged = reconcileWorkspace(latest.projects, latest.tasks, result.projects, result.tasks);
+        replaceWorkspace(merged.projects, merged.tasks);
+      }
       setWorkspaceSync(result.status, result.message);
     });
-  }, [replaceWorkspace, setWorkspaceSync]);
+  }, [replaceReferences, replaceWorkspace, setReferenceSync, setWorkspaceSync]);
 
   useEffect(() => {
-    if (currentView === 'pipeline') {
-      try { sessionStorage.setItem('visited-pipeline', 'true'); } catch { /* Storage is optional. */ }
+    syncRepositories(false);
+  }, [syncRepositories]);
+
+  useEffect(() => {
+    const isOnline = backend.tone === 'online';
+    if (prevBackendOnlineRef.current === false && isOnline) {
+      syncRepositories(true);
     }
-  }, [currentView]);
+    prevBackendOnlineRef.current = isOnline;
+  }, [backend.tone, syncRepositories]);
 
   useEffect(() => {
     if (!isDesktopTauri()) return;

@@ -12,25 +12,20 @@ run 启动注入摘要（digest），运行中 agent 可用 read_memory / write_
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from pathlib import Path
 
+from selenyx_backend.services.path_safety import safe_slug
 from selenyx_backend.settings import get_settings
 
-_SAFE_NAME_RE = re.compile(r"[^\w.一-鿿-]+", re.UNICODE)
 _DIGEST_CHARS = 800  # 每层注入 prompt 的上限
 _FULL_CHARS = 4000  # read_memory 工具返回上限
-
-
-def _slug(text: str, fallback: str = "project") -> str:
-    slug = _SAFE_NAME_RE.sub("-", (text or "").strip()).strip("-.")[:48]
-    return slug or fallback
+_slug = safe_slug
 
 
 def memory_file(project_id: str | None = None) -> Path:
     if project_id:
-        path = get_settings().data_dir / "projects" / _slug(project_id) / "memory.md"
+        path = get_settings().data_dir / "projects" / safe_slug(project_id, "project") / "memory.md"
     else:
         path = get_settings().data_dir / "memory" / "MEMORY.md"
     path.parent.mkdir(parents=True, exist_ok=True)

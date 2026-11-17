@@ -30,42 +30,83 @@ class ChunkHit:
     source: str
 
 
-def chunk_text(text: str, *, max_chars: int = 900, overlap: int = 120) -> list[tuple[int, int, str]]:
-    """Return list of (char_start, char_end, chunk_text)."""
-    clean = (text or "").strip()
-    if not clean:
-        return []
-    if len(clean) <= max_chars:
-        return [(0, len(clean), clean)]
+def _trimmed_span(text: str, start: int, end: int) -> tuple[int, int] | None:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return (start, end) if start < end else None
 
-    sentences = [s for s in _SENTENCE_SPLIT.split(clean) if s.strip()]
-    if not sentences:
-        sentences = [clean[i : i + max_chars] for i in range(0, len(clean), max_chars - overlap)]
+
+def _split_oversized_span(
+    text: str, start: int, end: int, *, max_chars: int, overlap: int
+) -> list[tuple[int, int]]:
+    step = max(1, max_chars - overlap)
+    spans: list[tuple[int, int]] = []
+    pos = start
+    while pos < end:
+        sub_end = min(end, pos + max_chars)
+        trimmed = _trimmed_span(text, pos, sub_end)
+        if trimmed is not None:
+            spans.append(trimmed)
+        if sub_end >= end:
+            break
+        pos += step
+    return spans
+
+
+def chunk_text(text: str, *, max_chars: int = 900, overlap: int = 120) -> list[tuple[int, int, str]]:
+    """Return list of (char_start, char_end, chunk_text) with exact offsets into ``text``."""
+    if not text:
+        return []
+    max_chars = max(1, max_chars)
+    overlap = max(0, min(overlap, max_chars - 1)) if max_chars > 1 else 0
+    full_span = _trimmed_span(text, 0, len(text))
+    if full_span is None:
+        return []
+    first_start, last_end = full_span
+    if last_end - first_start <= max_chars:
+        return [(first_start, last_end, text[first_start:last_end])]
+
+    raw_spans: list[tuple[int, int]] = []
+    cursor = first_start
+    for match in _SENTENCE_SPLIT.finditer(text, first_start, last_end):
+        trimmed = _trimmed_span(text, cursor, match.start())
+        if trimmed is not None:
+            raw_spans.append(trimmed)
+        cursor = match.end()
+    tail_trimmed = _trimmed_span(text, cursor, last_end)
+    if tail_trimmed is not None:
+        raw_spans.append(tail_trimmed)
+
+    spans: list[tuple[int, int]] = []
+    for s_start, s_end in raw_spans:
+        if s_end - s_start > max_chars:
+            spans.extend(_split_oversized_span(text, s_start, s_end, max_chars=max_chars, overlap=overlap))
+        else:
+            spans.append((s_start, s_end))
 
     chunks: list[tuple[int, int, str]] = []
-    buf = ""
-    buf_start = 0
-    cursor = 0
-    for sentence in sentences:
-        # locate sentence in original if possible
-        idx = clean.find(sentence, cursor)
-        if idx < 0:
-            idx = cursor
-        if buf and len(buf) + 1 + len(sentence) > max_chars:
-            chunks.append((buf_start, buf_start + len(buf), buf))
-            # overlap tail
-            tail = buf[-overlap:] if overlap and len(buf) > overlap else ""
-            buf = (tail + " " + sentence).strip() if tail else sentence
-            buf_start = max(0, buf_start + len(chunks[-1][2]) - len(tail))
-            if not tail:
-                buf_start = idx
-        else:
-            if not buf:
-                buf_start = idx
-            buf = f"{buf} {sentence}".strip() if buf else sentence
-        cursor = idx + len(sentence)
-    if buf:
-        chunks.append((buf_start, buf_start + len(buf), buf))
+    window: list[tuple[int, int]] = []
+    for span in spans:
+        s_start, s_end = span
+        if window and s_end - window[0][0] > max_chars:
+            c_start, c_end = window[0][0], window[-1][1]
+            chunks.append((c_start, c_end, text[c_start:c_end]))
+            if overlap > 0:
+                kept: list[tuple[int, int]] = []
+                for prev in reversed(window):
+                    if c_end - prev[0] <= overlap and s_end - prev[0] <= max_chars:
+                        kept.append(prev)
+                    else:
+                        break
+                window = list(reversed(kept))
+            else:
+                window = []
+        window.append(span)
+    if window:
+        c_start, c_end = window[0][0], window[-1][1]
+        chunks.append((c_start, c_end, text[c_start:c_end]))
     return chunks
 
 
@@ -233,9 +274,19 @@ async def semantic_search(
             scored.append((score, chunk))
 
     scored.sort(key=lambda item: item[0], reverse=True)
+    top_scored = scored[: max(1, min(top_k, 50))]
+    ref_ids = {chunk.reference_id for _, chunk in top_scored if chunk.reference_id}
+    refs_by_id = (
+        {
+            ref.id: ref
+            for ref in session.exec(select(Reference).where(col(Reference.id).in_(ref_ids))).all()
+        }
+        if ref_ids
+        else {}
+    )
     hits: list[ChunkHit] = []
-    for score, chunk in scored[: max(1, min(top_k, 50))]:
-        ref = session.get(Reference, chunk.reference_id)
+    for score, chunk in top_scored:
+        ref = refs_by_id.get(chunk.reference_id)
         hits.append(
             ChunkHit(
                 chunk_id=chunk.id,

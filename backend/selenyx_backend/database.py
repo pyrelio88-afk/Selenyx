@@ -1,20 +1,41 @@
 """SQLite persistence for the local backend."""
 
 from collections.abc import Generator
-from functools import lru_cache
+from typing import NamedTuple
 
 from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel, Session, create_engine
 
 from selenyx_backend.settings import get_settings
 
 
-@lru_cache
-def get_engine():
+class _EngineCacheInfo(NamedTuple):
+    hits: int
+    misses: int
+    maxsize: int | None
+    currsize: int
+
+
+_engines: dict[str, Engine] = {}
+_cache_hits = 0
+_cache_misses = 0
+
+
+def get_engine() -> Engine:
+    global _cache_hits, _cache_misses
     settings = get_settings()
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    resolved_db = settings.database_path.resolve()
+    key = str(resolved_db)
+    engine = _engines.get(key)
+    if engine is not None:
+        _cache_hits += 1
+        return engine
+
+    _cache_misses += 1
+    resolved_db.parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(
-        f"sqlite:///{settings.database_path.as_posix()}",
+        f"sqlite:///{resolved_db.as_posix()}",
         connect_args={"check_same_thread": False},
     )
 
@@ -22,10 +43,33 @@ def get_engine():
     def _enable_sqlite_guards(dbapi_connection, _connection_record) -> None:  # noqa: ANN001
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 
+    _engines[key] = engine
     return engine
+
+
+def _clear_engines() -> None:
+    global _cache_hits, _cache_misses
+    for engine in list(_engines.values()):
+        try:
+            engine.dispose()
+        except Exception:
+            pass
+    _engines.clear()
+    _cache_hits = 0
+    _cache_misses = 0
+
+
+def _engine_cache_info() -> _EngineCacheInfo:
+    return _EngineCacheInfo(_cache_hits, _cache_misses, None, len(_engines))
+
+
+get_engine.cache_clear = _clear_engines  # type: ignore[attr-defined]
+get_engine.cache_info = _engine_cache_info  # type: ignore[attr-defined]
 
 
 def init_db() -> None:

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -50,16 +52,28 @@ def update_skill(name: str, body: SkillBody):
     existing = skills_svc.get_skill(name, body.project_id)
     if not existing:
         raise HTTPException(404, "技能不存在。")
+    scope_project = body.project_id if existing.get("scope") == "project" else None
     skill = skills_svc.save_skill(
         body.name,
         body.instructions,
         body.description,
         body.allowed_tools,
         body.enabled,
-        body.project_id if existing.get("scope") == "project" else None,
+        scope_project,
     )
     if skill.get("error"):
         raise HTTPException(422, skill["error"])
+    old_file = existing.get("file")
+    new_file = skill.get("file")
+    if old_file and new_file and old_file != new_file:
+        folder = (
+            skills_svc.project_skills_dir(scope_project)
+            if scope_project
+            else skills_svc.skills_dir()
+        )
+        stale_path = folder / Path(old_file).name
+        if stale_path.is_file():
+            stale_path.unlink(missing_ok=True)
     return skill
 
 

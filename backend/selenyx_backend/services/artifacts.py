@@ -9,21 +9,16 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from selenyx_backend.services.path_safety import safe_markdown_filename, safe_slug
 from selenyx_backend.settings import get_settings
 
-_SAFE_NAME_RE = re.compile(r"[^\w.一-鿿-]+", re.UNICODE)
 _MAX_LIST = 20
 _CONTENT_LIMIT = 4000
-
-
-def _slug(text: str, fallback: str = "untitled") -> str:
-    slug = _SAFE_NAME_RE.sub("-", (text or "").strip()).strip("-.")[:48]
-    return slug or fallback
+_slug = safe_slug
 
 
 def notes_dir() -> Path:
@@ -33,19 +28,19 @@ def notes_dir() -> Path:
 
 
 def run_artifacts_dir(run_id: str) -> Path:
-    path = get_settings().data_dir / "artifacts" / "runs" / _slug(run_id, "run")
+    path = get_settings().data_dir / "artifacts" / "runs" / safe_slug(run_id, "run")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def write_note(title: str, content: str) -> dict[str, Any]:
     """写一篇 agent 笔记，返回文件名与预览。同名同日追加序号防覆盖。"""
-    title = (title or "").strip()[:80] or "未命名笔记"
+    title = (title or "").strip().replace("\r", " ").replace("\n", " ")[:80] or "未命名笔记"
     content = (content or "").strip()
     if not content:
         return {"error": "content 不能为空"}
     stamp = datetime.now().strftime("%Y%m%d")
-    base = f"{stamp}-{_slug(title)}"
+    base = f"{stamp}-{safe_slug(title)}"
     name = f"{base}.md"
     seq = 2
     while (notes_dir() / name).exists():
@@ -78,9 +73,7 @@ def list_notes() -> dict[str, Any]:
 
 
 def read_note(name: str) -> dict[str, Any]:
-    safe = Path(_slug(name)).name  # 防 ../ 遍历
-    if not safe.endswith(".md"):
-        safe += ".md"
+    safe = safe_markdown_filename(name, "untitled", max_len=80)
     path = notes_dir() / safe
     if not path.exists():
         return {"error": f"笔记不存在：{safe}（先用 list_notes 取真实名字）"}
@@ -93,7 +86,7 @@ def write_artifact(run_id: str, name: str, content: str) -> dict[str, Any]:
     content = (content or "").strip()
     if not content:
         return {"error": "content 不能为空"}
-    safe = _slug(name or "draft.md", "draft.md")
+    safe = safe_slug(name or "draft.md", "draft.md", max_len=80)
     if "." not in safe:
         safe += ".md"
     path = run_artifacts_dir(run_id) / safe

@@ -1,8 +1,8 @@
 {
   "name": "selenyx",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
-  "description": "Selenyx 科研工作台 — 本地优先、BYOK、八段科研流水线（TypeScript + Python + Tauri 多语言架构）",
+  "description": "Selenyx 科研工作台 — 本地优先、证据门闭环、八段科研流水线（TypeScript + Python + Tauri 2）",
   "license": "MIT",
   "packageManager": "npm@10.9.0",
   "workspaces": [
@@ -13,6 +13,7 @@
     "build": "npm --workspace @selenyx/frontend run build",
     "typecheck": "npm --workspace @selenyx/frontend run typecheck",
     "test": "npm --workspace @selenyx/frontend run test",
+    "lint": "npm --workspace @selenyx/frontend run lint",
     "offline:check": "node scripts/check-offline-assets.mjs --dist",
     "offline:smoke": "node scripts/smoke-offline-ocr.mjs",
     "verify:local": "node scripts/verify-local.mjs",
@@ -23,8 +24,7 @@
     "desktop:dev": "node scripts/dev-desktop.mjs",
     "desktop:doctor": "node scripts/check-desktop-prereqs.mjs",
     "desktop:build": "node scripts/build-desktop.mjs",
-    "desktop:build:offline-pack": "node scripts/build-desktop.mjs --offline-pack",
-    "lint": "npm --workspace @selenyx/frontend run lint"
+    "desktop:build:offline-pack": "node scripts/build-desktop.mjs --offline-pack"
   },
   "engines": {
     "node": ">=20.0.0"

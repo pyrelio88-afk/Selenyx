@@ -7,6 +7,7 @@ while the complete frontend object survives schema evolution losslessly.
 """
 
 import json
+import shutil
 from datetime import datetime
 from typing import Any
 
@@ -16,7 +17,7 @@ from sqlmodel import Session, select
 from selenyx_backend.database import get_session
 from selenyx_backend.models import (
     AgentRun,
-    ChatHistory,
+    AutomationTask,
     ContradictionCase,
     EvidenceItem,
     KanbanTask,
@@ -24,6 +25,9 @@ from selenyx_backend.models import (
     ResearchProject,
     StageArtifact,
 )
+from selenyx_backend.services.agent import registry
+from selenyx_backend.services.path_safety import safe_slug
+from selenyx_backend.settings import get_settings
 
 router = APIRouter()
 PIPELINE_ORDER = ["problem", "literature", "fulltext", "screening", "reading", "evidence", "synthesis", "writing"]
@@ -260,12 +264,12 @@ def update_project(project_id: str, patch: dict, session: Session = Depends(get_
 
 @router.delete("/{project_id}")
 def delete_project(project_id: str, session: Session = Depends(get_session)):
-    """Hard-delete a project and every project-scoped local child row.
+    """Hard-delete a project, every project-scoped child row, and disk artifacts.
 
     Source records and provenance anchors deliberately remain: they may be
     cited by another project. Evidence, claims, contradictions, stage
-    artifacts, chat history and agent runs are scoped to one project and must
-    never outlive it.
+    artifacts, automations, agent runs, and project/run disk directories are
+    scoped to one project and must never outlive it.
     """
     project = session.get(ResearchProject, project_id)
     if not project:
@@ -276,19 +280,38 @@ def delete_project(project_id: str, session: Session = Depends(get_session)):
     contradictions = session.exec(select(ContradictionCase).where(ContradictionCase.project_id == project_id)).all()
     claims = session.exec(select(ResearchClaim).where(ResearchClaim.project_id == project_id)).all()
     artifacts = session.exec(select(StageArtifact).where(StageArtifact.project_id == project_id)).all()
-    chats = session.exec(select(ChatHistory).where(ChatHistory.project_id == project_id)).all()
+    automations = session.exec(select(AutomationTask).where(AutomationTask.project_id == project_id)).all()
     runs = session.exec(select(AgentRun).where(AgentRun.project_id == project_id)).all()
+
+    run_ids = [run.id for run in runs]
+    auto_ids = [auto.id for auto in automations]
 
     try:
         # Clear dependent records first so no claim or contradiction can retain
         # an evidence id that was just deleted.
-        for row in [*contradictions, *claims, *artifacts, *chats, *runs, *evidence_items, *tasks]:
+        for row in [*contradictions, *claims, *artifacts, *automations, *runs, *evidence_items, *tasks]:
             session.delete(row)
         session.delete(project)
         session.commit()
     except Exception:
         session.rollback()
         raise
+
+    for rid in run_ids:
+        registry.cancel_run(rid)
+    for aid in auto_ids:
+        registry.release_task(aid)
+
+    data_dir = get_settings().data_dir
+    project_dir = data_dir / "projects" / safe_slug(project_id, "project")
+    if project_dir.exists():
+        shutil.rmtree(project_dir, ignore_errors=True)
+    runs_root = data_dir / "artifacts" / "runs"
+    for rid in run_ids:
+        run_dir = runs_root / safe_slug(rid, "run")
+        if run_dir.exists():
+            shutil.rmtree(run_dir, ignore_errors=True)
+
     return {
         "deleted": project_id,
         "deletedTasks": len(tasks),
@@ -296,7 +319,7 @@ def delete_project(project_id: str, session: Session = Depends(get_session)):
         "deletedClaims": len(claims),
         "deletedContradictions": len(contradictions),
         "deletedArtifacts": len(artifacts),
-        "deletedChats": len(chats),
+        "deletedAutomations": len(automations),
         "deletedRuns": len(runs),
     }
 

@@ -10,6 +10,8 @@
  */
 
 import type { LLMConfig } from '@apptypes/index';
+import { streamLocalAI } from './api';
+import { isDesktopTauri } from './nativeRuntime';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -269,6 +271,54 @@ export async function streamChat(
     return { content: full, tokensUsed: used, estimated: true };
   }
   return finish();
+}
+
+/**
+ * 统一流式路由：
+ * 1) 若当前无前端明文 apiKey（如桌面端或后端网关已配置密钥），优先通过本机后端 /api/ai/chat/stream 代理；
+ * 2) 若前端内存持有显式 apiKey，则直连对应提供商（遇到跨域错误时尝试回落本机后端网关）。
+ */
+export async function streamSmartChat(
+  config: LLMConfig | null,
+  messages: LLMMessage[],
+  onDelta: (accumulated: string) => void,
+  signal?: AbortSignal,
+): Promise<LLMResult> {
+  const hasExplicitKey = Boolean(config?.apiKey?.trim());
+  const preferGateway = !config || (!hasExplicitKey && (isDesktopTauri() || config.provider !== 'ollama'));
+
+  if (preferGateway) {
+    try {
+      const content = await streamLocalAI(messages, onDelta, signal);
+      const tokensUsed = estimateTokens(messages.map((m) => m.content).join('') + content);
+      return { content, tokensUsed, estimated: true };
+    } catch (gatewayErr) {
+      if (gatewayErr instanceof DOMException && gatewayErr.name === 'AbortError') throw gatewayErr;
+      if (config) {
+        return streamChat(config, messages, onDelta, signal);
+      }
+      throw new LLMError(
+        gatewayErr instanceof Error ? gatewayErr.message : '未配置模型密钥，请前往「设置 → 模型」完成配置。',
+        'auth',
+      );
+    }
+  }
+
+  try {
+    return await streamChat(config, messages, onDelta, signal);
+  } catch (directErr) {
+    if (directErr instanceof DOMException && directErr.name === 'AbortError') throw directErr;
+    if (directErr instanceof LLMError && directErr.kind === 'cors') {
+      try {
+        const content = await streamLocalAI(messages, onDelta, signal);
+        const tokensUsed = estimateTokens(messages.map((m) => m.content).join('') + content);
+        return { content, tokensUsed, estimated: true };
+      } catch {
+        throw directErr;
+      }
+    }
+    throw directErr;
+  }
 }
 
 // ============================================================

@@ -12,7 +12,7 @@ use std::sync::Once;
 use tauri::{Listener, LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const PET_LABEL: &str = "pet";
-const MAIN_LABEL: &str = "main";
+pub const MAIN_LABEL: &str = "main";
 #[cfg(not(mobile))]
 const PET_SIZE: f64 = 164.0;
 /// Approximate main-window composer height.  The pet is only placed once on

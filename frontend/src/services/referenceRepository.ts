@@ -155,7 +155,11 @@ export function removeMirroredReference(referenceId: string): Promise<void> {
 
 let bootstrapPromise: Promise<ReferenceBootstrapResult> | null = null;
 
-export function bootstrapReferenceRepository(local: Reference[]): Promise<ReferenceBootstrapResult> {
+export function bootstrapReferenceRepository(
+  local: Reference[],
+  options?: { force?: boolean },
+): Promise<ReferenceBootstrapResult> {
+  if (options?.force) bootstrapPromise = null;
   if (bootstrapPromise) return bootstrapPromise;
   bootstrapPromise = (async () => {
     try {
@@ -177,6 +181,7 @@ export function bootstrapReferenceRepository(local: Reference[]): Promise<Refere
         message: `SQLite 已同步 ${references.length} 条文献，RAG 元数据索引可用`,
       };
     } catch (error) {
+      bootstrapPromise = null;
       return {
         references: local,
         status: 'offline' as const,

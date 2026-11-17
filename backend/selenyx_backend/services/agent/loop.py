@@ -21,10 +21,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any, TypeVar
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -88,9 +91,30 @@ _WRAP_UP_PROMPT = (
 )
 _WRAP_UP_FALLBACK = "已达到最大步数，本次任务未能成稿；已完成的检索与观察可见于运行时间线。"
 
-# 成稿引用了待裁决证据时暂停，轮询本机 SQLite 等人工接受/驳回后自动续跑。
-EVIDENCE_WAIT_POLL_S = 0.25
+# 成稿引用了待裁决证据时暂停，由事件通知驱动（附 5 秒兜底等待），等人工接受/驳回后自动续跑。
+EVIDENCE_WAIT_POLL_S = 5.0
 EVIDENCE_WAIT_TIMEOUT_S = 15 * 60
+
+_EVIDENCE_WAITERS: set[tuple[asyncio.AbstractEventLoop, asyncio.Event]] = set()
+
+
+def notify_evidence_changed() -> None:
+    """Wake all in-flight evidence adjudication waiters (thread-safe & loop-safe)."""
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+    for loop, event in list(_EVIDENCE_WAITERS):
+        if loop.is_closed():
+            _EVIDENCE_WAITERS.discard((loop, event))
+            continue
+        if loop is current_loop:
+            event.set()
+        else:
+            try:
+                loop.call_soon_threadsafe(event.set)
+            except RuntimeError:
+                _EVIDENCE_WAITERS.discard((loop, event))
 
 Emit = Callable[[dict[str, Any]], None]
 CancelCheck = Callable[[], bool]
@@ -168,6 +192,7 @@ class _RunTimeline:
             status="waiting_confirm",
             checkpoint_json=snapshot.model_dump_json(),
             audit_log_json=json.dumps(self.audit, ensure_ascii=False),
+            tokens_used=tokens_used(),
         )
         self.emit({"type": "step", **entry})
 
@@ -180,6 +205,7 @@ class _RunTimeline:
         messages.append({"role": "user", "content": content})
 
     def finalize(self, status: str, output: str) -> None:
+        used = tokens_used()
         try:
             _persist(
                 self.run_id,
@@ -187,12 +213,20 @@ class _RunTimeline:
                 checkpoint_json="{}",
                 output_text=output,
                 audit_log_json=json.dumps(self.audit, ensure_ascii=False),
+                tokens_used=used,
                 completed_at=datetime.now().isoformat(),
             )
         except Exception:
             # 最终落库失败保底重试一次；再失败则由重启时的 stale 清理收敛
             try:
-                _persist(self.run_id, status=status, checkpoint_json="{}", output_text=output, completed_at=datetime.now().isoformat())
+                _persist(
+                    self.run_id,
+                    status=status,
+                    checkpoint_json="{}",
+                    output_text=output,
+                    tokens_used=used,
+                    completed_at=datetime.now().isoformat(),
+                )
             except Exception:
                 pass
         self.emit({"type": "status", "status": status, "output": output})
@@ -430,30 +464,54 @@ async def _await_evidence_adjudication(
 ) -> None:
     """Pause before the evidence gate while cited cards still await a human decision.
 
-    The loop polls the local database rather than accepting evidence itself:
-    only the user's accept/reject changes the citation verdict. Saved evidence
-    that is unrelated to the draft never blocks finalization.
+    Wakes immediately via :func:`notify_evidence_changed` when evidence is
+    updated or deleted, with a 5-second fallback timeout. Only the user's
+    accept/reject changes the citation verdict; unrelated pending cards never
+    block finalization.
     """
-    pending = _pending_citations(project_id, draft)
+    pending = await asyncio.to_thread(_pending_citations, project_id, draft)
     if not pending:
         return
     # Persist the pause first: clients refresh on the emitted step event.
-    _persist(run_id, status="waiting_evidence")
+    await asyncio.to_thread(_persist, run_id, status="waiting_evidence")
     timeline.record("evidence_wait", ids=pending)
     deadline = time.monotonic() + EVIDENCE_WAIT_TIMEOUT_S
-    while _pending_citations(project_id, draft):
-        if is_cancelled() or (controls is not None and controls.cancelled):
-            raise _RunCancelled()
-        if time.monotonic() >= deadline:
-            raise HTTPException(409, "等待证据人工裁决超时，未写入最终成稿。")
-        if controls is not None:
-            try:
-                await asyncio.wait_for(controls.cancel_event.wait(), timeout=EVIDENCE_WAIT_POLL_S)
-            except asyncio.TimeoutError:
-                pass
-        else:
-            await asyncio.sleep(EVIDENCE_WAIT_POLL_S)
-    _persist(run_id, status="running")
+    loop = asyncio.get_running_loop()
+    changed_event = asyncio.Event()
+    waiter = (loop, changed_event)
+    _EVIDENCE_WAITERS.add(waiter)
+    try:
+        while True:
+            changed_event.clear()
+            if not await asyncio.to_thread(_pending_citations, project_id, draft):
+                break
+            if is_cancelled() or (controls is not None and controls.cancelled):
+                raise _RunCancelled()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise HTTPException(409, "等待证据人工裁决超时，未写入最终成稿。")
+            wait_timeout = min(EVIDENCE_WAIT_POLL_S, remaining)
+            if controls is not None:
+                change_task = asyncio.create_task(changed_event.wait())
+                cancel_task = asyncio.create_task(controls.cancel_event.wait())
+                try:
+                    await asyncio.wait(
+                        {change_task, cancel_task},
+                        timeout=wait_timeout,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                finally:
+                    for waiter_task in (change_task, cancel_task):
+                        waiter_task.cancel()
+                    await asyncio.gather(change_task, cancel_task, return_exceptions=True)
+            else:
+                try:
+                    await asyncio.wait_for(changed_event.wait(), timeout=wait_timeout)
+                except asyncio.TimeoutError:
+                    pass
+    finally:
+        _EVIDENCE_WAITERS.discard(waiter)
+    await asyncio.to_thread(_persist, run_id, status="running")
     timeline.record("evidence_resume", ids=pending)
 
 
@@ -776,10 +834,11 @@ async def execute_run(
         status = "failed"
         timeline.record("error", message=str(exc.detail))
     except Exception as exc:  # 自循环绝不能把异常漏给 lifespan/调用方
+        logger.exception("Unhandled error in agent run %s", run_id)
         status = "failed"
-        timeline.record("error", message=f"agent 运行异常：{exc}")
+        timeline.record("error", message=f"agent 运行异常（内部错误：{type(exc).__name__}），详情已记录至服务端日志。")
 
     timeline.finalize(status, final_text)
 
 
-__all__ = ["execute_run", "SYSTEM_PROMPT", "MAX_STEPS", "Emit", "CancelCheck"]
+__all__ = ["execute_run", "notify_evidence_changed", "SYSTEM_PROMPT", "MAX_STEPS", "Emit", "CancelCheck"]

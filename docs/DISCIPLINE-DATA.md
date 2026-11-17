@@ -1,32 +1,18 @@
-# 学科数据扩充：开源对照与达标审计
+# 学科资料库：真实性与维护规范
 
-> 2026-08-07。目标（用户账本）：每学科名词 ≥500 · 数值 ≥100 · 公式 ≥100 · 标准 ≥20（约 60% 国内 / 40% 国际）· 标准/红头可展开 `fullText`。
+> 核心原则：**宁缺毋滥，严禁使用脚本笛卡尔积拼接或模板套话充数**。每一条学科术语、参考参数、常用公式与标准规范均须具备明确学术语义与真实出处说明。
 
-## 对照的开源/公开来源（抄结构，不整库搬运）
+## 数据来源与边界
 
-| 来源 | 吸收点 | 不抄 |
+| 类别 | 规范要求 | 禁止事项 |
 |---|---|---|
-| [Yuan1z0825/nature-skills](https://github.com/Yuan1z0825/nature-skills) | 研究方法词表（RCT/系统综述/PRISMA/STROBE…） | skill 超市导航 |
-| Zotero 本地库实践 | 本地优先、规范编码、集合思维 | 直接读 Zotero SQLite |
-| EQUATOR Network（CONSORT/PRISMA/STROBE） | 报告规范条目 + 公开摘要 | 商业全文 |
-| GB/T · WS/T 公开目录 | 国内标准代码/名称/机构 | 付费标准全文 |
-| ISO / APA / ICMJE 公开页 | 国际规范元数据 | 版权全文 |
-| OpenAlex Concepts（结构启发） | 学科概念节点可检索 | 整库镜像 |
+| 学科术语（`glossary`） | 简明准确定义、英文对照、分类与方法论语境说明 | 禁止 `核心概念NN` 或“在某领域以某取向讨论某概念”式机械拼接词条 |
+| 常用参数（`parameters`） | 标注数值区间、单位、适用人群/场景与参考来源 | 禁止无根据编造阈值或 `关键参数NN` |
+| 核心公式（`formulas`） | 给出标准表达式、各变量物理/统计含义与适用前提 | 禁止残缺无变量解释的空壳公式 |
+| 标准与规范（`standards` / `officialDocs`） | 真实标准代号（GB/T、WS/T、ISO、EQUATOR 清单等）及公开要点摘录 | 禁止伪造 `SEL-*` 标准号，不打包受版权保护的付费标准全文 |
 
-## 生成与审计
+## 目录结构
 
-```powershell
-python scripts/generate_discipline_fill.py
-cd frontend
-npx tsx scripts/audit-disciplines.ts
-```
-
-填充文件：`frontend/src/data/expansion/fill_*.ts`  
-合并入口：`frontend/src/data/expansion/index.ts`
-
-## 诚实边界
-
-- `fullText` 为**公开要点摘录**，点击可展开；完整红头/标准请走 `docUrl` 官方入口。
-- 释义策略：常用方法词条给**多源/多视角**中性定义（避免「唯一金标准」式单方措辞）；学科扩充词条给出工作定义，并提示中外/学派外延可能不同，需对照教材与规范。
-- **禁止**运行时占位标题：`核心概念NN` / `关键参数NN` / 伪造 `SEL-*` 标准代号。
-- 达标以 `audit-disciplines.ts` 运行时合并后计数为准，不是单文件行数。
+- 主定义与按需加载入口：`frontend/src/data/disciplines.ts`
+- 分学科精选扩充：`frontend/src/data/expansion/*.ts`
+- 审计脚本：`cd frontend && npx tsx scripts/audit-disciplines.ts`

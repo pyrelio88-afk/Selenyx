@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0] - 2026-11-17
+
+v0.4.0 架构与视觉大版本重塑：彻底铲除合成注水代码与多代样式包袱、实现全视图按需分包加载（首屏 JS 体积下降 >95%）、根治前后端与 Tauri 桌面壳多项 P0/P1 隐患，并全面升级 Qoder 森林抹茶绿科研工作台设计体系。
+
+### 架构与性能优化
+- **解耦单文件打包枷锁**：`vite.config.ts` 默认采用多 chunk 按需分包策略（独立拆分 `vendor-react`、`vendor-echarts`、`vendor-pdf`、`vendor-markdown`、`data-disciplines`），`viewRegistry` 及知识库/工具箱/扩展子面板全面落地 `React.lazy` + `Suspense`，首屏核心脚本由 `~9.8 MB` 降至 `~426 KB`（gzip `~138 KB`）。
+- **清除合成注水与死代码**：彻底移除 `4.65 MB` 笛卡尔积机械拼接词库（`fill_*.ts`）及生成脚本、移除 8 个不可达前端死模块、废弃子锁文件 `frontend/package-lock.json`、误入库的调试截图及移动端冗余图标，代码库净减重逾 `8 MB`。
+- **巨石模块拆解**：前端拆解千行级 `StatToolsView`（拆分为 `views/stat-tools/*`）、`ToolsView`（`views/tools/*`）、`ClinicalDataView`（按需异步装载学科库 + `views/disciplines/*`）并抽离按需 `pdf-reader.css`；后端将千行级 `services/connectors.py` 拆分为 `academic_probe`、`mcp_security`、`mcp_client` 与门面层。
+
+### UI 与交互体验升级
+- **Qoder 森林抹茶绿设计体系**：精调浅色顶栏与侧栏层级、抹茶绿强调色（`#386b52` / `#e8f2ec`）、原生范围滑块样式与高对比度夜间模式；保留原云纹仙鹤品牌标识，修正侧栏品牌标题与一级科研导航分组（新增直达「科研流水线」入口）。
+- **新研究主页重塑**：优化首屏纵向比例，外显快捷研究流程胶囊（标准研究 / 综述流水线 / 证据审计 / 研究设计），新增四类结构化科研场景模板与本机工作区实时概览卡，并打通一键进入「多轮对话」模式。
+- **修复样式冲突**：废弃 `workbench-v001.css` 并清理 `global.css` 百余处历史死类，修复项目页「待裁决」角标绝对定位越界遮挡顶栏、检索框辅助标签外露折行等视觉缺陷。
+
+### 前后端与桌面端核心缺陷修复
+- **修复 Token 预算硬闸失效（P0）**：`budget.py` 改为单 `ContextVar` 共享可变状态容器，解决 `asyncio.ensure_future` 子任务浅拷贝导致多步运行无法累计 Token 的问题，并在 `AgentRun` 结束时落库持久化 `tokens_used`。
+- **修复定时调度死循环（P0）**：修复 `scheduler.py` 在 `catch_up=False` 且 `occurrences == 0` 时每 30 秒无限重跑的问题；支持已禁用任务的手动“立即运行”并补齐 SSE 事件广播与运行控制句柄。
+- **修复前端配置丢失与对话切换黑洞（P0）**：修复 `useAppLifecycle` 空环境变量重置清空 `llmConfig` 的缺陷；打通桌面端优先经本机 Sidecar `/api/ai/chat/stream` 流式调用；修复专家与技能“投递到对话”被空消息短路吞没的问题；支持后端离线恢复在线时自动重跑对账合并。
+- **证据域与级联一致性（P1）**：`DELETE /api/evidence/{id}` 同步修复 `ResearchClaim` 与 `ContradictionCase` 引用状态；删除项目级联清理关联定时任务及磁盘目录；证据裁决等待由高频轮询升级为 `asyncio.Event` 事件唤醒；SQLite 启用 `PRAGMA busy_timeout=5000` 并修复 `json_each` 精确标签匹配；`scholarly.py` 升级为四源并发 HTTPS 检索并还原 OpenAlex 倒排摘要；`clinical/stat` 补齐精确逆分布临界值计算。
+- **Tauri 2 桌面壳生命周期加固（P0/P1）**：托管 `SidecarState` 并在应用退出时清理 `selenyx-backend` 完整进程树，主窗口关闭自动销毁仙鹤桌宠副窗，端口健康探测移入后台线程避免首帧阻塞，并补齐桌面安全 CSP 与原生标题栏日夜主题同步。
+
 ## [0.3.0] - 2026-10-24
 
 v0.3.0：科研 Agent 工作台重构 —— 森林抹茶绿主题、证据门工作流闭环、本机 Magpie 模型接入、Windows 桌面安装包。

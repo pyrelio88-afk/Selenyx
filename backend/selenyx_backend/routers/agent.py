@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Coroutine
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +30,23 @@ from selenyx_backend.services.skills import get_skill
 router = APIRouter()
 
 _ACTIVE_STATUSES = ("running", "cancelling", "waiting_confirm", "waiting_evidence")
+_BG_TASKS: set[asyncio.Task[Any]] = set()
+
+
+def _spawn_run_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
+    task = asyncio.create_task(coro)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    return task
+
+
+async def cancel_background_tasks() -> None:
+    tasks = [task for task in _BG_TASKS if not task.done()]
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+    _BG_TASKS.clear()
 
 # SSE 事件名映射（对齐 go-claw 事件类型）：时间线 kind -> wire 事件名
 _SSE_EVENT_NAME = {
@@ -82,6 +100,7 @@ def _serialize(run: AgentRun, *, with_log: bool) -> dict[str, Any]:
         "sourceSessionId": run.source_session_id or None,
         "sourceSessionScope": run.source_session_scope or None,
         "status": run.status,
+        "tokensUsed": run.tokens_used,
         "startedAt": run.started_at,
         "completedAt": run.completed_at,
     }
@@ -159,7 +178,7 @@ async def start_run(body: StartRunBody):
         finally:
             registry.finish_run(run.id)
 
-    asyncio.create_task(runner())
+    _spawn_run_task(runner())
     return {
         "runId": run.id,
         "status": "running",
@@ -171,7 +190,9 @@ async def start_run(body: StartRunBody):
 @router.get("/runs")
 def list_runs():
     with Session(get_engine()) as session:
-        runs = list(session.exec(select(AgentRun).order_by(AgentRun.started_at.desc())).all())[:50]
+        runs = list(
+            session.exec(select(AgentRun).order_by(AgentRun.started_at.desc()).limit(50)).all()
+        )
     return {"runs": [_serialize(run, with_log=False) for run in runs]}
 
 
@@ -282,7 +303,7 @@ async def confirm_run(run_id: str, body: ConfirmBody):
             finally:
                 registry.finish_run(run_id)
 
-        asyncio.create_task(runner())
+        _spawn_run_task(runner())
     return {"runId": run_id, "status": "running"}
 
 

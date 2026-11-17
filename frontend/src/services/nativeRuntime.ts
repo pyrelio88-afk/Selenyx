@@ -58,6 +58,14 @@ export function saveLocalLLMConfig(config: LocalLLMConfigInput): Promise<void> {
   return invoke<void>('save_llm_config', { config });
 }
 
+/** Sync native Windows/macOS titlebar theme with the active Selenyx Light/Dark mode. */
+export function setNativeWindowTheme(mode: 'light' | 'dark'): void {
+  if (!isDesktopTauri()) return;
+  void invoke<void>('plugin:window|set_theme', { label: 'main', value: mode }).catch(() => {
+    // Graceful no-op when window theme switching is unsupported on the host OS.
+  });
+}
+
 /** 切换仙鹤桌宠（桌面端独立透明窗口）；返回切换后的可见状态。 */
 export function setPetVisible(visible: boolean): Promise<boolean> {
   return invoke<boolean>('toggle_pet', { visible });

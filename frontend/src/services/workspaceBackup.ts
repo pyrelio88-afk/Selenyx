@@ -547,7 +547,9 @@ export function clearSelenyxBrowserStorage(storage: StorageLike | null = browser
   const keys: string[] = [];
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
-    if (key && (key === 'selenyx-v2' || key.startsWith('selenyx-') || key.startsWith('selenyx_'))) keys.push(key);
+    if (key && (key === 'selenyx-v2' || key.startsWith('selenyx-') || key.startsWith('selenyx_') || key.startsWith('selenyx.'))) {
+      keys.push(key);
+    }
   }
   for (const key of keys) storage.removeItem(key);
 }

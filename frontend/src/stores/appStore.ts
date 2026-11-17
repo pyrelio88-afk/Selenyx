@@ -75,10 +75,20 @@ export interface PipelineRun {
   passed: boolean; // 是否已标记通过门控
 }
 
+export interface PendingChatDraft {
+  prompt: string;
+  title?: string;
+}
+
 interface AppState {
   // === 导航 ===
   currentView: ViewKey;
   setView: (v: AnyViewKey) => void;
+  chatSurfaceMode: 'home' | 'chat';
+  setChatSurfaceMode: (mode: 'home' | 'chat') => void;
+  pendingChatDraft: PendingChatDraft | null;
+  requestChatDraft: (prompt: string, title?: string) => void;
+  clearPendingChatDraft: () => void;
   taskLaunchNonce: number;
   handledTaskLaunchNonce: number;
   requestNewTask: () => void;
@@ -240,10 +250,20 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       currentView: 'newTask' as ViewKey,
+      chatSurfaceMode: 'home' as 'home' | 'chat',
+      setChatSurfaceMode: (mode) => set({ chatSurfaceMode: mode }),
+      pendingChatDraft: null,
+      requestChatDraft: (prompt, title) => set((state) => state.chatStreamBusy ? state : {
+        currentView: 'newTask',
+        chatSurfaceMode: 'chat',
+        pendingChatDraft: { prompt, title },
+      }),
+      clearPendingChatDraft: () => set({ pendingChatDraft: null }),
       taskLaunchNonce: 0,
       handledTaskLaunchNonce: 0,
       requestNewTask: () => set((s) => ({
         currentView: 'newTask',
+        chatSurfaceMode: 'home',
         taskLaunchNonce: s.taskLaunchNonce + 1,
       })),
       claimTaskLaunch: (nonce) => {
@@ -258,9 +278,13 @@ export const useAppStore = create<AppState>()(
       setView: (v) => {
         // 设置已改为模态弹窗（WorkBuddy 范式），不再是路由视图
         if (v === 'settings') { set({ settingsOpen: true }); return; }
-        // 助理不再是独立一级页：旧深链并进新建任务工作壳
+        // 助理并进新建任务工作壳，显式跳转 aiChat / assistant 进入对话模式
         if (v === 'assistant' || v === 'aiChat') {
-          set({ currentView: 'newTask' });
+          set({ currentView: 'newTask', chatSurfaceMode: 'chat' });
+          return;
+        }
+        if (v === 'newTask') {
+          set({ currentView: 'newTask', chatSurfaceMode: 'home' });
           return;
         }
         const legacy = LEGACY_VIEW_TARGET[v as string];
@@ -329,6 +353,7 @@ export const useAppStore = create<AppState>()(
       requestChatOpen: (scope, sessionId) => set((state) => state.chatStreamBusy ? state : {
         pendingChatOpen: { scope, sessionId },
         currentView: 'newTask',
+        chatSurfaceMode: 'chat',
         currentProjectId: scope === 'global' ? null : scope,
       }),
       clearPendingChatOpen: () => set({ pendingChatOpen: null }),
@@ -444,6 +469,11 @@ export const useAppStore = create<AppState>()(
         const currentProjectId = s.currentProjectId === id
           ? (selectPrimaryProject(projects)?.id ?? null)
           : s.currentProjectId;
+        try {
+          localStorage.removeItem(`selenyx_chat_sessions_${id}`);
+          localStorage.removeItem(`selenyx_chat_active_${id}`);
+          if (typeof window !== 'undefined') window.dispatchEvent(new Event('selenyx-chat-changed'));
+        } catch { /* Storage cleanup is best-effort. */ }
         void removeMirroredProject(id).then(() => {
           void mirrorWorkspace(projects, tasks, (status, message) => set({ workspaceSyncStatus: status, workspaceSyncMessage: message }));
         });
@@ -581,6 +611,8 @@ export const useAppStore = create<AppState>()(
         ...state,
         settingsOpen: false,
         focusRunId: null,
+        chatSurfaceMode: 'home' as const,
+        pendingChatDraft: null,
         taskLaunchNonce: 0,
         handledTaskLaunchNonce: 0,
         pendingPdfOpen: null,

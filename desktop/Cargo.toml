@@ -1,6 +1,6 @@
 [package]
 name = "selenyx-desktop"
-version = "0.3.0"
+version = "0.4.0"
 description = "Selenyx 科研工作台桌面端 Tauri v2"
 edition = "2021"
 rust-version = "1.77"
@@ -17,11 +17,9 @@ tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
-tauri-plugin-http = "2"
 tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["time"] }
 
 [features]
 default = ["desktop"]

@@ -23,6 +23,7 @@ _locks: dict[str, asyncio.Lock] = {}
 def reset_rate_limits() -> None:
     """Test helper."""
     _last_call.clear()
+    _locks.clear()
 
 
 def _interval_for(host: str) -> float:

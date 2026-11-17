@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     )
 
     data_dir: Path = Field(default_factory=default_data_dir)
+    api_token: str = ""
     cors_origins: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"
         "http://tauri.localhost,https://tauri.localhost,tauri://localhost"

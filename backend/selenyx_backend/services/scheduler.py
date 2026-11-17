@@ -8,6 +8,8 @@ and at most three retry attempts with 1/2/4 minute exponential backoff.
 from __future__ import annotations
 
 import asyncio
+import inspect
+from collections.abc import Coroutine
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -15,7 +17,7 @@ from sqlmodel import Session, select
 
 from selenyx_backend.database import get_engine
 from selenyx_backend.models import AgentRun, AutomationTask
-from selenyx_backend.services.agent import execute_run
+from selenyx_backend.services.agent import events, execute_run
 from selenyx_backend.services.agent.registry import (
     finish_run,
     register_run,
@@ -26,6 +28,23 @@ from selenyx_backend.services.cronparse import cron_matches, parse_cron, prev_fi
 
 _TICK_SECONDS = 30
 _MAX_RETRIES = 3
+_BG_TASKS: set[asyncio.Task[Any]] = set()
+
+
+def spawn_automation_task(coro: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
+    task = asyncio.create_task(coro)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    return task
+
+
+async def cancel_background_tasks() -> None:
+    tasks = [task for task in _BG_TASKS if not task.done()]
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+    _BG_TASKS.clear()
 
 
 def _parse_timestamp(value: str | None) -> datetime | None:
@@ -46,13 +65,15 @@ def _within_tick_window(now: datetime, due: datetime) -> bool:
 
 
 def _interval_due_without_catchup(task: AutomationTask, now: datetime, last: datetime | None) -> bool:
-    """Only fire on an ordinary interval occurrence, never backfill one."""
+    """Only fire on an ordinary interval occurrence, never backfill or loop at t=0."""
     anchor = last or _parse_timestamp(task.created_at)
     if anchor is None or now < anchor:
         return False
     interval = timedelta(minutes=max(5, task.interval_min))
     elapsed = now - anchor
     occurrences = int(elapsed.total_seconds() // interval.total_seconds())
+    if occurrences < 1:
+        return False
     due = anchor + interval * occurrences
     return _within_tick_window(now, due)
 
@@ -106,6 +127,7 @@ def launch_automation_run(
     *,
     touch_last_run: bool = True,
     consume_retry: bool = False,
+    allow_disabled: bool = False,
 ) -> str:
     """Create an automation AgentRun and claim its in-flight guard.
 
@@ -116,7 +138,7 @@ def launch_automation_run(
         return ""
     with Session(get_engine()) as session:
         task = session.get(AutomationTask, task_id)
-        if not task or not task.enabled or not task.prompt.strip():
+        if not task or (not allow_disabled and not task.enabled) or not task.prompt.strip():
             release_task(task_id)
             return ""
         run = AgentRun(
@@ -186,8 +208,16 @@ async def _execute_automation(
     retry_attempt: bool = False,
 ) -> None:
     controls = register_run(run_id)
+    emit = lambda event: events.publish(run_id, event)
+    is_cancelled = lambda: controls.cancelled
     try:
-        await execute_run(run_id, prompt, project_id, lambda event: None, lambda: controls.cancelled)
+        params = inspect.signature(execute_run).parameters
+        if "controls" in params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        ):
+            await execute_run(run_id, prompt, project_id, emit, is_cancelled, controls=controls)
+        else:
+            await execute_run(run_id, prompt, project_id, emit, is_cancelled)
     except Exception:
         _mark_unhandled_run_failure(run_id)
     finally:
@@ -222,7 +252,7 @@ async def tick(now: datetime | None = None) -> list[str]:
         if not run_id:
             continue
         triggered.append(run_id)
-        asyncio.create_task(
+        spawn_automation_task(
             _execute_automation(
                 spec["id"], run_id, spec["prompt"], spec["project_id"], retry_attempt=True,
             )
@@ -232,7 +262,7 @@ async def tick(now: datetime | None = None) -> list[str]:
         if not run_id:
             continue
         triggered.append(run_id)
-        asyncio.create_task(
+        spawn_automation_task(
             _execute_automation(
                 spec["id"], run_id, spec["prompt"], spec["project_id"], retry_attempt=False,
             )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
+from dataclasses import dataclass
 
 
 class TokenBudgetExceeded(Exception):
@@ -12,35 +13,40 @@ class TokenBudgetExceeded(Exception):
         super().__init__(f"token budget exceeded: {used} > {limit}")
 
 
-_started: ContextVar[bool] = ContextVar("selenyx_token_budget_started", default=False)
-_used: ContextVar[int] = ContextVar("selenyx_token_budget_used", default=0)
-_limit: ContextVar[int] = ContextVar("selenyx_token_budget_limit", default=0)
+@dataclass
+class _BudgetState:
+    limit: int
+    used: int = 0
+
+
+_budget_state: ContextVar[_BudgetState | None] = ContextVar(
+    "selenyx_token_budget_state", default=None
+)
 
 
 def start_budget(limit: int) -> None:
-    _started.set(True)
-    _used.set(0)
-    _limit.set(max(0, int(limit or 0)))
+    _budget_state.set(_BudgetState(limit=max(0, int(limit or 0)), used=0))
 
 
 def tokens_used() -> int:
-    return _used.get()
+    state = _budget_state.get()
+    return state.used if state is not None else 0
 
 
 def token_limit() -> int:
-    return _limit.get()
+    state = _budget_state.get()
+    return state.limit if state is not None else 0
 
 
 def record_usage(n: int) -> int:
-    """Accumulate tokens. No-op until start_budget() so isolated tests stay quiet."""
-    if not _started.get():
+    """Accumulate tokens on shared mutable state across child asyncio Tasks."""
+    state = _budget_state.get()
+    if state is None:
         return 0
-    used = _used.get() + max(0, int(n))
-    _used.set(used)
-    limit = _limit.get()
-    if limit and used > limit:
-        raise TokenBudgetExceeded(used, limit)
-    return used
+    state.used += max(0, int(n))
+    if state.limit and state.used > state.limit:
+        raise TokenBudgetExceeded(state.used, state.limit)
+    return state.used
 
 
 def estimate_tokens(messages: list[dict[str, str]], completion: str = "") -> int:

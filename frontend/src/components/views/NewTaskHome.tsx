@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore } from '@stores/appStore';
-import { Icon } from '@components/ui/Icon';
+import { Icon, type IconName } from '@components/ui/Icon';
 import { Crane } from '@components/ui/Crane';
 import { STATUS_COLOR, STATUS_LABEL } from '@components/tasks/StepRow';
 import { agentApi, type AgentRunSummary } from '@services/agent';
@@ -24,10 +24,67 @@ interface AddMenuPosition {
   maxHeight: number;
 }
 
-export function NewTaskHome({ onStarted }: {
+const RESEARCH_TEMPLATES: {
+  key: string;
+  title: string;
+  desc: string;
+  icon: IconName;
+  recipe?: string;
+  prompt: string;
+}[] = [
+  {
+    key: 'systematic-review',
+    title: '系统综述与证据矩阵',
+    desc: '制定检索策略、提取正反证据，经人工裁决后生成综述',
+    icon: 'references',
+    recipe: 'literature_review',
+    prompt: '围绕【填写研究主题与人群/干预/结局】，检索近五年核心文献，提取关键结局证据卡并标注支持或反驳方向，汇总研究缺口与证据矩阵。',
+  },
+  {
+    key: 'evidence-audit',
+    title: '证据冲突与真实性核查',
+    desc: '针对存疑结论逐条追溯本机文献页码锚点，并排对照矛盾发现',
+    icon: 'stageEvidence',
+    recipe: 'evidence_audit',
+    prompt: '核查【填写待验证的核心学术主张】在当前文献库中的正反原文证据，指出样本局限、潜在偏倚及尚缺乏直接证据支撑的环节。',
+  },
+  {
+    key: 'study-design',
+    title: '研究方案与统计规划',
+    desc: '明确操作化变量、纳排标准、偏倚控制措施及样本量估算逻辑',
+    icon: 'statTools',
+    recipe: 'study_design',
+    prompt: '针对研究问题【填写研究问题】，设计可复现的研究方案：明确研究设计类型、纳入排除标准、主要与次要结局指标、混杂控制及统计检验方法。',
+  },
+  {
+    key: 'deep-reading',
+    title: '单篇/多篇文献精读提取',
+    desc: '结构化拆解研究方法、核心效应量与方法学局限并沉淀证据卡',
+    icon: 'stageReading',
+    prompt: '精读当前关联文献（或附加材料），按研究背景、研究设计、样本特征、主要定量/定性发现与方法学局限提取结构化要点。',
+  },
+];
+
+export function NewTaskHome({
+  onStarted,
+  onEnterChat,
+}: {
   onStarted?: (runId: string, projectId: string | null) => void;
+  onEnterChat?: () => void;
 } = {}) {
-  const { projects, currentProjectId, setView, setLibraryTab, customInstructions, replyStyle, settingsOpen, openSettings, requestRunFocus } = useAppStore();
+  const {
+    projects,
+    references,
+    currentProjectId,
+    setView,
+    setLibraryTab,
+    requestCreateProject,
+    customInstructions,
+    replyStyle,
+    settingsOpen,
+    openSettings,
+    requestRunFocus,
+  } = useAppStore();
   const [goal, setGoal] = useState('');
   const [projectId, setProjectId] = useState(currentProjectId ?? '');
   const [review, setReview] = useState(false);
@@ -64,6 +121,10 @@ export function NewTaskHome({ onStarted }: {
   const reviewForced = activeRecipe?.forcesReview ?? false;
   const addConfigured = Boolean(activeRecipe || selectedSkill || review || !confirmPlan);
   const polishTarget = splitPolishInput(goal).target;
+
+  useEffect(() => {
+    setProjectId(currentProjectId ?? '');
+  }, [currentProjectId]);
 
   const loadRecent = useCallback(async () => {
     preflightRef.current?.abort();
@@ -136,14 +197,24 @@ export function NewTaskHome({ onStarted }: {
     const width = Math.min(preferredWidth, Math.max(0, window.innerWidth - gutter * 2));
     const left = Math.min(Math.max(rect.left, gutter), Math.max(gutter, window.innerWidth - width - gutter));
     const topbarBottom = document.querySelector('.workspace-topbar')?.getBoundingClientRect().bottom ?? 0;
-    const maxHeight = Math.max(0, Math.min(480, rect.top - topbarBottom - gutter - 8));
-    if (!maxHeight) return;
-    setAddPosition({
-      bottom: Math.round(window.innerHeight - rect.top + 8),
-      left: Math.round(left),
-      width,
-      maxHeight,
-    });
+    const spaceAbove = rect.top - topbarBottom - gutter - 8;
+    const spaceBelow = window.innerHeight - rect.bottom - gutter - 8;
+
+    if (spaceAbove >= 220 || spaceAbove >= spaceBelow) {
+      setAddPosition({
+        bottom: Math.round(window.innerHeight - rect.top + 8),
+        left: Math.round(left),
+        width,
+        maxHeight: Math.max(180, Math.min(460, spaceAbove)),
+      });
+    } else {
+      setAddPosition({
+        top: Math.round(rect.bottom + 8),
+        left: Math.round(left),
+        width,
+        maxHeight: Math.max(180, Math.min(460, spaceBelow)),
+      });
+    }
   }, []);
 
   useLayoutEffect(() => {
@@ -204,6 +275,13 @@ export function NewTaskHome({ onStarted }: {
   const chooseRecipe = (key: string | undefined) => {
     setRecipe(key);
     if (key && recipeOption(key)?.forcesReview) setReview(true);
+  };
+
+  const applyTemplate = (tpl: (typeof RESEARCH_TEMPLATES)[number]) => {
+    chooseRecipe(tpl.recipe);
+    setGoal(tpl.prompt);
+    setPrePolishGoal(null);
+    goalRef.current?.focus();
   };
 
   const chooseSkill = (name: string) => {
@@ -370,18 +448,48 @@ export function NewTaskHome({ onStarted }: {
   ), document.body) : null;
 
   return (
-    <div className={`newtask-home${addOpen ? ' has-add-menu' : ''}`}>
+    <div className="newtask-home">
       <header className="newtask-hero">
-        <Crane size={48} className="newtask-crane" />
+        <Crane size={52} className="newtask-crane" />
         <div className="newtask-hero-copy">
-          <h1>{selectedProject ? '继续这项研究' : '开始研究'}</h1>
-          {selectedProject && <p>{selectedProject.name}</p>}
+          <h1>{selectedProject ? `继续研究：${selectedProject.name}` : '开始一项研究'}</h1>
+          <p>规划检索路径、提取可追溯原文片段，经人工证据门落锤后再行成稿。</p>
         </div>
+        {onEnterChat && (
+          <button type="button" className="btn newtask-chat-switch" onClick={onEnterChat} title="切换到自由多轮对话与严格证据问答">
+            <Icon name="aiChat" size={15} /> 多轮对话
+          </button>
+        )}
       </header>
+
+      <div className="newtask-workflow-bar" role="radiogroup" aria-label="快捷研究模式">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!recipe}
+          className={`newtask-workflow-pill ${!recipe ? 'is-active' : ''}`}
+          onClick={() => chooseRecipe(undefined)}
+        >
+          <Icon name="sparkles" size={14} /> 标准研究
+        </button>
+        {TASK_RECIPE_OPTIONS.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            role="radio"
+            aria-checked={recipe === option.key}
+            className={`newtask-workflow-pill ${recipe === option.key ? 'is-active' : ''}`}
+            onClick={() => chooseRecipe(option.key)}
+            title={option.hint}
+          >
+            <Icon name={option.icon} size={14} /> {option.name}
+          </button>
+        ))}
+      </div>
 
       <div className="newtask-composer-stage">
         <Composer value={goal} onChange={updateGoal} onSubmit={() => void submit()} textareaRef={goalRef}
-          ariaLabel="任务目标" placeholder="你想研究什么？输入问题，或附上一份材料…" rows={3} autoResize maxHeight={220}
+          ariaLabel="任务目标" placeholder="描述你的研究问题、待查证假设，或附上一份文献摘录/数据材料…" rows={3} autoResize maxHeight={220}
           className="newtask-composer" inputWrapClassName="newtask-composer-input-wrap"
           inputRowClassName="newtask-composer-input-row" textareaClassName="newtask-composer-textarea"
           controls={(
@@ -390,16 +498,18 @@ export function NewTaskHome({ onStarted }: {
                 <button ref={addTriggerRef} type="button" className="newtask-attach newtask-add-trigger"
                   onClick={toggleAddMenu} aria-haspopup="dialog" aria-expanded={addOpen}
                   aria-controls={addOpen ? 'newtask-add-menu' : undefined}
-                  aria-label="任务设置" title="研究流程、计划确认与科研技能">
-                  <Icon name="plus" size={18} />
+                  aria-label="任务设置" title="执行计划确认、批评审查与本机技能">
+                  <Icon name="plus" size={17} />
                   {addConfigured && <span className="newtask-add-dot" aria-hidden="true" />}
                 </button>
                 <button type="button" className="newtask-attach" onClick={() => attachInputRef.current?.click()}
-                  aria-label="附加文本材料" title="添加文本材料（最多 8000 字，提交时发送给所选模型）"><Icon name="paperclip" size={18} /></button>
+                  aria-label="附加文本材料" title="附加本地文本材料（.txt / .md / .csv / .json，上限 8000 字）">
+                  <Icon name="paperclip" size={17} />
+                </button>
                 <input ref={attachInputRef} type="file" accept=".txt,.md,.markdown,.csv,.tsv,.json,text/plain,text/markdown,text/csv,application/json" hidden
                   onChange={(event) => { const file = event.target.files?.[0]; if (file) attachFile(file); event.target.value = ''; }} />
                 <label className="newtask-project-control" title={selectedProject?.name ?? '为任务关联一个研究项目'}>
-                  <Icon name="projects" size={15} /><span>{selectedProject?.name ?? '选择项目'}</span><Icon name="chevronDown" size={12} />
+                  <Icon name="projects" size={14} /><span>{selectedProject?.name ?? '关联项目'}</span><Icon name="chevronDown" size={12} />
                   <select value={selectedProject?.id ?? ''} onChange={(event) => setProjectId(event.target.value)} aria-label="选择项目">
                     <option value="">不关联项目</option>
                     {activeProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
@@ -408,19 +518,21 @@ export function NewTaskHome({ onStarted }: {
               </div>
               <div className="newtask-composer-actions">
                 <button type="button" className="newtask-model-chip" onClick={() => openSettings('model')}
-                  title={backendModel?.configured ? `研究后端当前模型：${backendModel.model}` : '查看研究后端实际使用的模型配置'}>
-                  <span>{backendModel?.configured ? backendModel.model : '配置模型'}</span><Icon name="chevronDown" size={12} />
+                  title={backendModel?.configured ? `研究后端当前模型：${backendModel.model}` : '配置本机研究模型与 API 密钥'}>
+                  <span className={`newtask-model-dot ${backendModel?.configured ? 'is-ok' : ''}`} aria-hidden="true" />
+                  <span>{backendModel?.configured ? backendModel.model : '配置模型'}</span>
+                  <Icon name="chevronDown" size={12} />
                 </button>
                 <button type="button" className="newtask-polish" onClick={() => void polishGoal()}
                   disabled={!polishTarget || polishing || submitting || backendOffline || checkingBackend}
                   aria-label="优化提示词" aria-busy={polishing}
-                  title={!polishTarget && goal.trim() ? '先写研究目标再优化；技能名与附件原文会原样保留' : '优化提示词（调用一次模型，只改写法不补事实）'}>
-                  <Icon name="polish" size={17} />
+                  title={!polishTarget && goal.trim() ? '先写研究目标再优化；技能名与附件原文会原样保留' : '重写研究目标使其更严谨清晰（不补事实、可撤销）'}>
+                  <Icon name="polish" size={16} />
                 </button>
                 <button type="button" className="newtask-submit" onClick={() => void submit()}
                   disabled={!goal.trim() || submitting || backendOffline || checkingBackend}
                   aria-label={submitting ? '正在创建任务' : '开始研究'} title="开始研究（Enter）">
-                  {submitting ? <Icon name="clock" size={18} /> : <Icon name="arrowRight" size={19} />}
+                  {submitting ? <Icon name="clock" size={17} /> : <Icon name="arrowRight" size={18} />}
                 </button>
               </div>
             </div>
@@ -428,47 +540,102 @@ export function NewTaskHome({ onStarted }: {
         />
         <div className="newtask-composer-meta">
           <div className="newtask-config-chips">
-            {activeRecipe && <span className="newtask-config-chip">
-              <Icon name={activeRecipe.icon} size={13} />{activeRecipe.name}
-              <button type="button" onClick={() => setRecipe(undefined)} aria-label={`移除${activeRecipe.name}`}><Icon name="close" size={10} /></button>
-            </span>}
+            <span className="newtask-config-chip is-muted">
+              <Icon name="target" size={12} />{confirmPlan ? '先审阅计划' : '直接执行'}
+            </span>
             {review && <span className="newtask-config-chip">
-              <Icon name="shield" size={13} />批评审查
-              <button type="button" onClick={() => setReview(false)} aria-label="关闭成稿前批评审查"><Icon name="close" size={10} /></button>
+              <Icon name="shield" size={12} />成稿前批评审查
+              {!reviewForced && <button type="button" onClick={() => setReview(false)} aria-label="关闭成稿前批评审查"><Icon name="close" size={10} /></button>}
             </span>}
             {selectedSkill && <span className="newtask-config-chip">
-              <Icon name="skills" size={13} />/{selectedSkill}
+              <Icon name="skills" size={12} />/{selectedSkill}
               <button type="button" onClick={() => setSelectedSkill(null)} aria-label={`取消技能 ${selectedSkill}`}><Icon name="close" size={10} /></button>
             </span>}
             {prePolishGoal !== null && <span className="newtask-config-chip">
-              <Icon name="polish" size={13} />已润色
+              <Icon name="polish" size={12} />已重写表述
               <button type="button" className="newtask-config-undo" onClick={undoPolish}>撤销</button>
             </span>}
           </div>
-          <span className="newtask-keyboard-hint">Enter 开始研究 <span>·</span> Shift + Enter 换行</span>
+          <span className="newtask-keyboard-hint">Enter 提交任务 <span>·</span> Shift + Enter 换行</span>
         </div>
         {backendOffline && <div role="status" className="newtask-connection-note">
-          <Icon name="warning" size={15} /><span>本机服务未连接，项目和文献仍可离线管理。</span>
-          <button type="button" onClick={() => void loadRecent()} disabled={checkingBackend}>{checkingBackend ? '连接中…' : '重新连接'}</button>
+          <Icon name="warning" size={15} /><span>本机后端服务未连接，研究项目、文献库与统计工具仍可完整离线使用。</span>
+          <button type="button" onClick={() => void loadRecent()} disabled={checkingBackend}>{checkingBackend ? '连接中…' : '重新检测'}</button>
         </div>}
         {error && <div role="alert" className="newtask-error"><span>{error}</span><button type="button" onClick={() => openSettings('model')}>检查模型配置</button></div>}
       </div>
 
-      {(recent.length > 0 || pendingEvidence > 0) && <section className="newtask-recent" aria-label="最近研究">
-        <div className="newtask-section-heading"><h2>最近研究</h2><button type="button" onClick={() => setView('tasks')}>查看全部 <Icon name="arrowRight" size={13} /></button></div>
-        <div className="newtask-recent-list">
-          {pendingEvidence > 0 && <button type="button" className="newtask-recent-item newtask-recent-review" onClick={() => { setLibraryTab('evidence'); setView('library'); }}>
-            <Icon name="stageEvidence" size={16} /><span className="newtask-recent-goal">{pendingEvidence} 条证据等待审核</span><Icon name="chevronRight" size={13} />
-          </button>}
-          {recent.map((run) => (
-            <button key={run.id} type="button" className="newtask-recent-item" onClick={() => requestRunFocus(run.id)} title={run.goal}>
-              <Icon name="clock" size={15} /><span className="newtask-recent-goal">{run.goal}</span>
-              <span className="newtask-recent-status" style={{ color: STATUS_COLOR[run.status] ?? 'var(--text-muted)' }}>{STATUS_LABEL[run.status] ?? run.status}</span>
-              <Icon name="chevronRight" size={13} />
+      <section className="newtask-templates" aria-label="典型科研任务入口">
+        <div className="newtask-section-heading">
+          <h2>按研究场景填入结构</h2>
+          <span>点击仅填入可编辑模板，不自动发送</span>
+        </div>
+        <div className="newtask-template-grid">
+          {RESEARCH_TEMPLATES.map((tpl) => (
+            <button key={tpl.key} type="button" className="newtask-template-card" onClick={() => applyTemplate(tpl)}>
+              <span className="newtask-template-icon"><Icon name={tpl.icon} size={17} /></span>
+              <span className="newtask-template-body">
+                <strong>{tpl.title}</strong>
+                <small>{tpl.desc}</small>
+              </span>
             </button>
           ))}
         </div>
-      </section>}
+      </section>
+
+      <section className="newtask-workspace-strip" aria-label="你的本机工作区">
+        <div className="newtask-section-heading">
+          <h2>本机工作区概览</h2>
+          <button type="button" onClick={() => requestCreateProject()}><Icon name="plus" size={13} /> 新建课题</button>
+        </div>
+        <div className="newtask-overview-grid">
+          <button type="button" className="newtask-overview-card" onClick={() => setView('projects')}>
+            <span className="newtask-overview-icon"><Icon name="projects" size={17} /></span>
+            <span className="newtask-overview-copy">
+              <strong>研究项目</strong>
+              <small>课题框架、进度与截止日</small>
+            </span>
+            <b className="newtask-overview-num">{activeProjects.length}</b>
+          </button>
+          <button type="button" className="newtask-overview-card" onClick={() => { setLibraryTab('references'); setView('library'); }}>
+            <span className="newtask-overview-icon"><Icon name="references" size={17} /></span>
+            <span className="newtask-overview-copy">
+              <strong>文献与原文</strong>
+              <small>管理题录、PDF 批注与索引</small>
+            </span>
+            <b className="newtask-overview-num">{references.length}</b>
+          </button>
+          <button type="button" className={`newtask-overview-card ${pendingEvidence > 0 ? 'has-pending' : ''}`} onClick={() => { setLibraryTab('evidence'); setView('library'); }}>
+            <span className="newtask-overview-icon"><Icon name="stageEvidence" size={17} /></span>
+            <span className="newtask-overview-copy">
+              <strong>证据门待裁决</strong>
+              <small>{pendingEvidence > 0 ? '点击进入人工落锤审核' : '暂无待审核候选证据'}</small>
+            </span>
+            <b className="newtask-overview-num">{pendingEvidence}</b>
+          </button>
+        </div>
+      </section>
+
+      {recent.length > 0 && (
+        <section className="newtask-recent" aria-label="最近研究">
+          <div className="newtask-section-heading">
+            <h2>最近研究记录</h2>
+            <button type="button" onClick={() => setView('tasks')}>查看全部 <Icon name="arrowRight" size={13} /></button>
+          </div>
+          <div className="newtask-recent-list">
+            {recent.map((run) => (
+              <button key={run.id} type="button" className="newtask-recent-item" onClick={() => requestRunFocus(run.id)} title={run.goal}>
+                <Icon name="clock" size={15} />
+                <span className="newtask-recent-goal">{run.goal}</span>
+                <span className="newtask-recent-status" style={{ color: STATUS_COLOR[run.status] ?? 'var(--text-muted)' }}>
+                  {STATUS_LABEL[run.status] ?? run.status}
+                </span>
+                <Icon name="chevronRight" size={13} />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {addMenu}
     </div>
